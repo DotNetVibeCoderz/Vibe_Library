@@ -1,0 +1,161 @@
+╔═══════════════════════════════════════════════════════════════════╗
+║                           D3NET PROJECT                            ║
+║           Data Visualization Library - Cross Platform              ║
+╚═══════════════════════════════════════════════════════════════════╝
+
+📦 PROJECT DETAILS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Project Name    : D3Net
+  Language        : C# 12
+  Framework       : .NET 9.0
+  UI Framework    : Avalonia 11.x
+  Type            : Cross-Platform Desktop Application
+  Build Status    : ✅ SUCCESS (with 27 async warnings - normal)
+
+🎯 FEATURES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✅ 10 Different Chart Types
+  ✅ Smooth Fade-in Animations
+  ✅ Beautiful Color Palette
+  ✅ Responsive Design
+  ✅ Cross-Platform (Windows, Linux, macOS)
+  ✅ Modern UI with Side Menu
+  ✅ Random Data Generation for Demo
+  ✅ Vector-based Rendering
+  ✅ Grid Lines and Labels
+  ✅ Legend Support
+
+📊 CHART TYPES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  1. 📊 Bar Chart        - Vertical bar comparison chart
+  2. 📈 Line Chart       - Multi-series line trend chart
+  3. 🥧 Pie Chart        - Circular proportion chart
+  4. 📉 Area Chart       - Gradient filled area chart
+  5. ⚫ Scatter Plot     - Clustered scatter correlation
+  6. 🔵 Bubble Chart     - 3D bubble visualization
+  7. 🕸️ Radar Chart     - Spider/Radar multi-axis chart
+  8. 🔥 Heatmap         - Color intensity matrix
+  9. 🍩 Donut Chart     - Ring chart with center info
+  10. 🎯 Gauge Chart     - Speedometer-style gauges
+
+📁 FILE STRUCTURE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Root Files:
+    • Program.cs          - Application entry point
+    • App.axaml          - Avalonia app configuration (XAML)
+    • App.axaml.cs       - Avalonia app code-behind
+    • MainWindow.axaml   - Main window UI layout
+    • MainWindow.axaml.cs- Main window code with event handlers
+    • README.md          - Full documentation
+    • HOW_TO_RUN.md      - Running instructions
+    • PROJECT_INFO.txt   - This file
+
+  Charts Folder:
+    • BaseChart.cs       - Abstract base class for all charts
+    • AnimationHelper.cs - Simple fade-in animation helper
+    • BarChart.cs        - Bar chart implementation
+    • LineChart.cs       - Line chart implementation
+    • PieChart.cs        - Pie chart implementation
+    • AreaChart.cs       - Area chart implementation
+    • ScatterChart.cs    - Scatter plot implementation
+    • BubbleChart.cs     - Bubble chart implementation
+    • RadarChart.cs      - Radar chart implementation
+    • Heatmap.cs         - Heatmap implementation
+    • DonutChart.cs      - Donut chart implementation
+    • GaugeChart.cs      - Gauge chart implementation
+
+🔧 DEPENDENCIES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  NuGet Packages:
+    • Avalonia               - Core UI framework
+    • Avalonia.Desktop       - Desktop platform support
+    • Avalonia.Themes.Fluent - Fluent design theme
+    • Avalonia.Fonts.Inter   - Inter font family
+
+⚙️ HOW TO RUN
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  1. Open Terminal/Command Prompt
+  2. Navigate to D3Net folder: cd D3Net
+  3. Restore packages: dotnet restore
+  4. Build project: dotnet build
+  5. Run application: dotnet run
+
+  Alternative (Visual Studio):
+    - Open D3Net.csproj in Visual Studio
+    - Press F5 to build and run
+
+  Alternative (VS Code):
+    - Open folder in VS Code
+    - Install C# Dev Kit extension
+    - Press F5 to run
+
+🎨 COLOR PALETTE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Blue      - RGB(52, 152, 219)   - #3498DB
+  Green     - RGB(46, 204, 113)   - #2ECC71
+  Red       - RGB(231, 76, 60)    - #E74C3C
+  Yellow    - RGB(241, 196, 15)   - #F1C40F
+  Purple    - RGB(155, 89, 182)   - #9B59B6
+  Dark Blue - RGB(52, 73, 94)     - #34495E
+  Turquoise - RGB(26, 188, 156)   - #1ABC9C
+  Orange    - RGB(230, 126, 34)   - #E67E22
+  Gray      - RGB(149, 165, 166)  - #95A5A6
+  Dark Red  - RGB(192, 57, 43)    - #C0392B
+
+💡 TIPS & TRICKS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  • Each chart generates random data on load
+  • Click different chart buttons to switch views
+  • Charts have smooth fade-in animations
+  • Window is resizable (1200x800 default)
+  • All charts are rendered using vector graphics
+  • Cross-platform: runs on Windows, Linux, macOS
+
+⚠️ KNOWN ISSUES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  • CS4014 warnings: Intentional fire-and-forget animations
+  • No warnings affect functionality
+  • All charts compile and run successfully
+
+🔮 FUTURE ENHANCEMENTS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  □ Real-time data updates
+  □ Export charts to PNG/SVG
+  □ Custom data input
+  □ More chart types
+  □ Interactive tooltips
+  □ Zoom and pan
+  □ Dark/Light theme toggle
+  □ Chart customization UI
+
+👨‍💻 AUTHOR
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Created by: Jacky the Code Bender 🚀
+  Team: Gravicode Studios
+  Leader: Kang Fadhil
+  Website: https://studios.gravicode.com
+
+💝 SUPPORT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Kalau suka project ini, traktir pulsa dong! 😊
+  Kirim ke: https://studios.gravicode.com/products/budax
+
+📚 RESOURCES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  • Avalonia UI Docs: https://docs.avaloniaui.net
+  • .NET Docs: https://docs.microsoft.com/dotnet
+  • D3.js (inspiration): https://d3js.org
+  • Gravicode Studios: https://studios.gravicode.com
+
+📄 LICENSE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Free to use and modify
+  Attribution appreciated
+  Created by Gravicode Studios
+
+═══════════════════════════════════════════════════════════════════
+
+                    ⭐ HAPPY VISUALIZING! ⭐
+                       📊 D3Net v1.0 📊
+
+═══════════════════════════════════════════════════════════════════

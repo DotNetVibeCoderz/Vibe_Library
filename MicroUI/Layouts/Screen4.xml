@@ -1,0 +1,11 @@
+<Panel X="0" Y="0" Width="800" Height="480" Background="#111111">
+    <Label Text="Now Playing..." X="300" Y="50" />
+    <Label Text="Song: Bohemian Rhapsody" X="280" Y="100" />
+    <Label Text="Artist: Queen" X="330" Y="130" />
+    
+    <Gauge Title="Volume" Value="75" Max="100" X="50" Y="200" Width="100" Height="100" />
+    
+    <Button Text="<<" X="250" Y="250" Width="60" />
+    <Button Text="PLAY" X="330" Y="250" Width="80" Background="#00AA00" />
+    <Button Text=">>" X="430" Y="250" Width="60" />
+</Panel>

@@ -1,0 +1,116 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="1200" d:DesignHeight="800"
+        x:Class="D3Net.MainWindow"
+        Title="D3Net - Visualisasi Data Cross-Platform by Gravicode Studios"
+        Width="1200" Height="800"
+        Background="#F5F5F5">
+    
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="250"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+        
+        <!-- Side Menu -->
+        <Border Grid.Column="0" Background="#2C3E50" Padding="10">
+            <StackPanel>
+                <TextBlock Text="D3Net Charts" 
+                          FontSize="24" 
+                          FontWeight="Bold" 
+                          Foreground="White"
+                          Margin="0,10,0,30"
+                          HorizontalAlignment="Center"/>
+                
+                <Button Name="btnBarChart" Content="📊 Bar Chart" 
+                        Margin="0,5" Padding="15,10" 
+                        HorizontalAlignment="Stretch"
+                        HorizontalContentAlignment="Left"
+                        Background="#34495E"
+                        Foreground="White"/>
+                
+                <Button Name="btnLineChart" Content="📈 Line Chart" 
+                        Margin="0,5" Padding="15,10"
+                        HorizontalAlignment="Stretch"
+                        HorizontalContentAlignment="Left"
+                        Background="#34495E"
+                        Foreground="White"/>
+                
+                <Button Name="btnPieChart" Content="🥧 Pie Chart" 
+                        Margin="0,5" Padding="15,10"
+                        HorizontalAlignment="Stretch"
+                        HorizontalContentAlignment="Left"
+                        Background="#34495E"
+                        Foreground="White"/>
+                
+                <Button Name="btnAreaChart" Content="📉 Area Chart" 
+                        Margin="0,5" Padding="15,10"
+                        HorizontalAlignment="Stretch"
+                        HorizontalContentAlignment="Left"
+                        Background="#34495E"
+                        Foreground="White"/>
+                
+                <Button Name="btnScatterChart" Content="⚫ Scatter Plot" 
+                        Margin="0,5" Padding="15,10"
+                        HorizontalAlignment="Stretch"
+                        HorizontalContentAlignment="Left"
+                        Background="#34495E"
+                        Foreground="White"/>
+                
+                <Button Name="btnBubbleChart" Content="🔵 Bubble Chart" 
+                        Margin="0,5" Padding="15,10"
+                        HorizontalAlignment="Stretch"
+                        HorizontalContentAlignment="Left"
+                        Background="#34495E"
+                        Foreground="White"/>
+                
+                <Button Name="btnRadarChart" Content="🕸️ Radar Chart" 
+                        Margin="0,5" Padding="15,10"
+                        HorizontalAlignment="Stretch"
+                        HorizontalContentAlignment="Left"
+                        Background="#34495E"
+                        Foreground="White"/>
+                
+                <Button Name="btnHeatmap" Content="🔥 Heatmap" 
+                        Margin="0,5" Padding="15,10"
+                        HorizontalAlignment="Stretch"
+                        HorizontalContentAlignment="Left"
+                        Background="#34495E"
+                        Foreground="White"/>
+                
+                <Button Name="btnDonutChart" Content="🍩 Donut Chart" 
+                        Margin="0,5" Padding="15,10"
+                        HorizontalAlignment="Stretch"
+                        HorizontalContentAlignment="Left"
+                        Background="#34495E"
+                        Foreground="White"/>
+                
+                <Button Name="btnGaugeChart" Content="🎯 Gauge Chart" 
+                        Margin="0,5" Padding="15,10"
+                        HorizontalAlignment="Stretch"
+                        HorizontalContentAlignment="Left"
+                        Background="#34495E"
+                        Foreground="White"/>
+                
+                <TextBlock Text="💝 Traktir pulsa dong!" 
+                          FontSize="10" 
+                          Foreground="#ECF0F1"
+                          Margin="0,30,0,5"
+                          TextWrapping="Wrap"
+                          HorizontalAlignment="Center"/>
+                          
+                <TextBlock Text="studios.gravicode.com" 
+                          FontSize="9" 
+                          Foreground="#95A5A6"
+                          HorizontalAlignment="Center"/>
+            </StackPanel>
+        </Border>
+        
+        <!-- Chart Display Area -->
+        <Border Grid.Column="1" Background="White" Margin="10" CornerRadius="8">
+            <Canvas Name="ChartCanvas" Background="White"/>
+        </Border>
+    </Grid>
+</Window>

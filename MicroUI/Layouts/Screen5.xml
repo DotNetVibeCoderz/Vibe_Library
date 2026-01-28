@@ -1,0 +1,9 @@
+<Panel X="0" Y="0" Width="800" Height="480" Background="#333333">
+    <Label Text="Factory Machine 01 (XML)" X="20" Y="20" />
+    
+    <Gauge Title="Pressure" Value="120" Max="200" X="50" Y="100" />
+    <Gauge Title="Temp C" Value="65" Max="100" X="250" Y="100" />
+    <Gauge Title="Flow Rate" Value="800" Max="1000" X="450" Y="100" />
+    
+    <Button Text="Emergency Stop" X="300" Y="350" Width="200" Height="60" Background="#FF0000" />
+</Panel>

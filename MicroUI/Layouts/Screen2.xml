@@ -1,0 +1,15 @@
+<Panel X="0" Y="0" Width="800" Height="480" Background="#F0F0F0">
+    <Label Text="Smart Home (XML)" X="20" Y="20" Background="#00000000" />
+    
+    <Panel X="50" Y="80" Width="200" Height="150" Background="#FFFFFF">
+        <Label Text="Living Room" X="50" Y="20" />
+        <Button Text="ON" X="20" Y="60" Width="60" />
+        <Button Text="OFF" X="100" Y="60" Width="60" />
+    </Panel>
+
+    <Panel X="300" Y="80" Width="200" Height="150" Background="#FFFFFF">
+        <Label Text="Kitchen" X="60" Y="20" />
+        <Button Text="ON" X="20" Y="60" Width="60" />
+        <Button Text="OFF" X="100" Y="60" Width="60" />
+    </Panel>
+</Panel>

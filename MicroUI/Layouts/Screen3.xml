@@ -1,0 +1,5 @@
+<Panel X="0" Y="0" Width="800" Height="480">
+    <Label Text="Network Traffic (XML)" X="20" Y="20" />
+    <Chart Title="Download Speed" X="50" Y="80" Width="700" Height="300" />
+    <Button Text="Reset Stats" X="650" Y="20" Width="100" Height="30" />
+</Panel>
