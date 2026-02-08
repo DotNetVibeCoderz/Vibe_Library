@@ -28,36 +28,123 @@ dotnet run
 
 The server will start at `http://localhost:8080/`.
 
-### Code Examples
+### Code Examples (from Program.cs)
 
-#### 1. Basic Routing
+#### 1. Server Setup & Static Files
 ```csharp
-server.Router.Get("/hello", async (ctx) =>
-{
-    byte[] data = Encoding.UTF8.GetBytes("Hello World");
-    await ctx.Response.OutputStream.WriteAsync(data, 0, data.Length);
-    ctx.Response.Close();
-});
+using var server = new MicroServer();
+server.AddPrefix("http://localhost:8080/");
+
+// Setup Static Files
+string wwwroot = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
+if (!Directory.Exists(wwwroot)) Directory.CreateDirectory(wwwroot);
+server.UseStaticFiles(wwwroot);
 ```
 
-#### 2. JSON API
-```csharp
-server.Router.Get("/api/time", async (ctx) =>
-{
-    var json = JsonSerializer.Serialize(new { Time = DateTime.Now });
-    ctx.Response.ContentType = "application/json";
-    byte[] data = Encoding.UTF8.GetBytes(json);
-    await ctx.Response.OutputStream.WriteAsync(data, 0, data.Length);
-    ctx.Response.Close();
-});
-```
-
-#### 3. Middleware (Logging)
+#### 2. Basic Authentication Middleware
 ```csharp
 server.Use(async (context, next) =>
 {
-    Console.WriteLine($"Request: {context.Request.Url}");
+    if (context.Request.Url.AbsolutePath.StartsWith("/admin"))
+    {
+        string authHeader = context.Request.Headers["Authorization"];
+        if (authHeader != null && authHeader.StartsWith("Basic "))
+        {
+            var credentialBytes = Convert.FromBase64String(authHeader.Substring(6));
+            var credentials = Encoding.UTF8.GetString(credentialBytes).Split(':');
+            if (credentials.Length == 2 && credentials[0] == "admin" && credentials[1] == "password")
+            {
+                await next();
+                return;
+            }
+        }
+        context.Response.StatusCode = 401;
+        context.Response.AddHeader("WWW-Authenticate", "Basic realm=\"Microsvr Admin\"");
+        context.Response.Close();
+        return;
+    }
     await next();
+});
+```
+
+#### 3. REST API (GET & POST)
+```csharp
+// GET JSON Response
+server.Router.Get("/api/hello", async (ctx) =>
+{
+    var response = new { Message = "Hello World form REST API", Time = DateTime.Now };
+    string json = JsonSerializer.Serialize(response);
+    ctx.Response.ContentType = "application/json";
+    byte[] buffer = Encoding.UTF8.GetBytes(json);
+    ctx.Response.ContentLength64 = buffer.Length;
+    await ctx.Response.OutputStream.WriteAsync(buffer, 0, buffer.Length);
+    ctx.Response.Close();
+});
+
+// POST Echo
+server.Router.Post("/api/echo", async (ctx) =>
+{
+    using var reader = new StreamReader(ctx.Request.InputStream, ctx.Request.ContentEncoding);
+    string body = await reader.ReadToEndAsync();
+    var response = new { Received = body };
+    string json = JsonSerializer.Serialize(response);
+    ctx.Response.ContentType = "application/json";
+    byte[] buffer = Encoding.UTF8.GetBytes(json);
+    ctx.Response.ContentLength64 = buffer.Length;
+    await ctx.Response.OutputStream.WriteAsync(buffer, 0, buffer.Length);
+    ctx.Response.Close();
+});
+```
+
+#### 4. File Upload Handling
+```csharp
+server.Router.Post("/upload", async (ctx) =>
+{
+    if (!ctx.Request.ContentType.StartsWith("multipart/form-data"))
+    {
+        ctx.Response.StatusCode = 400;
+        ctx.Response.Close();
+        return;
+    }
+    // Parse using HttpUtils helper
+    using var ms = new MemoryStream();
+    await ctx.Request.InputStream.CopyToAsync(ms);
+    ms.Position = 0;
+    var files = HttpUtils.ParseMultipart(ctx.Request.ContentType, ms, ctx.Request.ContentEncoding);
+    
+    ctx.Response.StatusCode = 200;
+    byte[] ok = Encoding.UTF8.GetBytes($"Upload OK: {files.Count} items received.");
+    await ctx.Response.OutputStream.WriteAsync(ok, 0, ok.Length);
+    ctx.Response.Close();
+});
+```
+
+#### 5. WebSocket Support
+```csharp
+server.Router.Get("/ws", async (ctx) =>
+{
+    if (ctx.Request.IsWebSocketRequest)
+    {
+        HttpListenerWebSocketContext wsContext = await ctx.AcceptWebSocketAsync(null);
+        WebSocket webSocket = wsContext.WebSocket;
+        
+        byte[] buffer = new byte[1024];
+        while (webSocket.State == WebSocketState.Open)
+        {
+            var result = await webSocket.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None);
+            if (result.MessageType == WebSocketMessageType.Close)
+            {
+                await webSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Closing", CancellationToken.None);
+            }
+            else
+            {
+                string msg = Encoding.UTF8.GetString(buffer, 0, result.Count);
+                // Echo back
+                byte[] sendBuffer = Encoding.UTF8.GetBytes("Echo: " + msg);
+                await webSocket.SendAsync(new ArraySegment<byte>(sendBuffer), WebSocketMessageType.Text, true, CancellationToken.None);
+            }
+        }
+    }
 });
 ```
 
@@ -93,35 +180,122 @@ dotnet run
 
 Server akan berjalan di `http://localhost:8080/`.
 
-### Contoh Kode
+### Contoh Kode (dari Program.cs)
 
-#### 1. Routing Dasar
+#### 1. Setup Server & File Statis
 ```csharp
-server.Router.Get("/halo", async (ctx) =>
-{
-    byte[] data = Encoding.UTF8.GetBytes("Halo Dunia");
-    await ctx.Response.OutputStream.WriteAsync(data, 0, data.Length);
-    ctx.Response.Close();
-});
+using var server = new MicroServer();
+server.AddPrefix("http://localhost:8080/");
+
+// Setup File Statis
+string wwwroot = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
+if (!Directory.Exists(wwwroot)) Directory.CreateDirectory(wwwroot);
+server.UseStaticFiles(wwwroot);
 ```
 
-#### 2. JSON API
-```csharp
-server.Router.Get("/api/waktu", async (ctx) =>
-{
-    var json = JsonSerializer.Serialize(new { Waktu = DateTime.Now });
-    ctx.Response.ContentType = "application/json";
-    byte[] data = Encoding.UTF8.GetBytes(json);
-    await ctx.Response.OutputStream.WriteAsync(data, 0, data.Length);
-    ctx.Response.Close();
-});
-```
-
-#### 3. Middleware (Logging)
+#### 2. Middleware Otentikasi Dasar
 ```csharp
 server.Use(async (context, next) =>
 {
-    Console.WriteLine($"Permintaan: {context.Request.Url}");
+    if (context.Request.Url.AbsolutePath.StartsWith("/admin"))
+    {
+        string authHeader = context.Request.Headers["Authorization"];
+        if (authHeader != null && authHeader.StartsWith("Basic "))
+        {
+            var credentialBytes = Convert.FromBase64String(authHeader.Substring(6));
+            var credentials = Encoding.UTF8.GetString(credentialBytes).Split(':');
+            if (credentials.Length == 2 && credentials[0] == "admin" && credentials[1] == "password")
+            {
+                await next();
+                return;
+            }
+        }
+        context.Response.StatusCode = 401;
+        context.Response.AddHeader("WWW-Authenticate", "Basic realm=\"Microsvr Admin\"");
+        context.Response.Close();
+        return;
+    }
     await next();
+});
+```
+
+#### 3. REST API (GET & POST)
+```csharp
+// GET JSON Response
+server.Router.Get("/api/hello", async (ctx) =>
+{
+    var response = new { Message = "Hello World form REST API", Time = DateTime.Now };
+    string json = JsonSerializer.Serialize(response);
+    ctx.Response.ContentType = "application/json";
+    byte[] buffer = Encoding.UTF8.GetBytes(json);
+    ctx.Response.ContentLength64 = buffer.Length;
+    await ctx.Response.OutputStream.WriteAsync(buffer, 0, buffer.Length);
+    ctx.Response.Close();
+});
+
+// POST Echo
+server.Router.Post("/api/echo", async (ctx) =>
+{
+    using var reader = new StreamReader(ctx.Request.InputStream, ctx.Request.ContentEncoding);
+    string body = await reader.ReadToEndAsync();
+    var response = new { Received = body };
+    string json = JsonSerializer.Serialize(response);
+    ctx.Response.ContentType = "application/json";
+    byte[] buffer = Encoding.UTF8.GetBytes(json);
+    ctx.Response.ContentLength64 = buffer.Length;
+    await ctx.Response.OutputStream.WriteAsync(buffer, 0, buffer.Length);
+    ctx.Response.Close();
+});
+```
+
+#### 4. Penanganan Upload File
+```csharp
+server.Router.Post("/upload", async (ctx) =>
+{
+    if (!ctx.Request.ContentType.StartsWith("multipart/form-data"))
+    {
+        ctx.Response.StatusCode = 400;
+        ctx.Response.Close();
+        return;
+    }
+    // Parse menggunakan bantuan HttpUtils
+    using var ms = new MemoryStream();
+    await ctx.Request.InputStream.CopyToAsync(ms);
+    ms.Position = 0;
+    var files = HttpUtils.ParseMultipart(ctx.Request.ContentType, ms, ctx.Request.ContentEncoding);
+    
+    ctx.Response.StatusCode = 200;
+    byte[] ok = Encoding.UTF8.GetBytes($"Upload OK: {files.Count} items received.");
+    await ctx.Response.OutputStream.WriteAsync(ok, 0, ok.Length);
+    ctx.Response.Close();
+});
+```
+
+#### 5. Dukungan WebSocket
+```csharp
+server.Router.Get("/ws", async (ctx) =>
+{
+    if (ctx.Request.IsWebSocketRequest)
+    {
+        HttpListenerWebSocketContext wsContext = await ctx.AcceptWebSocketAsync(null);
+        WebSocket webSocket = wsContext.WebSocket;
+        
+        byte[] buffer = new byte[1024];
+        while (webSocket.State == WebSocketState.Open)
+        {
+            var result = await webSocket.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None);
+            if (result.MessageType == WebSocketMessageType.Close)
+            {
+                await webSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Closing", CancellationToken.None);
+            }
+            else
+            {
+                string msg = Encoding.UTF8.GetString(buffer, 0, result.Count);
+                // Echo back
+                byte[] sendBuffer = Encoding.UTF8.GetBytes("Echo: " + msg);
+                await webSocket.SendAsync(new ArraySegment<byte>(sendBuffer), WebSocketMessageType.Text, true, CancellationToken.None);
+            }
+        }
+    }
 });
 ```
