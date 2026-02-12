@@ -23,6 +23,8 @@ namespace KafkaNet.Streams
 
         public void Start()
         {
+            if (_cts != null && !_cts.IsCancellationRequested) return;
+
             _cts = new CancellationTokenSource();
             _pollingTask = Task.Run(async () =>
             {
@@ -39,7 +41,7 @@ namespace KafkaNet.Streams
         public IObservable<Message> FromTopic(string topicName)
         {
             _consumer.Subscribe(topicName);
-            return _subject.AsObservable().Where(m => true);
+            return _subject.AsObservable();
         }
 
         public void Stop()

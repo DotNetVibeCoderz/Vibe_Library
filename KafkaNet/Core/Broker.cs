@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.IO;
+using System.Linq;
 
 namespace KafkaNet.Core
 {
@@ -19,6 +20,42 @@ namespace KafkaNet.Core
             if (!Directory.Exists(_storagePath))
             {
                 Directory.CreateDirectory(_storagePath);
+            }
+            
+            LoadTopics();
+        }
+
+        private void LoadTopics()
+        {
+            try
+            {
+                var topicDirs = Directory.GetDirectories(_storagePath);
+                foreach (var dir in topicDirs)
+                {
+                    var topicName = Path.GetFileName(dir);
+                    var partitionDirs = Directory.GetDirectories(dir);
+                    
+                    // Simple logic: number of partitions = number of subdirectories that are integers
+                    int partitionCount = 0;
+                    foreach(var pDir in partitionDirs)
+                    {
+                        if (int.TryParse(Path.GetFileName(pDir), out _))
+                        {
+                            partitionCount++;
+                        }
+                    }
+
+                    if (partitionCount > 0)
+                    {
+                        var topic = new Topic(topicName, partitionCount, _storagePath);
+                        _topics.TryAdd(topicName, topic);
+                        Console.WriteLine($"Loaded topic '{topicName}' with {partitionCount} partitions.");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error loading topics: {ex.Message}");
             }
         }
 

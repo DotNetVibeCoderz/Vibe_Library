@@ -1,79 +1,85 @@
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using KafkaNet.Core;
+using KafkaNet.Network;
+using Newtonsoft.Json;
 
 namespace KafkaNet.Client
 {
-    public class ConsumerClient
+    public class ConsumerClient : IDisposable
     {
-        private readonly Broker _broker;
-        private readonly string _consumerGroup;
-        // Key: "Topic-PartitionID", Value: Offset
-        private readonly ConcurrentDictionary<string, long> _partitionOffsets;
-        private readonly List<string> _subscribedTopics;
+        private readonly KafkaClient _client;
+        private readonly string _groupId;
+        private string _topic;
+        private readonly Dictionary<int, long> _offsets = new Dictionary<int, long>();
         public bool IsRunning { get; private set; } = true;
 
-        public ConsumerClient(Broker broker, string consumerGroup)
+        public ConsumerClient(string host, int port, string groupId = "default-group")
         {
-            _broker = broker;
-            _consumerGroup = consumerGroup;
-            _partitionOffsets = new ConcurrentDictionary<string, long>();
-            _subscribedTopics = new List<string>();
+            _client = new KafkaClient(host, port);
+            _groupId = groupId;
         }
 
         public void Subscribe(string topic)
         {
-            if (!_subscribedTopics.Contains(topic))
-            {
-                _subscribedTopics.Add(topic);
-            }
+            _topic = topic;
+            if (!_offsets.ContainsKey(0)) _offsets[0] = 0; // Default offset 0 partition 0
         }
 
-        public async Task PollAsync(TimeSpan timeout, Action<string, Message> onMessageReceived)
+        public async Task PollAsync(TimeSpan timeout, Action<string, Message> onMessage)
         {
             if (!IsRunning) return;
+            if (string.IsNullOrEmpty(_topic)) throw new InvalidOperationException("Subscribe to a topic first.");
 
-            bool messageFound = false;
+            int partition = 0; // Simplified
+            long currentOffset = _offsets.ContainsKey(partition) ? _offsets[partition] : 0;
 
-            foreach (var topicName in _subscribedTopics)
+            var request = new ConsumeRequest
             {
-                var topic = _broker.GetTopic(topicName);
-                if (topic == null) continue;
+                Topic = _topic,
+                Partition = partition,
+                Offset = currentOffset,
+                MaxMessages = 10 
+            };
 
-                foreach (var partition in topic.GetPartitions())
+            try 
+            {
+                var response = await _client.SendRequestAsync(RequestType.Consume, request);
+                if (response.Success && !string.IsNullOrEmpty(response.Data))
                 {
-                    string key = $"{topicName}-{partition.Id}";
-                    long currentOffset = _partitionOffsets.GetOrAdd(key, 0);
-
-                    // Read batch
-                    var messages = partition.Read(currentOffset, 10); // Small batch for responsiveness
-                    
-                    if (messages.Count > 0)
+                    var messages = JsonConvert.DeserializeObject<List<Message>>(response.Data);
+                    if (messages != null && messages.Count > 0)
                     {
-                        messageFound = true;
                         foreach (var msg in messages)
                         {
-                            onMessageReceived(topicName, msg);
-                            // Update offset to next
+                            onMessage(_topic, msg);
+                            // Update local offset to next message
                             currentOffset = msg.Offset + 1;
                         }
-                        _partitionOffsets[key] = currentOffset;
+                        _offsets[partition] = currentOffset;
                     }
                 }
             }
-
-            if (!messageFound)
+            catch (Exception ex)
             {
-                await Task.Delay(timeout);
+                // Simple logging
+                // Console.WriteLine($"Error polling: {ex.Message}");
             }
+            
+            await Task.Delay(100); 
         }
 
         public void Stop()
         {
             IsRunning = false;
+        }
+
+        public void Dispose()
+        {
+            Stop();
+            _client.Dispose();
         }
     }
 }
