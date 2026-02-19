@@ -18,6 +18,36 @@ df.AddColumn("Price", new[] { 300, 500, 100 });
 df.Print();
 ```
 
+## Advanced Examples
+
+### 1. Series Operations
+```csharp
+var s = new Series<int>(new[] { 10, 20, 30, 40 }, "MySeries");
+Console.WriteLine($"Mean: {s.Mean()}, Sum: {s.Sum()}, Max: {s.Max()}");
+```
+
+### 2. Filtering Data
+```csharp
+// Filter rows where Age > 24
+var filtered = df.Filter(i => Convert.ToInt32(df["Age"][i]) > 24);
+filtered.Print();
+```
+
+### 3. Handling Missing Data (FillNa)
+```csharp
+var sWithNulls = new Series<double?>(new double?[] { 1.0, null, 3.5, null }, "NullableSeries");
+var filled = sWithNulls.FillNa(0.0);
+```
+
+### 4. Visualization (ASCII Charts)
+```csharp
+// Bar Chart
+Visualizer.BarChart(df, "Product", "Price");
+
+// Pie Chart
+Visualizer.PieChart(df, "Dept", "StaffCount");
+```
+
 ---
 
 # DataBender (Bahasa Indonesia) 🐼
@@ -40,6 +70,39 @@ df.AddColumn("Nilai", new[] { 85, 90, 78 });
 df.Print();
 ```
 
+## Contoh Lanjutan
+
+### 1. Operasi Series
+```csharp
+var s = new Series<int>(new[] { 10, 20, 30, 40 }, "NilaiSaya");
+Console.WriteLine($"Rata-rata: {s.Mean()}, Total: {s.Sum()}, Maks: {s.Max()}");
+```
+
+### 2. Filter Data
+```csharp
+// Filter baris di mana Umur > 24
+var filtered = df.Filter(i => Convert.ToInt32(df["Umur"][i]) > 24);
+filtered.Print();
+```
+
+### 3. Menangani Data Kosong (FillNa)
+```csharp
+var sWithNulls = new Series<double?>(new double?[] { 1.0, null, 3.5, null }, "SeriesKosong");
+var filled = sWithNulls.FillNa(0.0); // Mengisi null dengan 0.0
+```
+
+### 4. Visualisasi (Grafik ASCII)
+```csharp
+// Bar Chart
+Visualizer.BarChart(df, "Produk", "Harga");
+
+// Pie Chart (Distribusi)
+Visualizer.PieChart(df, "Departemen", "JumlahStaf");
+
+// Scatter Plot
+Visualizer.ScatterPlot(df, "Bulan", "Pendapatan");
+```
+
 ---
-*Created by Jacky the Code Bender @ Gravicode Studios.*
-*Support us: [Traktir Pulsa](https://studios.gravicode.com/products/budax)*
+*Dibuat oleh Jacky the Code Bender @ Gravicode Studios.*
+*Dukung kami: [Traktir Pulsa](https://studios.gravicode.com/products/budax)*
