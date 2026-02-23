@@ -1,0 +1,41 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="600"
+        x:Class="RLNet.Visualizer.MainWindow"
+        Title="RLNet - Multi-Environment Simulation"
+        Width="900" Height="650">
+    <DockPanel>
+        <StackPanel DockPanel.Dock="Right" Width="220" Background="#f0f0f0" Margin="10">
+            <TextBlock Text="RL Control Panel" FontSize="18" FontWeight="Bold" Margin="0,0,0,10"/>
+            
+            <TextBlock Text="Environment:" FontWeight="Bold"/>
+            <ComboBox Name="EnvSelector" SelectedIndex="0" HorizontalAlignment="Stretch" Margin="0,5">
+                <ComboBoxItem>GridWorld</ComboBoxItem>
+                <ComboBoxItem>CartPole</ComboBoxItem>
+                <ComboBoxItem>LunarLander</ComboBoxItem>
+                <ComboBoxItem>Trading</ComboBoxItem>
+            </ComboBox>
+
+            <TextBlock Text="Episode:" FontWeight="Bold" Margin="0,10,0,0"/>
+            <TextBlock Name="EpisodeText" Text="0"/>
+            <TextBlock Text="Step:" FontWeight="Bold" Margin="0,10,0,0"/>
+            <TextBlock Name="StepText" Text="0"/>
+            <TextBlock Text="Epsilon:" FontWeight="Bold" Margin="0,10,0,0"/>
+            <TextBlock Name="EpsilonText" Text="1.0"/>
+            <TextBlock Text="Total Reward:" FontWeight="Bold" Margin="0,10,0,0"/>
+            <TextBlock Name="RewardText" Text="0"/>
+            
+            <Button Name="ToggleTrainButton" Content="Start Training" Margin="0,20,0,0" HorizontalAlignment="Stretch"/>
+            <Button Name="ResetButton" Content="Reset Environment" Margin="0,10,0,0" HorizontalAlignment="Stretch"/>
+            
+            <TextBlock Text="Speed:" FontWeight="Bold" Margin="0,20,0,0"/>
+            <Slider Name="SpeedSlider" Minimum="10" Maximum="500" Value="50"/>
+        </StackPanel>
+        
+        <Border BorderBrush="Black" BorderThickness="1" Margin="10">
+            <Canvas Name="GameCanvas" Background="White"/>
+        </Border>
+    </DockPanel>
+</Window>
