@@ -1,0 +1,19 @@
+<Solution>
+  <Folder Name="/samples/">
+    <Project Path="samples/LVGL.Desktop/LVGL.Desktop.csproj" />
+    <Project Path="samples/LVGL.Raspi/LVGL.Raspi.csproj" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/LVGL.Net.Assistant/LVGL.Net.Assistant.csproj" />
+    <Project Path="src/LVGL.Net.Linux/LVGL.Net.Linux.csproj" />
+    <Project Path="src/LVGL.Net.Sdl/LVGL.Net.Sdl.csproj" />
+    <Project Path="src/LVGL.Net.Ui/LVGL.Net.Ui.csproj" />
+    <Project Path="src/LVGL.Net/LVGL.Net.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/LVGL.Net.Tests/LVGL.Net.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tools/">
+    <Project Path="tools/LVGL.Designer/LVGL.Designer.csproj" />
+  </Folder>
+</Solution>

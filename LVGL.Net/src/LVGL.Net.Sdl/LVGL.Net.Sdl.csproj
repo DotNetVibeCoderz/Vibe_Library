@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>Lvgl.Sdl</RootNamespace>
+    <AssemblyName>LVGL.Net.Sdl</AssemblyName>
+    <PackageId>LVGL.Net.Sdl</PackageId>
+    <Description>SDL2 backend for LVGL.Net - windowed output and mouse/keyboard input on Windows, macOS and Linux.</Description>
+    <IsAotCompatible>true</IsAotCompatible>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../LVGL.Net/LVGL.Net.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,46 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>Lvgl.Assistant</RootNamespace>
+    <AssemblyName>LVGL.Net.Assistant</AssemblyName>
+    <PackageId>LVGL.Net.Assistant</PackageId>
+    <Description>Jack The Code Bender - a Semantic Kernel design assistant for LVGL.Net, with OpenAI, Anthropic, Gemini and Ollama support.</Description>
+
+    <!--
+      Deliberately not AOT/trim-clean: Semantic Kernel and its connectors use reflection
+      throughout. This assembly is only referenced by the WPF designer, which is not trimmed.
+    -->
+    <IsAotCompatible>false</IsAotCompatible>
+
+    <!-- SK's Google and Ollama connectors only ship as alpha; the warning is expected. -->
+    <NoWarn>$(NoWarn);SKEXP0001;SKEXP0010;SKEXP0070;SKEXP0110;CS1591</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.SemanticKernel" Version="1.78.0" />
+    <PackageReference Include="Microsoft.SemanticKernel.Connectors.Google" Version="1.78.0-alpha" />
+    <PackageReference Include="Microsoft.SemanticKernel.Connectors.Ollama" Version="1.78.0-alpha" />
+
+    <!--
+      The official Anthropic SDK, not an OpenAI-compatible shim: Claude's request shape
+      diverges from OpenAI's in ways that matter here (thinking blocks, and the models that
+      reject `temperature` outright).
+    -->
+    <PackageReference Include="Anthropic" Version="12.39.0" />
+
+    <PackageReference Include="Markdig" Version="1.3.2" />
+    <PackageReference Include="System.Configuration.ConfigurationManager" Version="10.0.10" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../LVGL.Net/LVGL.Net.csproj" />
+    <ProjectReference Include="../LVGL.Net.Ui/LVGL.Net.Ui.csproj" />
+  </ItemGroup>
+
+  <!-- The tests exercise the HTML-to-text reduction and the expression parser directly. -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="LVGL.Net.Tests" />
+  </ItemGroup>
+
+</Project>

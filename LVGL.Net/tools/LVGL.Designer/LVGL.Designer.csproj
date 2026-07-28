@@ -1,0 +1,57 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <!--
+      WPF pins this project to Windows. That is the only Windows-only project in the solution:
+      LVGL.Net itself and both samples stay platform-agnostic, and the designer talks to them
+      through the same public API any application would use.
+    -->
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <RootNamespace>Lvgl.Designer</RootNamespace>
+    <AssemblyName>LVGL.Designer</AssemblyName>
+    <IsPackable>false</IsPackable>
+    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
+
+    <!--
+      WPF cannot run under invariant globalization, which Directory.Build.props turns on for the
+      solution. Text layout resolves a specific culture from the UI language, and with ICU absent
+      that throws "Cannot find non-neutral culture related to 'en-us'" the first time a templated
+      item is measured - the app dies on startup rather than degrading.
+    -->
+    <InvariantGlobalization>false</InvariantGlobalization>
+  </PropertyGroup>
+
+  <!--
+    Directory.Build.props sets EnableDefaultNoneItems=false, which stops the SDK's default glob
+    from picking App.config up - and the SDK only copies it to LVGL.Designer.dll.config when it
+    is a None item. Without this the app starts fine and then reports "no API key" for every
+    provider, because ConfigurationManager has no config file to read.
+  -->
+  <ItemGroup>
+    <None Include="App.config" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/LVGL.Net/LVGL.Net.csproj" />
+    <ProjectReference Include="../../src/LVGL.Net.Ui/LVGL.Net.Ui.csproj" />
+    <ProjectReference Include="../../src/LVGL.Net.Assistant/LVGL.Net.Assistant.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      The chat transcript is rendered as HTML in a WebView2 rather than with WPF controls:
+      tables, fenced code and embedded media are what a model actually emits, and reproducing
+      them with WPF primitives would be a lot of work for a worse result.
+    -->
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4078.44" />
+
+    <!--
+      The code view needs line numbers, a search panel, undo/redo and syntax highlighting.
+      AvalonEdit provides all four; a TextBox would mean hand-rolling the first three.
+    -->
+    <PackageReference Include="AvalonEdit" Version="6.3.1.120" />
+  </ItemGroup>
+
+</Project>

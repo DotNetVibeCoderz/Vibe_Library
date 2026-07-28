@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>Lvgl</RootNamespace>
+    <AssemblyName>LVGL.Net</AssemblyName>
+    <PackageId>LVGL.Net</PackageId>
+    <IsAotCompatible>true</IsAotCompatible>
+    <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
+  </PropertyGroup>
+
+  <!--
+    The native library is produced by native/build.sh|ps1 into runtimes/<rid>/native.
+    It is linked (not copied into the project) so a rebuild of the C side is picked
+    up without touching the managed build.
+  -->
+  <!--
+    The integration tests call the raw interop layer directly to assert that this LVGL build
+    exposes every entry point and event code the wrapper relies on.
+  -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="LVGL.Net.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="$(MSBuildThisFileDirectory)../../runtimes/**/native/*"
+          Link="runtimes/%(RecursiveDir)%(Filename)%(Extension)"
+          CopyToOutputDirectory="PreserveNewest"
+          Pack="true"
+          PackagePath="runtimes/" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,103 @@
+<UserControl x:Class="Lvgl.Designer.Assistant.ChatPanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
+             Background="{StaticResource Chrome}">
+
+    <DockPanel>
+
+        <!-- Header -->
+        <Border DockPanel.Dock="Top" Background="{StaticResource ChromeAlt}"
+                BorderBrush="{StaticResource ChromeLine}" BorderThickness="0,0,0,1" Padding="8,6">
+            <DockPanel>
+                <Button DockPanel.Dock="Right" Content="&#x2715;" Click="OnHide" Padding="7,1" Margin="0"
+                        ToolTip="Hide the assistant (Ctrl+J)" Background="Transparent" BorderThickness="0" />
+                <TextBlock Text="Jack The Code Bender" FontWeight="SemiBold" VerticalAlignment="Center" />
+            </DockPanel>
+        </Border>
+
+        <!-- Session and provider bar -->
+        <Border DockPanel.Dock="Top" Background="{StaticResource Chrome}"
+                BorderBrush="{StaticResource ChromeLine}" BorderThickness="0,0,0,1" Padding="8,6">
+            <StackPanel>
+                <DockPanel>
+                    <Button DockPanel.Dock="Right" Content="&#x1F5D1;" Click="OnDeleteSession" Padding="7,1" Margin="0"
+                            ToolTip="Delete this chat" />
+                    <Button DockPanel.Dock="Right" Content="Reset" Click="OnResetSession" Padding="7,1"
+                            ToolTip="Clear the messages, keep the chat" />
+                    <Button DockPanel.Dock="Right" Content="New" Click="OnNewSession" Padding="7,1" />
+                    <ComboBox x:Name="SessionBox" SelectionChanged="OnSessionSelected"
+                              DisplayMemberPath="Title" Margin="0,0,6,0" />
+                </DockPanel>
+
+                <DockPanel Margin="0,6,0,0">
+                    <Button DockPanel.Dock="Right" Content="Prompts" Click="OnShowPrompts" Padding="7,1" Margin="0" />
+                    <ComboBox x:Name="ProviderBox" Width="96" SelectionChanged="OnProviderChanged" Margin="0,0,6,0" />
+                    <TextBlock x:Name="ModelText" VerticalAlignment="Center" FontSize="11"
+                               Foreground="{StaticResource Accent}" TextTrimming="CharacterEllipsis" />
+                </DockPanel>
+
+                <TextBlock x:Name="StatusText" FontSize="10" Margin="0,5,0,0"
+                           Foreground="{StaticResource InkMuted}" TextWrapping="Wrap" />
+            </StackPanel>
+        </Border>
+
+        <!-- Composer -->
+        <Border DockPanel.Dock="Bottom" Background="{StaticResource ChromeAlt}"
+                BorderBrush="{StaticResource ChromeLine}" BorderThickness="0,1,0,0" Padding="8">
+            <DockPanel>
+                <DockPanel DockPanel.Dock="Bottom" Margin="0,6,0,0">
+                    <Button DockPanel.Dock="Right" x:Name="SendButton" Content="Send" Click="OnSend"
+                            MinWidth="70" Margin="6,0,0,0" />
+                    <Button DockPanel.Dock="Right" x:Name="StopButton" Content="Stop" Click="OnStop"
+                            Visibility="Collapsed" MinWidth="60" Margin="6,0,0,0" />
+                    <Button Content="&#x1F5BC;" Click="OnAttachImage" Padding="7,1" ToolTip="Attach an image" />
+                    <Button Content="&#x1F4CE;" Click="OnAttachDocument" Padding="7,1" ToolTip="Attach a document" />
+                    <TextBlock />
+                </DockPanel>
+
+                <ItemsControl x:Name="AttachmentStrip" DockPanel.Dock="Bottom" Margin="0,6,0,0">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Background="{StaticResource Chrome}" BorderBrush="{StaticResource ChromeLine}"
+                                    BorderThickness="1" CornerRadius="9" Padding="6,1" Margin="0,0,4,4">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="{Binding FileName}" FontSize="10" VerticalAlignment="Center" />
+                                    <Button Content="x" Margin="5,0,0,0" Padding="2,0" FontSize="9"
+                                            Background="Transparent" BorderThickness="0"
+                                            Tag="{Binding}" Click="OnRemoveAttachment" />
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <TextBox x:Name="Composer" AcceptsReturn="True" MinHeight="56" MaxHeight="160"
+                         TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"
+                         PreviewKeyDown="OnComposerKeyDown"
+                         ToolTip="Enter sends, Shift+Enter for a new line" />
+            </DockPanel>
+        </Border>
+
+        <!-- Transcript -->
+        <Grid Background="#FF11151C">
+            <wv2:WebView2 x:Name="Transcript" />
+
+            <Border x:Name="TranscriptFallback" Visibility="Collapsed" Padding="16" Background="#FF11151C">
+                <StackPanel VerticalAlignment="Center">
+                    <TextBlock Text="WebView2 runtime missing" FontWeight="SemiBold" Margin="0,0,0,8"
+                               TextWrapping="Wrap" />
+                    <TextBlock x:Name="TranscriptFallbackText" TextWrapping="Wrap"
+                               Foreground="{StaticResource InkMuted}" FontSize="11" />
+                    <TextBlock Margin="0,10,0,0" TextWrapping="Wrap" Foreground="{StaticResource InkMuted}"
+                               FontSize="11"
+                               Text="Install the Microsoft Edge WebView2 Runtime. Everything except the rendered transcript still works." />
+                </StackPanel>
+            </Border>
+        </Grid>
+
+    </DockPanel>
+</UserControl>

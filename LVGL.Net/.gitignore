@@ -1,0 +1,17 @@
+bin/
+obj/
+.vs/
+.idea/
+*.user
+*.suo
+
+# Native build output
+native/build/
+native/lvgl/
+runtimes/**/native/*.so
+runtimes/**/native/*.dll
+runtimes/**/native/*.dylib
+
+# Test output
+TestResults/
+*.trx

@@ -1,0 +1,12 @@
+nama: LVGL.Net
+deskripsi:
+Library .NET wrapper dari LVGL (https://github.com/lvgl/lvgl) yang dapat digunakan multi-platform. Dengan supporting tools:
+1. LVGL designer dibuat dengan WPF
+2. Sample-sample aplikasi yang memanfaatkan LVGL:
+a. LVGL.Raspi: aplikasi yang run di raspberry 4 (membaca data sensor yang ada di raspi 4, dan menampilkan dalam grafis secara realtime dengan LVGL.Net)
+b. LVGL.Desktop: .NET Desktop yang bisa run di windows/mac/Linux dengan menampilkan berbagai demo dengan komponen LVGL
+c. dokumentasi lengkap di folder docs (English dan Bahasa Indonesia)
+
+Notes:
+- optimize code agar ringan dan cepat
+- .NET Versi 10

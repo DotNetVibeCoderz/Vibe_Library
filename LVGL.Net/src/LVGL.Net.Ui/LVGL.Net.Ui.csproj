@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>Lvgl.Ui</RootNamespace>
+    <AssemblyName>LVGL.Net.Ui</AssemblyName>
+    <PackageId>LVGL.Net.Ui</PackageId>
+    <Description>Serializable UI document model shared by the LVGL designer, the runtime loader and the C# code generator.</Description>
+    <IsAotCompatible>true</IsAotCompatible>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../LVGL.Net/LVGL.Net.csproj" />
+  </ItemGroup>
+
+</Project>

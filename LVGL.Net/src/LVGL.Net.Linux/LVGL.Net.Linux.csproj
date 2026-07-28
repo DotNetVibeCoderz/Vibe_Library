@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>Lvgl.Linux</RootNamespace>
+    <AssemblyName>LVGL.Net.Linux</AssemblyName>
+    <PackageId>LVGL.Net.Linux</PackageId>
+    <Description>Linux framebuffer and evdev backend for LVGL.Net - direct-to-display output with no window system, for Raspberry Pi and similar boards.</Description>
+    <IsAotCompatible>true</IsAotCompatible>
+    <!-- Every API here is a Linux syscall; the analyser would otherwise flag each one. -->
+    <SupportedOSPlatformVersion>0.0</SupportedOSPlatformVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../LVGL.Net/LVGL.Net.csproj" />
+  </ItemGroup>
+
+</Project>
