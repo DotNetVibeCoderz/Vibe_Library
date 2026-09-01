@@ -150,9 +150,9 @@ jobs:
             tar -xzf "$t" -C runtimes
           done
 
-      # 0.1.0 shipped with only win-x64 inside it. A published version can never be replaced,
-      # so the RID set is checked before anything is packed rather than after it is public.
-      - name: Verify every RID is present
+      # An early, clear failure when one of the native jobs produced nothing. It is not the
+      # gate that matters though - see "Verify the packed RIDs" below.
+      - name: Verify every RID was staged
         run: |
           missing=0
           for rid in win-x64 linux-x64 linux-arm64 linux-arm osx-arm64 osx-x64; do
@@ -186,6 +186,24 @@ jobs:
             dotnet pack "$p" -c Release -o artifacts/nuget ${{ steps.version.outputs.arg }}
           done
           ls -l artifacts/nuget
+
+      # The gate that matters. 0.1.1 shipped win-x64 only even though staging held all six,
+      # because the csproj glob missed the lib-prefixed Unix names - the staging check passed
+      # and the package was empty. A published version can never be replaced, so what gets
+      # checked here is the .nupkg itself, not the folder it was built from.
+      - name: Verify the packed RIDs
+        run: |
+          nupkg=$(ls artifacts/nuget/LVGL.Net.[0-9]*.nupkg)
+          echo "inspecting $nupkg"
+          unzip -l "$nupkg" | grep runtimes/ || true
+          missing=0
+          for rid in win-x64 linux-x64 linux-arm64 linux-arm osx-arm64 osx-x64; do
+            if ! unzip -l "$nupkg" | grep -q "runtimes/$rid/native/"; then
+              echo "::error::$nupkg carries no native library for $rid"
+              missing=1
+            fi
+          done
+          exit $missing
 
       - uses: actions/upload-artifact@v4
         with:

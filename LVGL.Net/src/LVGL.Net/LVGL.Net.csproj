@@ -24,11 +24,15 @@
   -->
   <ItemGroup>
     <!--
+      The leading * is load-bearing: CMake names the shim lvglnet.dll on Windows but
+      liblvglnet.so / liblvglnet.dylib everywhere else, so a "lvglnet.*" glob silently packs
+      nothing for Linux and macOS.
+
       RecursiveDir here is "<rid>/native/" and NuGet appends it to a directory PackagePath, so
       "runtimes/" is what lands the shim at runtimes/<rid>/native/ - the layout NuGet resolves and
       LvglNativeLibrary.EnumerateProbePaths searches. Spelling the RID folder out again duplicates it.
     -->
-    <None Include="$(MSBuildThisFileDirectory)../../runtimes/**/native/lvglnet.*"
+    <None Include="$(MSBuildThisFileDirectory)../../runtimes/**/native/*lvglnet.*"
           Link="runtimes/%(RecursiveDir)%(Filename)%(Extension)"
           CopyToOutputDirectory="PreserveNewest"
           Pack="true"
@@ -40,7 +44,7 @@
       keeps working; simply not shipped.
     -->
     <None Include="$(MSBuildThisFileDirectory)../../runtimes/**/native/*"
-          Exclude="$(MSBuildThisFileDirectory)../../runtimes/**/native/lvglnet.*"
+          Exclude="$(MSBuildThisFileDirectory)../../runtimes/**/native/*lvglnet.*"
           Link="runtimes/%(RecursiveDir)%(Filename)%(Extension)"
           CopyToOutputDirectory="PreserveNewest"
           Pack="false" />
