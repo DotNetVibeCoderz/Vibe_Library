@@ -20,6 +20,33 @@ saling bergantung.
 ./native/build.sh --no-demos     # lewati scene demo bawaan LVGL
 ```
 
+## Cross-compile
+
+`lvglnet` tidak me-link apa pun selain libc dan libm, jadi satu mesin Linux x64 bisa membangun
+semua target Linux dan satu Mac membangun kedua target Apple. Inilah cara workflow rilis
+menghasilkan keenam RID dari tiga runner.
+
+```bash
+sudo apt install gcc-aarch64-linux-gnu gcc-arm-linux-gnueabihf
+
+./native/build.sh --cross=aarch64-linux-gnu      # -> runtimes/linux-arm64/native
+./native/build.sh --cross=arm-linux-gnueabihf    # -> runtimes/linux-arm/native
+```
+
+`--cross` menerima triplet GNU dan menurunkan sisanya dari situ: compiler-nya `<triplet>-gcc`,
+dan komponen pertama triplet menjadi `CMAKE_SYSTEM_PROCESSOR` - itulah yang dipetakan
+`CMakeLists.txt` menjadi RID.
+
+Di macOS arsitektur kedua keluar dari SDK yang sama, tapi `CMAKE_SYSTEM_PROCESSOR` tetap
+melaporkan host - jadi RID-nya harus disebut eksplisit:
+
+```bash
+./native/build.sh --osx-arch=x86_64 --rid=osx-x64
+```
+
+Setiap target punya build tree sendiri (`native/build-<target>`), karena cache CMake mengingat
+compiler yang dipakai saat konfigurasi dan menolak dipakai ulang lintas arsitektur.
+
 ```powershell
 ./native/build.ps1
 ./native/build.ps1 -NoDemos

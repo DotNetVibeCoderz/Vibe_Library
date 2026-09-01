@@ -19,6 +19,33 @@ One artifact means one `DllImport` name and no load-order problems between co-de
 ./native/build.sh --no-demos     # skip LVGL's bundled demo scenes
 ```
 
+## Cross-compiling
+
+`lvglnet` links nothing but libc and libm, so one x64 Linux machine builds every Linux target
+and one Mac builds both Apple targets. This is how the release workflow produces all six RIDs
+from three runners.
+
+```bash
+sudo apt install gcc-aarch64-linux-gnu gcc-arm-linux-gnueabihf
+
+./native/build.sh --cross=aarch64-linux-gnu      # -> runtimes/linux-arm64/native
+./native/build.sh --cross=arm-linux-gnueabihf    # -> runtimes/linux-arm/native
+```
+
+`--cross` takes a GNU triplet and derives the rest from it: the compiler is `<triplet>-gcc` and
+the triplet's first component becomes `CMAKE_SYSTEM_PROCESSOR`, which is what `CMakeLists.txt`
+maps onto the RID.
+
+On macOS the second architecture comes out of the same SDK, but `CMAKE_SYSTEM_PROCESSOR` still
+reports the host - so the RID has to be named:
+
+```bash
+./native/build.sh --osx-arch=x86_64 --rid=osx-x64
+```
+
+Each target gets its own build tree (`native/build-<target>`), because a CMake cache remembers
+the compiler it was configured with and refuses to be reused across architectures.
+
 ```powershell
 ./native/build.ps1
 ./native/build.ps1 -NoDemos

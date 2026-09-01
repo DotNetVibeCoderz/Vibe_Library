@@ -1,0 +1,6 @@
+# Shell scripts run on the Linux and macOS CI runners; a CRLF checkout breaks them with
+# "bad interpreter: no such file or directory". core.autocrlf=true on a Windows clone would
+# do exactly that, so pin the ending here rather than relying on every contributor's config.
+*.sh text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf

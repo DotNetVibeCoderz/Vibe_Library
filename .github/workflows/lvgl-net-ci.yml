@@ -1,0 +1,92 @@
+# Build and test LVGL.Net (Vibe_Library/LVGL.Net).
+#
+# Vibe_Library holds several independent projects, so this workflow is scoped by path and
+# named after the one it covers. Everything runs from the LVGL.Net/ subdirectory.
+name: LVGL.Net CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'LVGL.Net/**'
+      - '.github/workflows/lvgl-net-ci.yml'
+  pull_request:
+    paths:
+      - 'LVGL.Net/**'
+      - '.github/workflows/lvgl-net-ci.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: lvgl-net-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+
+defaults:
+  run:
+    working-directory: LVGL.Net
+
+jobs:
+  build:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: LVGL.Net/global.json
+
+      # The CMake build clones LVGL itself and reuses native/lvgl when it is already there, so
+      # caching that checkout keeps every run off github.com/lvgl/lvgl. The key tracks
+      # CMakeLists.txt because that is where LVGL_TAG is pinned.
+      - name: Cache LVGL checkout
+        uses: actions/cache@v4
+        with:
+          path: LVGL.Net/native/lvgl
+          key: lvgl-${{ hashFiles('LVGL.Net/native/CMakeLists.txt') }}
+
+      - name: Build native library
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            pwsh ./native/build.ps1
+          else
+            ./native/build.sh
+          fi
+
+      # The WPF designer targets net10.0-windows and cannot even be restored on Linux, so the
+      # whole solution is only built on Windows. Everything else is cross-platform.
+      - name: Build (Windows)
+        if: runner.os == 'Windows'
+        run: dotnet build LVGL.Net.slnx -c Release
+
+      - name: Build (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          for p in src/LVGL.Net src/LVGL.Net.Ui src/LVGL.Net.Sdl src/LVGL.Net.Linux \
+                   src/LVGL.Net.Assistant samples/LVGL.Desktop samples/LVGL.Raspi \
+                   tests/LVGL.Net.Tests; do
+            dotnet build "$p" -c Release
+          done
+
+      # The unit tests run without the native library and LvglIntegrationTests no-ops when it is
+      # missing - but the native build above means the integration tests really execute here.
+      - name: Test
+        run: dotnet test tests/LVGL.Net.Tests -c Release --no-build --logger "trx;LogFileName=test-results.trx"
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lvgl-net-test-results-${{ matrix.os }}
+          path: LVGL.Net/tests/LVGL.Net.Tests/TestResults/*.trx
+          if-no-files-found: ignore

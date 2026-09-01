@@ -34,7 +34,7 @@
     <Product>LVGL.Net</Product>
     <Description>Multi-platform .NET wrapper for LVGL. Di port oleh Kang Fadhil dari Gravicode Studios.</Description>
     <Copyright>Di port oleh Kang Fadhil dari Gravicode Studios. LVGL itself is MIT-licensed.</Copyright>
-    <Version>0.1.0</Version>
+    <Version>0.1.1</Version>
   </PropertyGroup>
 
   <!--

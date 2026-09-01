@@ -1,0 +1,210 @@
+# Packs the five LVGL.Net packages with native binaries for every supported RID and pushes
+# them to nuget.org.
+#
+# Trigger with a tag: LVGL.Net-v0.1.1 (namespaced because Vibe_Library holds several projects
+# and a bare v* tag would be ambiguous). A manual run without "push" ticked is a dry run: it
+# builds and verifies the packages and uploads them as artifacts, touching nothing public.
+#
+# Requires the repository secret NUGET_API_KEY.
+name: LVGL.Net Publish
+
+on:
+  push:
+    tags:
+      - 'LVGL.Net-v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Package version (blank = the version in Directory.Build.props)'
+        required: false
+        type: string
+      push:
+        description: 'Push to nuget.org (leave off for a dry run)'
+        required: false
+        default: false
+        type: boolean
+
+concurrency:
+  group: lvgl-net-publish
+  cancel-in-progress: false
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+defaults:
+  run:
+    working-directory: LVGL.Net
+
+jobs:
+  # ---------------------------------------------------------------------------------------
+  # Native binaries. lvglnet links nothing but libc and libm, so the three Linux targets
+  # cross-compile on one x64 runner and both Mac targets come off one Apple SDK - five RIDs
+  # from three jobs, and no ARM runner minutes.
+  #
+  # Demos stay ON (the CMake default): LvglDemos is public API of the LVGL.Net package, and a
+  # package built with LVGLNET_WITH_DEMOS=OFF would ship that API returning false at runtime.
+  # ---------------------------------------------------------------------------------------
+  native-windows:
+    name: native (win-x64)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: LVGL.Net/native/lvgl
+          key: lvgl-${{ hashFiles('LVGL.Net/native/CMakeLists.txt') }}
+      - name: Build
+        shell: pwsh
+        run: ./native/build.ps1
+      # Tarred rather than uploaded loose: upload-artifact v4 roots an artifact at the least
+      # common ancestor of the files it matched, which drops the RID folder for a job that
+      # produced exactly one binary.
+      - name: Archive native output
+        shell: bash
+        run: tar -czf native-win.tgz -C runtimes .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lvgl-native-win
+          path: LVGL.Net/native-win.tgz
+          if-no-files-found: error
+
+  native-linux:
+    name: native (linux-x64, linux-arm64, linux-arm)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: LVGL.Net/native/lvgl
+          key: lvgl-${{ hashFiles('LVGL.Net/native/CMakeLists.txt') }}
+      - name: Install cross toolchains
+        run: sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu gcc-arm-linux-gnueabihf
+      - name: Build
+        run: |
+          ./native/build.sh
+          ./native/build.sh --cross=aarch64-linux-gnu
+          ./native/build.sh --cross=arm-linux-gnueabihf
+      # Tarred rather than uploaded loose: upload-artifact v4 roots an artifact at the least
+      # common ancestor of the files it matched, which drops the RID folder for a job that
+      # produced exactly one binary.
+      - name: Archive native output
+        shell: bash
+        run: tar -czf native-linux.tgz -C runtimes .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lvgl-native-linux
+          path: LVGL.Net/native-linux.tgz
+          if-no-files-found: error
+
+  native-macos:
+    name: native (osx-arm64, osx-x64)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: LVGL.Net/native/lvgl
+          key: lvgl-${{ hashFiles('LVGL.Net/native/CMakeLists.txt') }}
+      - name: Build
+        run: |
+          ./native/build.sh
+          ./native/build.sh --osx-arch=x86_64 --rid=osx-x64
+      # Tarred rather than uploaded loose: upload-artifact v4 roots an artifact at the least
+      # common ancestor of the files it matched, which drops the RID folder for a job that
+      # produced exactly one binary.
+      - name: Archive native output
+        shell: bash
+        run: tar -czf native-macos.tgz -C runtimes .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lvgl-native-macos
+          path: LVGL.Net/native-macos.tgz
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------------------------
+  pack:
+    name: pack and push
+    needs: [native-windows, native-linux, native-macos]
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: LVGL.Net/global.json
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: lvgl-native-*
+          path: ${{ runner.temp }}/native
+
+      # Unpacks the three archives into one runtimes/ tree, exactly where LVGL.Net.csproj
+      # globs for the native assets.
+      - name: Stage native binaries
+        run: |
+          mkdir -p runtimes
+          for t in "${{ runner.temp }}"/native/*/*.tgz; do
+            echo "unpacking $t"
+            tar -xzf "$t" -C runtimes
+          done
+
+      # 0.1.0 shipped with only win-x64 inside it. A published version can never be replaced,
+      # so the RID set is checked before anything is packed rather than after it is public.
+      - name: Verify every RID is present
+        run: |
+          missing=0
+          for rid in win-x64 linux-x64 linux-arm64 linux-arm osx-arm64 osx-x64; do
+            if ! ls runtimes/"$rid"/native/*lvglnet* >/dev/null 2>&1; then
+              echo "::error::missing native library for $rid"
+              missing=1
+            fi
+          done
+          find runtimes -name '*lvglnet*' -printf '%p  %s bytes\n' | sort
+          exit $missing
+
+      # A last gate before an irreversible push: with linux-x64 staged above, the integration
+      # tests exercise the real LVGL build rather than no-opping.
+      - name: Test
+        run: dotnet test tests/LVGL.Net.Tests -c Release
+
+      # A tag sets the version; otherwise the workflow input; otherwise Directory.Build.props.
+      - name: Resolve version
+        id: version
+        run: |
+          v="${{ inputs.version }}"
+          if [ -z "$v" ] && [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            v="${GITHUB_REF_NAME#LVGL.Net-v}"
+          fi
+          if [ -n "$v" ]; then echo "arg=-p:Version=$v" >> "$GITHUB_OUTPUT"; fi
+          echo "resolved version: ${v:-from Directory.Build.props}"
+
+      - name: Pack
+        run: |
+          for p in src/LVGL.Net src/LVGL.Net.Ui src/LVGL.Net.Sdl src/LVGL.Net.Linux src/LVGL.Net.Assistant; do
+            dotnet pack "$p" -c Release -o artifacts/nuget ${{ steps.version.outputs.arg }}
+          done
+          ls -l artifacts/nuget
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lvgl-net-nuget-packages
+          path: LVGL.Net/artifacts/nuget/*
+          if-no-files-found: error
+
+      # --skip-duplicate so re-running the job over an already-published version is a no-op
+      # rather than a failure.
+      - name: Push to nuget.org
+        if: github.event_name == 'push' || inputs.push
+        env:
+          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+        run: |
+          if [ -z "$NUGET_API_KEY" ]; then
+            echo "::error::NUGET_API_KEY is not set - add it under Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+          dotnet nuget push "artifacts/nuget/*.nupkg" \
+            --api-key "$NUGET_API_KEY" \
+            --source https://api.nuget.org/v3/index.json \
+            --skip-duplicate
