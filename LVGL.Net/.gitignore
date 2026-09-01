@@ -12,6 +12,11 @@ runtimes/**/native/*.so
 runtimes/**/native/*.dll
 runtimes/**/native/*.dylib
 
+# Package output
+artifacts/
+*.nupkg
+*.snupkg
+
 # Test output
 TestResults/
 *.trx

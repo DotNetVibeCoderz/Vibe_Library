@@ -34,10 +34,41 @@
     <Product>LVGL.Net</Product>
     <Description>Multi-platform .NET wrapper for LVGL. Di port oleh Kang Fadhil dari Gravicode Studios.</Description>
     <Copyright>Di port oleh Kang Fadhil dari Gravicode Studios. LVGL itself is MIT-licensed.</Copyright>
-    <RepositoryUrl>https://github.com/lvgl/lvgl</RepositoryUrl>
-    <PackageProjectUrl>https://gravicode.com</PackageProjectUrl>
     <Version>0.1.0</Version>
   </PropertyGroup>
+
+  <!--
+    NuGet metadata. The sources live in a subfolder of a shared repository, so both the project
+    URL and the repository URL point at that subfolder rather than at the repository root.
+  -->
+  <PropertyGroup>
+    <PackageProjectUrl>https://github.com/DotNetVibeCoderz/Vibe_Library/tree/main/LVGL.Net</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/DotNetVibeCoderz/Vibe_Library/tree/main/LVGL.Net</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageTags>lvgl;embedded;graphics;gui;ui;raspberry-pi;iot;sdl;framebuffer;interop</PackageTags>
+    <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
+
+    <!--
+      SourceLink is in the SDK. PublishRepositoryUrl stays off deliberately: it would let
+      SourceLink overwrite RepositoryUrl above with the bare git remote, dropping the subfolder.
+    -->
+    <PublishRepositoryUrl>false</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <ContinuousIntegrationBuild Condition="'$(GITHUB_ACTIONS)' == 'true'">true</ContinuousIntegrationBuild>
+  </PropertyGroup>
+
+  <!--
+    EnableDefaultNoneItems is off above, so the readme and licence the package metadata points at
+    have to be listed by hand. Harmless in the non-packable projects: nothing packs there.
+  -->
+  <ItemGroup>
+    <None Include="$(MSBuildThisFileDirectory)README.md" Pack="true" PackagePath="\" Visible="false" />
+    <None Include="$(MSBuildThisFileDirectory)LICENSE" Pack="true" PackagePath="\" Visible="false" />
+  </ItemGroup>
 
   <!--
     A single generated attribution constant, available to every project, so the

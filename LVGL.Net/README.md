@@ -24,7 +24,20 @@ Documentation: **[English](docs/en/README.md)** · **[Bahasa Indonesia](docs/id/
 | `tests/LVGL.Net.Tests` | Unit tests; run without the native library |
 | `native/` | LVGL build, ABI shim, `lv_conf.h`, build scripts |
 
-## Quick start
+## Install
+
+```bash
+dotnet add package LVGL.Net          # core wrapper, ships the native lvglnet for every RID
+dotnet add package LVGL.Net.Sdl      # windowed output on Windows, macOS and Linux
+dotnet add package LVGL.Net.Linux    # framebuffer + evdev, no window system
+dotnet add package LVGL.Net.Ui       # layout document model, loader and C# generator
+```
+
+`LVGL.Net.Sdl` needs SDL2 itself on the machine — the package does not redistribute it. Install
+`libsdl2-2.0-0` on Debian/Ubuntu, `sdl2` via Homebrew, or drop `SDL2.dll` into
+`runtimes/win-x64/native/` on Windows.
+
+## Build from source
 
 ```bash
 ./native/build.sh                            # Linux/macOS - builds LVGL + the shim

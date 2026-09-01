@@ -10,11 +10,6 @@
   </PropertyGroup>
 
   <!--
-    The native library is produced by native/build.sh|ps1 into runtimes/<rid>/native.
-    It is linked (not copied into the project) so a rebuild of the C side is picked
-    up without touching the managed build.
-  -->
-  <!--
     The integration tests call the raw interop layer directly to assert that this LVGL build
     exposes every entry point and event code the wrapper relies on.
   -->
@@ -22,12 +17,33 @@
     <InternalsVisibleTo Include="LVGL.Net.Tests" />
   </ItemGroup>
 
+  <!--
+    The native library is produced by native/build.sh|ps1 into runtimes/<rid>/native. It is
+    linked (not copied into the project) so a rebuild of the C side is picked up without
+    touching the managed build.
+  -->
   <ItemGroup>
-    <None Include="$(MSBuildThisFileDirectory)../../runtimes/**/native/*"
+    <!--
+      RecursiveDir here is "<rid>/native/" and NuGet appends it to a directory PackagePath, so
+      "runtimes/" is what lands the shim at runtimes/<rid>/native/ - the layout NuGet resolves and
+      LvglNativeLibrary.EnumerateProbePaths searches. Spelling the RID folder out again duplicates it.
+    -->
+    <None Include="$(MSBuildThisFileDirectory)../../runtimes/**/native/lvglnet.*"
           Link="runtimes/%(RecursiveDir)%(Filename)%(Extension)"
           CopyToOutputDirectory="PreserveNewest"
           Pack="true"
           PackagePath="runtimes/" />
+
+    <!--
+      Anything else staged there - SDL2 above all - is a third-party redistributable that belongs
+      to whoever needs it, not to the core package. Still copied next to the app so a local build
+      keeps working; simply not shipped.
+    -->
+    <None Include="$(MSBuildThisFileDirectory)../../runtimes/**/native/*"
+          Exclude="$(MSBuildThisFileDirectory)../../runtimes/**/native/lvglnet.*"
+          Link="runtimes/%(RecursiveDir)%(Filename)%(Extension)"
+          CopyToOutputDirectory="PreserveNewest"
+          Pack="false" />
   </ItemGroup>
 
 </Project>
