@@ -32,6 +32,8 @@ command -v cmake >/dev/null || { echo "cmake is required (apt install cmake buil
 # Every target gets its own build tree. A CMake cache remembers the compiler it was configured
 # with, so reusing one directory across architectures fails with "the compiler has changed".
 BUILD_DIR="$ROOT/native/build"
+# Expanded as ${EXTRA[@]+...} further down: under `set -u`, bash 3.2 - which is what macOS
+# ships - treats an empty array's plain expansion as an unbound variable.
 EXTRA=()
 
 if [ -n "$CROSS" ]; then
@@ -63,7 +65,7 @@ cmake -S "$ROOT/native" -B "$BUILD_DIR" \
       -DCMAKE_BUILD_TYPE=Release \
       -DLVGLNET_WITH_DEMOS="$DEMOS" \
       -DLVGLNET_TUNE_PI4="$PI4" \
-      "${EXTRA[@]}"
+      ${EXTRA[@]+"${EXTRA[@]}"}
 
 cmake --build "$BUILD_DIR" --config Release -j "$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 4)"
 

@@ -60,7 +60,7 @@ jobs:
           if [ "$RUNNER_OS" = "Windows" ]; then
             pwsh ./native/build.ps1
           else
-            ./native/build.sh
+            bash ./native/build.sh
           fi
 
       # The WPF designer targets net10.0-windows and cannot even be restored on Linux, so the

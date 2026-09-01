@@ -82,9 +82,9 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu gcc-arm-linux-gnueabihf
       - name: Build
         run: |
-          ./native/build.sh
-          ./native/build.sh --cross=aarch64-linux-gnu
-          ./native/build.sh --cross=arm-linux-gnueabihf
+          bash ./native/build.sh
+          bash ./native/build.sh --cross=aarch64-linux-gnu
+          bash ./native/build.sh --cross=arm-linux-gnueabihf
       # Tarred rather than uploaded loose: upload-artifact v4 roots an artifact at the least
       # common ancestor of the files it matched, which drops the RID folder for a job that
       # produced exactly one binary.
@@ -108,8 +108,8 @@ jobs:
           key: lvgl-${{ hashFiles('LVGL.Net/native/CMakeLists.txt') }}
       - name: Build
         run: |
-          ./native/build.sh
-          ./native/build.sh --osx-arch=x86_64 --rid=osx-x64
+          bash ./native/build.sh
+          bash ./native/build.sh --osx-arch=x86_64 --rid=osx-x64
       # Tarred rather than uploaded loose: upload-artifact v4 roots an artifact at the least
       # common ancestor of the files it matched, which drops the RID folder for a job that
       # produced exactly one binary.
