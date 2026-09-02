@@ -180,6 +180,83 @@ public class NeuralNetworkTests
         Assert.True(loss < 1e-5f, $"Adam failed to converge; final loss {loss:E3}");
     }
 
+    /// <summary>
+    /// Checks the vectorised Adam against a scalar reference at lengths that straddle the vector
+    /// width, so the tail loop is actually exercised.
+    /// </summary>
+    /// <remarks>
+    /// The optimiser is vectorised because at small batches it dominates the gradient step. That
+    /// rewrite is exactly the kind that stays silent when wrong: a tail loop that drops the last few
+    /// parameters leaves them frozen at their initial values, which looks like a network that merely
+    /// learns a bit worse. Comparing against the obvious scalar implementation catches it.
+    /// </remarks>
+    [Theory]
+    [InlineData(1)]
+    [InlineData(7)]
+    [InlineData(8)]
+    [InlineData(9)]
+    [InlineData(17)]
+    [InlineData(64)]
+    [InlineData(97)]
+    public void Adam_MatchesAScalarReference(int parameterCount)
+    {
+        const float learningRate = 0.01f, scale = 0.5f;
+        const int steps = 25;
+
+        var random = new FastRandom(7);
+        var start = new float[parameterCount];
+        var gradient = new float[parameterCount];
+        for (int i = 0; i < parameterCount; i++)
+        {
+            start[i] = random.NextGaussian();
+            gradient[i] = random.NextGaussian();
+        }
+
+        var actual = (float[])start.Clone();
+        var optimizer = new AdamOptimizer(parameterCount, learningRate);
+        for (int t = 0; t < steps; t++)
+        {
+            var scope = optimizer.BeginUpdate(scale);
+            scope.Apply(actual, (float[])gradient.Clone());
+        }
+
+        var expected = ScalarAdam(start, gradient, steps, learningRate, scale);
+
+        for (int i = 0; i < parameterCount; i++)
+        {
+            float tolerance = 1e-4f * Math.Max(1f, Math.Abs(expected[i]));
+            Assert.True(
+                Math.Abs(expected[i] - actual[i]) <= tolerance,
+                $"parameter {i} of {parameterCount}: expected {expected[i]:F7}, got {actual[i]:F7}");
+        }
+    }
+
+    /// <summary>Adam written the obvious way, as the reference the vectorised version must match.</summary>
+    private static float[] ScalarAdam(float[] start, float[] gradient, int steps, float learningRate, float scale)
+    {
+        const float beta1 = 0.9f, beta2 = 0.999f, epsilon = 1e-8f;
+
+        var parameters = (float[])start.Clone();
+        var m = new float[parameters.Length];
+        var v = new float[parameters.Length];
+
+        for (int t = 1; t <= steps; t++)
+        {
+            float correction1 = 1f - MathF.Pow(beta1, t);
+            float correction2 = 1f - MathF.Pow(beta2, t);
+
+            for (int i = 0; i < parameters.Length; i++)
+            {
+                float g = gradient[i] * scale;
+                m[i] = beta1 * m[i] + (1f - beta1) * g;
+                v[i] = beta2 * v[i] + (1f - beta2) * g * g;
+                parameters[i] -= learningRate * (m[i] / correction1) / (MathF.Sqrt(v[i] / correction2) + epsilon);
+            }
+        }
+
+        return parameters;
+    }
+
     [Fact]
     public void SoftUpdate_MovesTargetFractionally()
     {
