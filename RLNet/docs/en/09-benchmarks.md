@@ -111,7 +111,7 @@ A2C's short rollouts and any online single-step update sit squarely in the range
 Prioritised replay costs about 6× uniform for a full round trip, and both allocate nothing.
 
 Read that against what a gradient step costs, not in isolation. A DQN gradient step on this machine
-is around 1.3 ms, so the extra ~120 µs is roughly 9% — and on a sparse-reward problem like
+is around 1.1 ms, so the extra ~120 µs is roughly 11% — and on a sparse-reward problem like
 MountainCar, prioritised replay is frequently the difference between learning and not learning at
 all. It is close to always worth it.
 
@@ -127,13 +127,13 @@ actually feels. 2,000 steps per measurement, at **library default settings**:
 
 | Algorithm / environment | Per 2,000 steps | Steps/sec |
 |---|---:|---:|
-| Q-learning / GridWorld | 7.5 ms | 267,000 |
-| A2C / CartPole | 54.5 ms | 36,700 |
-| PPO / CartPole | 206.4 ms | 9,690 |
-| DQN / CartPole | 2.60 s | 770 |
-| DQN, uniform replay / CartPole | 2.76 s | 725 |
-| TD3 / Pendulum | 63.3 s | 32 |
-| SAC / Pendulum | 88.9 s | 22 |
+| Q-learning / GridWorld | 5.5 ms | 365,000 |
+| A2C / CartPole | 43.4 ms | 46,100 |
+| PPO / CartPole | 114.6 ms | 17,450 |
+| DQN, uniform replay / CartPole | 2.08 s | 963 |
+| DQN / CartPole | 2.13 s | 941 |
+| TD3 / Pendulum | 56.8 s | 35 |
+| SAC / Pendulum | 99.5 s | 20 |
 
 Four orders of magnitude across the set, and the reason is what each does per environment step:
 
@@ -145,8 +145,28 @@ Four orders of magnitude across the set, and the reason is what each does per en
 - **SAC and TD3** do the same, but one update touches an actor *and four critics* at 256×256, with
   a batch of 256.
 
-The DQN rows are within noise of each other at three iterations — the prioritised sampling overhead
-is real but small next to the gradient step, which is exactly what the replay table above predicts.
+The two DQN rows differ by 2.3%, with prioritised the slower of the pair — the right direction, and
+about the size the replay table above predicts once the sampling cost is set against a ~1 ms
+gradient step.
+
+### On comparing these across runs
+
+This table was re-measured after the Adam work, and most rows moved by 10–44%. **Almost none of that
+is attributable to the change**, and it is worth saying why rather than banking the improvement.
+
+Q-learning is the control: it uses no neural network and no optimiser at all, so the Adam rewrite
+cannot touch it — and it still moved 27%. SAC moved 12% in the *wrong* direction, which the change
+also cannot cause. Both point at the same thing: this is a laptop that had been running benchmarks
+continuously for hours, and run-to-run variance at three iterations is larger than the effect being
+looked for.
+
+The clean measurement of the Adam change is [the network table](#the-network-itself), which isolates
+the operation instead of burying it inside a training loop. At the batch sizes these agents use
+(32–256) that table predicts 10% or less, which is exactly the regime where agent-level timings
+cannot resolve it.
+
+Treat the numbers here as *this machine, this afternoon* — useful for the shape of the ranking
+across algorithms, which is stable and enormous, and not for 20% comparisons between runs.
 
 ### If this is too slow
 

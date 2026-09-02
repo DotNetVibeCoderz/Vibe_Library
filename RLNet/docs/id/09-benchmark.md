@@ -113,7 +113,7 @@ Prioritised replay berbiaya sekitar 6× uniform untuk satu perjalanan penuh, dan
 mengalokasikan apa pun.
 
 Baca itu terhadap biaya satu gradient step, bukan sendirian. Satu gradient step DQN di mesin ini
-sekitar 1,3 ms, jadi tambahan ~120 µs itu kira-kira 9% — dan pada masalah ber-reward jarang seperti
+sekitar 1,1 ms, jadi tambahan ~120 µs itu kira-kira 11% — dan pada masalah ber-reward jarang seperti
 MountainCar, prioritised replay sering kali menjadi pembeda antara belajar dan tidak belajar sama
 sekali. Nyaris selalu sepadan.
 
@@ -130,13 +130,13 @@ dirasakan pengguna. 2.000 langkah per pengukuran, pada **setelan default library
 
 | Algoritma / simulasi | Per 2.000 langkah | Langkah/detik |
 |---|---:|---:|
-| Q-learning / GridWorld | 7,5 ms | 267.000 |
-| A2C / CartPole | 54,5 ms | 36.700 |
-| PPO / CartPole | 206,4 ms | 9.690 |
-| DQN / CartPole | 2,60 s | 770 |
-| DQN, uniform replay / CartPole | 2,76 s | 725 |
-| TD3 / Pendulum | 63,3 s | 32 |
-| SAC / Pendulum | 88,9 s | 22 |
+| Q-learning / GridWorld | 5,5 ms | 365.000 |
+| A2C / CartPole | 43,4 ms | 46.100 |
+| PPO / CartPole | 114,6 ms | 17.450 |
+| DQN, uniform replay / CartPole | 2,08 s | 963 |
+| DQN / CartPole | 2,13 s | 941 |
+| TD3 / Pendulum | 56,8 s | 35 |
+| SAC / Pendulum | 99,5 s | 20 |
 
 Empat orde besaran perbedaan, dan sebabnya adalah apa yang dilakukan masing-masing per langkah
 simulasi:
@@ -150,9 +150,29 @@ simulasi:
 - **SAC dan TD3** melakukan hal yang sama, tapi satu pembaruan menyentuh satu actor *dan empat
   critic* berukuran 256×256, dengan batch 256.
 
-Kedua baris DQN berada dalam rentang derau satu sama lain pada tiga iterasi — biaya sampling
-prioritised itu nyata tapi kecil dibanding gradient step-nya, persis seperti yang diprediksi tabel
-replay di atas.
+Kedua baris DQN berselisih 2,3%, dengan prioritised yang lebih lambat — arah yang benar, dan
+kira-kira sebesar yang diprediksi tabel replay di atas begitu biaya samplingnya dibandingkan dengan
+gradient step ~1 ms.
+
+### Soal membandingkan angka ini antar-run
+
+Tabel ini diukur ulang setelah pekerjaan Adam, dan sebagian besar barisnya bergerak 10–44%.
+**Hampir tidak ada yang bisa dikaitkan dengan perubahan itu**, dan alasannya perlu disebutkan
+alih-alih mengklaim perbaikannya.
+
+Q-learning adalah kontrolnya: ia tidak memakai neural network maupun optimizer sama sekali, jadi
+penulisan ulang Adam mustahil menyentuhnya — dan ia tetap bergerak 27%. SAC bergerak 12% ke arah
+yang *salah*, yang juga mustahil disebabkan perubahan itu. Keduanya menunjuk hal yang sama: ini
+laptop yang sudah menjalankan benchmark berjam-jam tanpa henti, dan variansi antar-run pada tiga
+iterasi lebih besar daripada efek yang sedang dicari.
+
+Pengukuran bersih atas perubahan Adam ada di [tabel jaringan](#jaringannya-sendiri), yang
+mengisolasi operasinya alih-alih menguburnya di dalam loop training. Pada ukuran batch yang dipakai
+agen-agen ini (32–256), tabel itu memprediksi 10% atau kurang — persis rezim tempat pengukuran di
+level agen tidak sanggup memisahkannya.
+
+Perlakukan angka di sini sebagai *mesin ini, sore ini* — berguna untuk melihat bentuk peringkat
+antar algoritma, yang stabil dan sangat besar selisihnya, dan bukan untuk perbandingan 20% antar-run.
 
 ### Kalau ini terlalu lambat
 
