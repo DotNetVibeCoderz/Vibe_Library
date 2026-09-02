@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>RLNet.Tests</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+
+    <!--
+      xunit.v3 runs on Microsoft.Testing.Platform, which the .NET 10 SDK no longer bridges to
+      VSTest. The test project is its own executable and "dotnet test" drives it directly.
+    -->
+    <OutputType>Exe</OutputType>
+    <TestingPlatformDotnetTestSupport>true</TestingPlatformDotnetTestSupport>
+    <UseMicrosoftTestingPlatformRunner>true</UseMicrosoftTestingPlatformRunner>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!--
+      xunit.v3 carries its own TRX reporter, so the separate Microsoft.Testing.Extensions.TrxReport
+      package is not needed - and it is pinned to an older platform version that fails to load
+      against the one xunit.v3 brings in.
+    -->
+    <PackageReference Include="xunit.v3" Version="4.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/RLNet.Core/RLNet.Core.csproj" />
+    <ProjectReference Include="../../src/RLNet.Gpu/RLNet.Gpu.csproj" />
+  </ItemGroup>
+
+</Project>

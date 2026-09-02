@@ -1,0 +1,178 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="clr-namespace:RLNet.Visualizer.Controls"
+        x:Class="RLNet.Visualizer.MainWindow"
+        Title="RLNet Console"
+        Width="1240" Height="720"
+        MinWidth="960" MinHeight="600"
+        WindowStartupLocation="CenterScreen"
+        Background="{StaticResource Ground}">
+
+    <!--
+        Three bands: a status ribbon across the top, the working area, and a transport bar.
+        The working area splits into the viewport (what the agent is doing) and the recorder
+        stack (whether it is working) - the two questions anyone watching an RL run is asking.
+    -->
+    <Grid RowDefinitions="Auto,*,Auto" Margin="14">
+
+        <!-- Status ribbon -->
+        <Border Grid.Row="0" Classes="panel" Padding="16,11" Margin="0,0,0,10">
+            <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto,Auto,Auto">
+
+                <StackPanel Grid.Column="0" Spacing="2">
+                    <TextBlock Classes="legend" Text="ENVIRONMENT" />
+                    <TextBlock Name="EnvironmentLabel" Classes="readout" FontSize="16" Text="—" />
+                </StackPanel>
+
+                <Border Grid.Column="1" Width="1" Background="{StaticResource Rule}" Margin="18,2" />
+
+                <StackPanel Grid.Column="2" Spacing="2">
+                    <TextBlock Classes="legend" Text="ALGORITHM" />
+                    <TextBlock Name="AlgorithmLabel" Classes="readout" FontSize="16" Foreground="{StaticResource Amber}" Text="—" />
+                </StackPanel>
+
+                <StackPanel Grid.Column="3" Spacing="2" Width="98">
+                    <TextBlock Classes="legend" Text="EPISODE" />
+                    <TextBlock Name="EpisodeReadout" Classes="readout" Text="0" />
+                </StackPanel>
+
+                <StackPanel Grid.Column="4" Spacing="2" Width="112">
+                    <TextBlock Classes="legend" Text="STEPS" />
+                    <TextBlock Name="StepsReadout" Classes="readout" Text="0" />
+                </StackPanel>
+
+                <StackPanel Grid.Column="5" Spacing="2" Width="112">
+                    <TextBlock Classes="legend" Text="STEPS / SEC" />
+                    <TextBlock Name="RateReadout" Classes="readout" Text="0" />
+                </StackPanel>
+
+                <StackPanel Grid.Column="6" Spacing="2" Width="120">
+                    <TextBlock Classes="legend" Text="BEST RETURN" />
+                    <TextBlock Name="BestReadout" Classes="readout" Foreground="{StaticResource Teal}" Text="—" />
+                </StackPanel>
+
+            </Grid>
+        </Border>
+
+        <!-- Working area -->
+        <Grid Grid.Row="1" ColumnDefinitions="*,14,360">
+
+            <Border Grid.Column="0" Classes="panel" ClipToBounds="True">
+                <Grid RowDefinitions="*,Auto">
+                    <controls:WorldView Name="World" Grid.Row="0" />
+
+                    <!--
+                        Action lamps. A row of cells, one per action, with the chosen one lit.
+                        The recorder stack shows whether the policy is improving; this shows what
+                        the policy is actually doing, which no aggregate can.
+                    -->
+                    <Border Grid.Row="1" BorderBrush="{StaticResource Rule}" BorderThickness="0,1,0,0" Padding="14,9">
+                        <StackPanel Spacing="7">
+                            <TextBlock Classes="legend" Text="ACTION" />
+                            <ItemsControl Name="ActionLamps">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <StackPanel Orientation="Horizontal" Spacing="6" />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                            </ItemsControl>
+                        </StackPanel>
+                    </Border>
+                </Grid>
+            </Border>
+
+            <!--
+                The recorder stack. Three traces butted together on one shared episode axis,
+                separated by hairlines only - so it reads as a single continuous instrument
+                rather than three charts, and the relationship between them is legible at a
+                glance. Exploration falling while return climbs is the shape of a run going well.
+            -->
+            <Border Grid.Column="2" Classes="panel" ClipToBounds="True">
+                <Grid RowDefinitions="*,1,*,1,*,Auto">
+                    <controls:RecorderStrip Name="ReturnStrip" Grid.Row="0"
+                                            Legend="EPISODE RETURN"
+                                            TraceBrush="{StaticResource Teal}"
+                                            ValueFormat="F1"
+                                            ShowZeroLine="True"
+                                            ShowTrend="True" />
+
+                    <Border Grid.Row="1" Background="{StaticResource Rule}" />
+
+                    <controls:RecorderStrip Name="LossStrip" Grid.Row="2"
+                                            Legend="VALUE LOSS"
+                                            TraceBrush="{StaticResource Rust}"
+                                            ValueFormat="F3"
+                                            ShowTrend="True" />
+
+                    <Border Grid.Row="3" Background="{StaticResource Rule}" />
+
+                    <controls:RecorderStrip Name="ExplorationStrip" Grid.Row="4"
+                                            Legend="EXPLORATION"
+                                            TraceBrush="{StaticResource Violet}"
+                                            ValueFormat="F3" />
+
+                    <!--
+                        The summary row. Font is a step down from the ribbon's readouts because
+                        Pendulum's returns run to five characters plus a sign, and these two share
+                        a 360px rail - at 16pt the step count was being clipped.
+                    -->
+                    <Border Grid.Row="5" BorderBrush="{StaticResource Rule}" BorderThickness="0,1,0,0" Padding="14,10">
+                        <Grid ColumnDefinitions="*,*">
+                            <StackPanel Grid.Column="0" Spacing="2">
+                                <TextBlock Classes="legend" Text="LAST 20 EPISODES" />
+                                <TextBlock Name="AverageReadout" Classes="readout" FontSize="14" Text="—" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" Spacing="2">
+                                <TextBlock Classes="legend" Text="THIS EPISODE" />
+                                <TextBlock Name="CurrentReadout" Classes="readout" FontSize="14" Text="—" />
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <!-- Transport bar -->
+        <Border Grid.Row="2" Classes="panel" Padding="16,12" Margin="0,10,0,0">
+            <Grid ColumnDefinitions="200,12,180,12,Auto,10,Auto,20,*,20,Auto">
+
+                <StackPanel Grid.Column="0" Spacing="5">
+                    <TextBlock Classes="legend" Text="ENVIRONMENT" />
+                    <ComboBox Name="EnvironmentPicker" HorizontalAlignment="Stretch" />
+                </StackPanel>
+
+                <StackPanel Grid.Column="2" Spacing="5">
+                    <TextBlock Classes="legend" Text="ALGORITHM" />
+                    <ComboBox Name="AlgorithmPicker" HorizontalAlignment="Stretch" />
+                </StackPanel>
+
+                <StackPanel Grid.Column="4" Spacing="5" VerticalAlignment="Bottom">
+                    <TextBlock Classes="legend" Text=" " />
+                    <Button Name="RunButton" Classes="primary" Content="START TRAINING" Width="164" />
+                </StackPanel>
+
+                <StackPanel Grid.Column="6" Spacing="5" VerticalAlignment="Bottom">
+                    <TextBlock Classes="legend" Text=" " />
+                    <Button Name="ResetButton" Content="RESET" Width="92" />
+                </StackPanel>
+
+                <StackPanel Grid.Column="8" Spacing="1">
+                    <Grid ColumnDefinitions="Auto,*,Auto">
+                        <TextBlock Grid.Column="0" Classes="legend" Text="SPEED" />
+                        <TextBlock Grid.Column="2" Name="SpeedReadout" Classes="readout-small" Text="4 steps / frame" />
+                    </Grid>
+                    <Slider Name="SpeedSlider" Minimum="0" Maximum="12" Value="2" TickFrequency="1"
+                            IsSnapToTickEnabled="True" />
+                </StackPanel>
+
+                <StackPanel Grid.Column="10" Spacing="4" VerticalAlignment="Center" Width="132">
+                    <TextBlock Classes="legend" Text="BUILT BY" />
+                    <TextBlock Classes="body" FontSize="11" Text="Gravicode Studios" Foreground="{StaticResource Ink}" />
+                    <TextBlock Classes="body" FontSize="10" Text="Led by Kang Fadhil" />
+                </StackPanel>
+
+            </Grid>
+        </Border>
+
+    </Grid>
+</Window>

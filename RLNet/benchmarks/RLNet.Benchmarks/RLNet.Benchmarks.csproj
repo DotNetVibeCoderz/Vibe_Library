@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>RLNet.Benchmarks</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+
+    <!-- BenchmarkDotNet needs an optimised build to measure anything meaningful. -->
+    <Optimize>true</Optimize>
+    <DebugType>pdbonly</DebugType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="BenchmarkDotNet" Version="0.15.8" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/RLNet.Core/RLNet.Core.csproj" />
+    <ProjectReference Include="../../src/RLNet.Gpu/RLNet.Gpu.csproj" />
+  </ItemGroup>
+
+</Project>

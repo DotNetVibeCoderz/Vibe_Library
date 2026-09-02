@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>RLNet.Gpu</RootNamespace>
+    <AssemblyName>RLNet.Gpu</AssemblyName>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <IsPackable>true</IsPackable>
+    <PackageId>RLNet.Gpu</PackageId>
+    <Title>RLNet.Gpu - Optional GPU backend for RLNet</Title>
+    <Description>Optional GPU compute backend for RLNet, built on ILGPU. Runs the dense-layer kernels on CUDA or OpenCL and falls back to the CPU when no accelerator is present. Dibuat oleh Gravicode Studios, dipimpin oleh Kang Fadhil.</Description>
+    <PackageTags>reinforcement-learning;rl;gpu;cuda;opencl;ilgpu;neural-network;machine-learning</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!--
+      ILGPU is fully managed: it JITs kernels to PTX or OpenCL C at runtime, so this package
+      stays cross-platform and needs no native binaries of its own beyond the driver already
+      installed on the machine.
+    -->
+    <PackageReference Include="ILGPU" Version="1.5.3" />
+
+    <!-- Supplies XMath, whose transcendentals are callable from inside a kernel. -->
+    <PackageReference Include="ILGPU.Algorithms" Version="1.5.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../RLNet.Core/RLNet.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="$(MSBuildThisFileDirectory)../../README.md" Pack="true" PackagePath="\" Visible="false" />
+    <None Include="$(MSBuildThisFileDirectory)../../LICENSE" Pack="true" PackagePath="\" Visible="false" />
+  </ItemGroup>
+
+</Project>

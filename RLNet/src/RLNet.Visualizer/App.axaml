@@ -1,0 +1,145 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="RLNet.Visualizer.App"
+             RequestedThemeVariant="Dark">
+
+    <Application.Resources>
+        <!--
+            Flight-console palette. Deep blue-slate rather than black: an instrument panel is lit,
+            not switched off, and the blue keeps the amber and teal traces reading as lamps against
+            it instead of as neon on a void.
+
+            Each accent is assigned one meaning and never reused for another:
+              amber  - the agent and its actions
+              teal   - reward and value, the "is it working" trace
+              rust   - termination and loss
+              violet - exploration and entropy
+        -->
+        <Color x:Key="GroundColor">#0E1621</Color>
+        <Color x:Key="PanelColor">#16212E</Color>
+        <Color x:Key="PanelRaisedColor">#1D2A39</Color>
+        <Color x:Key="RuleColor">#253243</Color>
+        <Color x:Key="InkColor">#DCE6F0</Color>
+        <Color x:Key="InkDimColor">#7E92A8</Color>
+        <Color x:Key="AmberColor">#F0A93B</Color>
+        <Color x:Key="TealColor">#4FC3B0</Color>
+        <Color x:Key="RustColor">#E0674F</Color>
+        <Color x:Key="VioletColor">#8B7FD4</Color>
+
+        <SolidColorBrush x:Key="Ground" Color="{StaticResource GroundColor}" />
+        <SolidColorBrush x:Key="Panel" Color="{StaticResource PanelColor}" />
+        <SolidColorBrush x:Key="PanelRaised" Color="{StaticResource PanelRaisedColor}" />
+        <SolidColorBrush x:Key="Rule" Color="{StaticResource RuleColor}" />
+        <SolidColorBrush x:Key="Ink" Color="{StaticResource InkColor}" />
+        <SolidColorBrush x:Key="InkDim" Color="{StaticResource InkDimColor}" />
+        <SolidColorBrush x:Key="Amber" Color="{StaticResource AmberColor}" />
+        <SolidColorBrush x:Key="Teal" Color="{StaticResource TealColor}" />
+        <SolidColorBrush x:Key="Rust" Color="{StaticResource RustColor}" />
+        <SolidColorBrush x:Key="Violet" Color="{StaticResource VioletColor}" />
+
+        <!--
+            Two families, two jobs. Labels are set in a grotesque at small size, uppercase and
+            letterspaced, which is how panel legends are actually engraved. Every number is
+            monospaced so a value that changes every frame does not shift the digits beside it -
+            on a live readout, jitter is the difference between reading a number and watching it
+            twitch. The stacks name real faces per platform and fall back to the generic family.
+        -->
+        <FontFamily x:Key="LabelFont">Inter, Segoe UI Variable Text, Segoe UI, SF Pro Text, Ubuntu, sans-serif</FontFamily>
+        <FontFamily x:Key="ReadoutFont">Cascadia Mono, Consolas, SF Mono, DejaVu Sans Mono, monospace</FontFamily>
+    </Application.Resources>
+
+    <Application.Styles>
+        <FluentTheme />
+
+        <!-- Panel legend: the small engraved label above every readout and control. -->
+        <Style Selector="TextBlock.legend">
+            <Setter Property="FontFamily" Value="{StaticResource LabelFont}" />
+            <Setter Property="FontSize" Value="10" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="{StaticResource InkDim}" />
+            <Setter Property="LetterSpacing" Value="1.4" />
+        </Style>
+
+        <!-- Live numeric readout. -->
+        <Style Selector="TextBlock.readout">
+            <Setter Property="FontFamily" Value="{StaticResource ReadoutFont}" />
+            <Setter Property="FontSize" Value="19" />
+            <Setter Property="Foreground" Value="{StaticResource Ink}" />
+        </Style>
+
+        <Style Selector="TextBlock.readout-small">
+            <Setter Property="FontFamily" Value="{StaticResource ReadoutFont}" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Foreground" Value="{StaticResource InkDim}" />
+        </Style>
+
+        <Style Selector="TextBlock.body">
+            <Setter Property="FontFamily" Value="{StaticResource LabelFont}" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Foreground" Value="{StaticResource InkDim}" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+
+        <Style Selector="Border.panel">
+            <Setter Property="Background" Value="{StaticResource Panel}" />
+            <Setter Property="BorderBrush" Value="{StaticResource Rule}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="3" />
+        </Style>
+
+        <!--
+            Controls are square-cornered and flat. A console has switches, not pills; the Fluent
+            default rounding reads as a web form and fights everything else on the panel.
+        -->
+        <Style Selector="Button">
+            <Setter Property="FontFamily" Value="{StaticResource LabelFont}" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="CornerRadius" Value="2" />
+            <Setter Property="Padding" Value="14,9" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="Background" Value="{StaticResource PanelRaised}" />
+            <Setter Property="Foreground" Value="{StaticResource Ink}" />
+            <Setter Property="BorderBrush" Value="{StaticResource Rule}" />
+            <Setter Property="BorderThickness" Value="1" />
+        </Style>
+
+        <Style Selector="Button:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="#243447" />
+            <Setter Property="BorderBrush" Value="#33465C" />
+        </Style>
+
+        <!-- The primary transport control, lit like a panel lamp. -->
+        <Style Selector="Button.primary">
+            <Setter Property="Background" Value="{StaticResource Amber}" />
+            <Setter Property="Foreground" Value="#14202C" />
+            <Setter Property="BorderBrush" Value="{StaticResource Amber}" />
+        </Style>
+
+        <Style Selector="Button.primary:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="#FFBE55" />
+            <Setter Property="BorderBrush" Value="#FFBE55" />
+            <Setter Property="Foreground" Value="#14202C" />
+        </Style>
+
+        <Style Selector="ComboBox">
+            <Setter Property="FontFamily" Value="{StaticResource LabelFont}" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="CornerRadius" Value="2" />
+            <Setter Property="Background" Value="{StaticResource PanelRaised}" />
+            <Setter Property="Foreground" Value="{StaticResource Ink}" />
+            <Setter Property="BorderBrush" Value="{StaticResource Rule}" />
+        </Style>
+
+        <Style Selector="Slider">
+            <Setter Property="Foreground" Value="{StaticResource Amber}" />
+        </Style>
+
+        <Style Selector="CheckBox">
+            <Setter Property="FontFamily" Value="{StaticResource LabelFont}" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Foreground" Value="{StaticResource InkDim}" />
+        </Style>
+    </Application.Styles>
+
+</Application>

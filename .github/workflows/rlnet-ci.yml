@@ -1,0 +1,118 @@
+# Build and test RLNet (Vibe_Library/RLNet).
+#
+# Vibe_Library holds several independent projects, so this workflow is scoped by path and named
+# after the one it covers. Everything runs from the RLNet/ subdirectory.
+name: RLNet CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'RLNet/**'
+      - '.github/workflows/rlnet-ci.yml'
+  pull_request:
+    paths:
+      - 'RLNet/**'
+      - '.github/workflows/rlnet-ci.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: rlnet-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+  TESTINGPLATFORM_TELEMETRY_OPTOUT: true
+
+defaults:
+  run:
+    working-directory: RLNet
+
+jobs:
+  build:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # macOS is included because RLNet.Core's SIMD paths go through Vector<T>, which widens to
+        # NEON on Apple silicon and AVX2 on the x64 runners. The gradient checks are the only way
+        # a divergence between those would ever be noticed.
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: RLNet/global.json
+
+      - name: Restore
+        run: dotnet restore RLNet.slnx
+
+      - name: Build
+        run: dotnet build RLNet.slnx -c Release --no-restore
+
+      # xunit.v3 runs on Microsoft.Testing.Platform, and the .NET 10 SDK no longer bridges that
+      # through VSTest - "dotnet test" fails outright. The test project is its own executable, so
+      # it is run directly. --report-xunit-trx comes from xunit.v3 itself.
+      - name: Test
+        run: >
+          dotnet run --project tests/RLNet.Tests -c Release --no-build --
+          --report-xunit-trx --report-xunit-trx-filename rlnet-tests.trx
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rlnet-test-results-${{ matrix.os }}
+          path: RLNet/tests/RLNet.Tests/bin/Release/net10.0/TestResults/*.trx
+          if-no-files-found: warn
+
+  pack:
+    name: pack
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: RLNet/global.json
+
+      # Packing on every green build, not only on a release tag: a packaging problem that only
+      # shows up at pack time is much cheaper to find here than during a release.
+      - name: Pack
+        run: dotnet pack RLNet.slnx -c Release -o artifacts
+
+      - name: Upload packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: rlnet-packages
+          path: RLNet/artifacts/*.nupkg
+
+  benchmark:
+    name: benchmark (smoke)
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: RLNet/global.json
+
+      # Only the microbenchmarks. The agent suite runs thousands of real gradient steps per
+      # iteration and would take the better part of an hour; this exists to catch a benchmark that
+      # stops compiling or throws, not to produce numbers worth quoting from a shared runner.
+      - name: Run SIMD benchmarks
+        run: >
+          dotnet run -c Release --project benchmarks/RLNet.Benchmarks --
+          --filter '*SimdBenchmarks*' --job Dry
+
+      - name: Report accelerators
+        run: dotnet run -c Release --project benchmarks/RLNet.Benchmarks -- --devices

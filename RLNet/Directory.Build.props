@@ -1,0 +1,74 @@
+<Project>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <!-- CS1591: undocumented public member. CS1573: only some parameters documented - deliberate,
+         the obvious ones are left to their names. -->
+    <NoWarn>$(NoWarn);CS1591;CS1573</NoWarn>
+    <AnalysisLevel>latest</AnalysisLevel>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <!--
+    Training loops are the hot path: millions of environment steps, each one running a forward
+    pass through an MLP. Server GC is on because rollout buffers and minibatch scratch are the
+    dominant allocations and a background collector keeps pauses out of the render loop.
+  -->
+  <PropertyGroup>
+    <ServerGarbageCollection>true</ServerGarbageCollection>
+    <ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>
+    <TieredPGO>true</TieredPGO>
+    <Optimize Condition="'$(Configuration)' == 'Release'">true</Optimize>
+  </PropertyGroup>
+
+  <!--
+    Attribution flows into every built assembly's metadata, so the credit travels with the
+    binaries rather than living only in the README.
+  -->
+  <PropertyGroup>
+    <Authors>Kang Fadhil (Gravicode Studios)</Authors>
+    <Company>Gravicode Studios</Company>
+    <Product>RLNet</Product>
+    <Copyright>Copyright (c) 2026 Gravicode Studios. Dibuat oleh Gravicode Studios, dipimpin oleh Kang Fadhil.</Copyright>
+    <Version>0.1.0</Version>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <AssemblyMetadata Include="CreatedBy" Value="Gravicode Studios" />
+    <AssemblyMetadata Include="LedBy" Value="Kang Fadhil" />
+  </ItemGroup>
+
+  <!--
+    NuGet metadata. The sources live in a subfolder of a shared repository, so both the project
+    URL and the repository URL point at that subfolder rather than at the repository root.
+  -->
+  <PropertyGroup>
+    <PackageProjectUrl>https://github.com/DotNetVibeCoderz/Vibe_Library/tree/main/RLNet</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/DotNetVibeCoderz/Vibe_Library/tree/main/RLNet</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
+
+    <!--
+      SourceLink ships in the SDK. PublishRepositoryUrl stays off deliberately: it would let
+      SourceLink overwrite RepositoryUrl above with the bare git remote, dropping the subfolder.
+    -->
+    <PublishRepositoryUrl>false</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <ContinuousIntegrationBuild Condition="'$(GITHUB_ACTIONS)' == 'true'">true</ContinuousIntegrationBuild>
+  </PropertyGroup>
+
+  <!-- Only RLNet.Core packs; the app, tests and benchmarks opt out. -->
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+</Project>

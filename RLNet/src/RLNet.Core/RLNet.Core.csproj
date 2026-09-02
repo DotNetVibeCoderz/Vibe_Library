@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>RLNet</RootNamespace>
+    <AssemblyName>RLNet.Core</AssemblyName>
+  </PropertyGroup>
+
+  <!--
+    The package is published as "RLNet" even though the assembly is RLNet.Core: RLNet is the
+    library users install, and RLNet.Visualizer is a sample app that is never packed.
+  -->
+  <PropertyGroup>
+    <IsPackable>true</IsPackable>
+    <PackageId>RLNet</PackageId>
+    <Title>RLNet - Reinforcement Learning for .NET</Title>
+    <Description>Dependency-free reinforcement learning library for .NET 10. Gym-style environments, a SIMD neural-network engine, and prebuilt DQN, A2C, PPO, SAC and TD3 agents with multi-agent support. Dibuat oleh Gravicode Studios, dipimpin oleh Kang Fadhil.</Description>
+    <PackageTags>reinforcement-learning;rl;machine-learning;ai;dqn;ppo;sac;td3;a2c;q-learning;gym;multi-agent;neural-network;simd</PackageTags>
+    <PackageReleaseNotes>First release: Gym-style environment API with Discrete/Box spaces, seeded determinism and truncation; SIMD MLP engine with Adam; DQN (double + dueling + prioritised replay), A2C, PPO, SAC, TD3; nine environments across classic control, robotics, finance, supply chain and multi-agent.</PackageReleaseNotes>
+  </PropertyGroup>
+
+  <!--
+    The tests verify backpropagation against finite differences, which needs to read the per-layer
+    gradient buffers; the benchmarks time the same internals. Both are in this repository and ship
+    with it, so widening the public surface for them would be the worse trade.
+  -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="RLNet.Tests" />
+    <InternalsVisibleTo Include="RLNet.Benchmarks" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="$(MSBuildThisFileDirectory)../../README.md" Pack="true" PackagePath="\" Visible="false" />
+    <None Include="$(MSBuildThisFileDirectory)../../LICENSE" Pack="true" PackagePath="\" Visible="false" />
+  </ItemGroup>
+
+</Project>

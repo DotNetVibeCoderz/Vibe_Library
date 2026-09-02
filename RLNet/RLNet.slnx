@@ -1,0 +1,13 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/RLNet.Core/RLNet.Core.csproj" />
+    <Project Path="src/RLNet.Gpu/RLNet.Gpu.csproj" />
+    <Project Path="src/RLNet.Visualizer/RLNet.Visualizer.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/RLNet.Tests/RLNet.Tests.csproj" />
+  </Folder>
+  <Folder Name="/benchmarks/">
+    <Project Path="benchmarks/RLNet.Benchmarks/RLNet.Benchmarks.csproj" />
+  </Folder>
+</Solution>
