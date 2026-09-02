@@ -55,8 +55,6 @@ public sealed class WorldView : Control
     private static readonly IBrush GroundBrush = new SolidColorBrush(Color.Parse("#101A25"));
 
     private static readonly Pen RulePen = new(RuleBrush, 1);
-    private static readonly Pen InkPen = new(InkBrush, 2);
-    private static readonly Pen AmberPen = new(AmberBrush, 2.5);
 
     private static readonly Typeface LabelTypeface = new(
         new FontFamily("Inter, Segoe UI Variable Text, Segoe UI, SF Pro Text, Ubuntu, sans-serif"),
