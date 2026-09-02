@@ -43,3 +43,26 @@ Tiga hal yang perlu diketahui sebelum membaca lebih jauh, karena ketiganya membe
 
 3. **Tidak ada alokasi di jalur panas.** Semua buffer dialokasikan sekali saat konstruksi. Inilah
    sebabnya library ini bisa menjalankan jutaan langkah tanpa garbage collector menjadi hambatan.
+
+## Cakupan, dan apa yang sengaja di luarnya
+
+RLNet **berbentuk seperti Gym, bukan kompatibel dengan Gym**. Kontrak environment-nya mencerminkan
+desain `gymnasium` — space yang mendeskripsikan dirinya sendiri, reset ber-seed, terminated/truncated
+sebagai dua flag terpisah — sehingga agen yang ditulis untuk salah satunya bisa dipindahkan secara
+konseptual ke yang lain, dan hyper-parameter yang dipublikasikan berarti seperti biasanya. Tapi tidak
+ada lapisan interop: RLNet tidak bisa memuat environment Gym dari Python, dan membangunnya berarti
+menghadirkan runtime Python di dalam loop — persis hal yang ingin dihindari library ini.
+
+Konsekuensi praktisnya:
+
+| | |
+|---|---|
+| **Atari** | Tidak didukung. Butuh frame stacking, konvolusi, dan binding ALE — semuanya di luar cakupan library CPU tanpa dependensi. |
+| **MuJoCo** | Tidak didukung. [Reacher](04-simulasi.md#reacher) adalah pengganti analitik untuk *tugas* robotikanya, bukan port mesin fisika; skornya tidak sebanding. |
+| **LunarLander** | Ada, tapi sebagai model analitik yang lebih ringan alih-alih simulasi Box2D milik Gymnasium. Perilakunya berpindah; skor absolutnya tidak. |
+| **CartPole, MountainCar, Pendulum** | Konstantanya sama persis dengan Gymnasium, jadi skornya **memang** langsung sebanding. |
+| **Observasi piksel** | Di luar cakupan. Semua di sini bekerja pada vektor fitur. |
+
+Sebagai gantinya Anda mendapat satu paket NuGet portabel tanpa binary native, yang berjalan identik
+di Windows, Linux, macOS, dan ARM, dan setiap barisnya — environment, jaringan, optimizer, algoritma
+— adalah C# yang bisa Anda telusuri langkah demi langkah.

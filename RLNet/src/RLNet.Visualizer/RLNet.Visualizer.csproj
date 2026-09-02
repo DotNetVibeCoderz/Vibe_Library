@@ -21,6 +21,13 @@
     -->
     <PackageReference Include="Avalonia.Fonts.Inter" Version="11.3.12" />
     <PackageReference Include="Avalonia.Diagnostics" Version="11.3.12" Condition="'$(Configuration)' == 'Debug'" />
+
+    <!--
+      Pinned past Avalonia's transitive 0.21.2, which carries GHSA-xrw6-gwf8-vvr9. Only Avalonia's
+      Linux backend touches D-Bus, so this affects the console alone and never RLNet.Core - but a
+      build that reports a high-severity advisory trains people to ignore build warnings.
+    -->
+    <PackageReference Include="Tmds.DBus.Protocol" Version="0.95.0" />
   </ItemGroup>
 
   <ItemGroup>

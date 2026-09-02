@@ -42,3 +42,26 @@ Three things are worth knowing before reading further, because they shape every 
 
 3. **Nothing on the hot path allocates.** Buffers are sized once at construction. This is why the
    library can do millions of steps without the garbage collector becoming the bottleneck.
+
+## Scope, and what is deliberately outside it
+
+RLNet is **Gym-shaped, not Gym-compatible**. The environment contract mirrors `gymnasium`'s design —
+spaces that describe themselves, seeded resets, terminated/truncated as separate flags — so an agent
+written against one transfers conceptually to the other, and published hyper-parameters mean what
+they usually mean. But there is no interop layer: RLNet cannot load a Python Gym environment, and
+building one would mean a Python runtime in the loop, which is precisely what this library exists to
+avoid.
+
+The practical consequences:
+
+| | |
+|---|---|
+| **Atari** | Not supported. It needs frame stacking, convolutions and an ALE binding — all out of scope for a dependency-free CPU library. |
+| **MuJoCo** | Not supported. [Reacher](04-environments.md#reacher) is an analytic stand-in for the robotics *task*, not a physics-engine port; scores are not comparable. |
+| **LunarLander** | Present, but as a lighter analytic model rather than Gymnasium's Box2D simulation. Behaviour transfers; absolute scores do not. |
+| **CartPole, MountainCar, Pendulum** | Constants match Gymnasium exactly, so scores **are** directly comparable. |
+| **Pixel observations** | Out of scope. Everything here works on feature vectors. |
+
+What you get instead is one portable NuGet package with no native binaries, that runs identically on
+Windows, Linux, macOS and ARM, and where every line — environment, network, optimiser, algorithm —
+is C# you can step through.

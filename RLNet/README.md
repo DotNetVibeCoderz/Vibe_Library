@@ -110,6 +110,12 @@ there; [the measured crossover is in the docs](docs/en/05-neural-network.md).
 take rather than construct, so swapping uniform for prioritised replay — or plugging in your own —
 is a constructor argument, not a fork.
 
+**Gym-shaped, not Gym-compatible.** The environment contract mirrors `gymnasium`'s design, so agents
+and hyper-parameters transfer conceptually — but there is no interop layer, and Atari and MuJoCo are
+out of scope. CartPole, MountainCar and Pendulum match Gymnasium's constants exactly and are directly
+comparable; LunarLander and Reacher are lighter analytic stand-ins and are not.
+[The full scope note](docs/en/README.md#scope-and-what-is-deliberately-outside-it) says which is which.
+
 ## Documentation
 
 Full documentation in [English](docs/en/README.md) and [Bahasa Indonesia](docs/id/README.md):
@@ -120,7 +126,7 @@ console, benchmarks, and how to extend any of it.
 
 ```bash
 dotnet build RLNet.slnx -c Release
-dotnet run --project tests/RLNet.Tests -c Release          # 80 tests
+dotnet run --project tests/RLNet.Tests -c Release          # 81 tests
 dotnet run -c Release --project benchmarks/RLNet.Benchmarks
 ```
 
@@ -243,6 +249,14 @@ menguntungkan, `RLNet.Gpu` tersedia; [titik impasnya terukur di dokumentasi](doc
 agen lewat konstruktor, bukan yang dibuat sendiri di dalamnya — jadi mengganti uniform replay
 dengan prioritised, atau memasang buatan sendiri, cukup satu argumen konstruktor.
 
+**Berbentuk seperti Gym, bukan kompatibel dengan Gym.** Kontrak environment-nya mencerminkan desain
+`gymnasium`, sehingga agen dan hyper-parameter berpindah secara konseptual — tapi tidak ada lapisan
+interop, dan Atari serta MuJoCo di luar cakupan. CartPole, MountainCar, dan Pendulum sama persis
+dengan konstanta Gymnasium dan langsung sebanding; LunarLander dan Reacher adalah pengganti analitik
+yang lebih ringan dan tidak sebanding.
+[Catatan cakupan lengkapnya](docs/id/README.md#cakupan-dan-apa-yang-sengaja-di-luarnya) menjelaskan
+mana yang mana.
+
 ## Dokumentasi
 
 Dokumentasi lengkap dalam [Bahasa Indonesia](docs/id/README.md) dan [English](docs/en/README.md):
@@ -253,7 +267,7 @@ memperluas semuanya.
 
 ```bash
 dotnet build RLNet.slnx -c Release
-dotnet run --project tests/RLNet.Tests -c Release          # 80 tes
+dotnet run --project tests/RLNet.Tests -c Release          # 81 tes
 dotnet run -c Release --project benchmarks/RLNet.Benchmarks
 ```
 

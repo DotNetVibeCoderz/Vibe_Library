@@ -46,7 +46,7 @@ src/RLNet.Core/         the library (packs as NuGet id "RLNet", assembly RLNet.C
   Catalog.cs            name -> environment -> configured agent
 src/RLNet.Gpu/          optional ILGPU backend, packs as "RLNet.Gpu"
 src/RLNet.Visualizer/   Avalonia console (not packable)
-tests/RLNet.Tests/      xunit.v3, ~80 tests
+tests/RLNet.Tests/      xunit.v3, 81 tests
 benchmarks/             BenchmarkDotNet
 ```
 
