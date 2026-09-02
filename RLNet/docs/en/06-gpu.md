@@ -20,18 +20,34 @@ var agent = new DqnAgent(obs, act, backend: backend);
 Classic-control networks are two or three layers of 64 to 256 units. A forward pass over a batch of
 256 is a few hundred microseconds of arithmetic, while the round trip to move the batch across the
 bus and bring the result back costs tens of microseconds on its own — and does not shrink as the
-network does. Below roughly a hidden width of 512 with a batch of 256,
-[`CpuComputeBackend`](05-neural-network.md) wins outright.
+network does. At those sizes [`CpuComputeBackend`](05-neural-network.md) generally wins outright.
+
+**Where the CPU stops winning depends entirely on the device**, so there is no single crossover
+number to quote. Here is what `GpuBenchmarks` measured on the development machine — a dense forward
+pass at a batch of 256, on an *integrated* Intel UHD 620 over OpenCL:
+
+| Hidden width | CPU SIMD | GPU (Intel UHD 620) | GPU is |
+|---:|---:|---:|---|
+| 64 | 338 µs | 2,802 µs | **8.3× slower** |
+| 256 | 3,932 µs | 8,424 µs | **2.2× slower** |
+| 1,024 | 75,070 µs | 112,921 µs | **1.5× slower** |
+
+The GPU never wins on this hardware — but notice the gap closing steadily as the network widens
+(8.3× → 2.2× → 1.5×), which is exactly the transfer overhead being amortised over more arithmetic.
+An integrated GPU shares memory bandwidth with the CPU it is meant to be beating, so this is close
+to the worst case; a discrete card with its own memory would cross over far earlier. The shape of
+the trend is the transferable part, not the numbers.
 
 Where it does pay off:
 
-- Wide networks — hidden layers of 512 or more
+- Wide networks, on a discrete GPU — the trend above extrapolates to a win, this hardware just never
+  reaches it
 - Large-batch offline updates
 - Image-like observations, if you extend the library that far
 - Sweeps training many agents at once
 
-**Measure on your actual configuration.** `GpuBenchmarks` is parameterised across hidden width
-specifically so the crossover can be read off rather than guessed:
+**Measure it on your hardware.** `GpuBenchmarks` is parameterised across hidden width (64, 256,
+1024 at a batch of 256) specifically so the crossover can be read off rather than guessed:
 
 ```bash
 dotnet run -c Release --project benchmarks/RLNet.Benchmarks -- --filter '*GpuBenchmarks*'
@@ -144,4 +160,4 @@ launches would do better on large networks; it is not there yet.
 ## Next
 
 - [Neural engine](05-neural-network.md) — what the backend sits under
-- [Benchmarks](09-benchmarks.md) — where the crossover actually is
+- [Benchmarks](09-benchmarks.md) — what the CPU backend achieves, and how to run the GPU comparison

@@ -164,8 +164,9 @@ Compare against the [benchmarks](09-benchmarks.md) to see whether your numbers a
 
 ### The GPU made it slower
 
-Expected below a hidden width of about 512. See [GPU](06-gpu.md) — the transfer cost does not shrink
-as the network does.
+Expected at classic-control network sizes. See [GPU](06-gpu.md) — the transfer cost does not shrink
+as the network does, so below some device-dependent width the CPU backend simply wins. Run
+`GpuBenchmarks` to find where that width is on your hardware.
 
 ### Memory keeps growing
 

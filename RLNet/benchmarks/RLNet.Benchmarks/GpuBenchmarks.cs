@@ -42,8 +42,24 @@ public class GpuBenchmarks : IDisposable
     [Params(256)]
     public int Batch { get; set; }
 
-    /// <summary>Whether an accelerator was actually found, so the GPU rows can be read honestly.</summary>
-    public bool Accelerated { get; private set; }
+    /// <summary>
+    /// The device the GPU rows actually ran on, shown as a column.
+    /// </summary>
+    /// <remarks>
+    /// A column rather than a <c>Console.WriteLine</c> in <see cref="Setup"/>: BenchmarkDotNet
+    /// talks to its child process over stdout, so printing from inside a benchmark corrupts that
+    /// protocol and every row comes back as NA. Reporting through the summary is both correct and
+    /// more useful — the device name sits beside the numbers it produced.
+    /// </remarks>
+    [ParamsSource(nameof(BackendNames))]
+    public string Device { get; set; } = "";
+
+    /// <summary>Resolved once, so the summary names the real device rather than a guess.</summary>
+    public static IEnumerable<string> BackendNames()
+    {
+        using var probe = GpuComputeBackend.TryCreate();
+        yield return probe.IsAccelerated ? probe.Name : $"{probe.Name} (no accelerator - GPU rows are CPU)";
+    }
 
     [GlobalSetup]
     public void Setup()
@@ -51,11 +67,11 @@ public class GpuBenchmarks : IDisposable
         _cpu = CpuComputeBackend.Instance;
 
         var gpu = GpuComputeBackend.TryCreate();
-        Accelerated = gpu.IsAccelerated;
+
+        // The threshold exists to keep small calls off the device; here it would make the small
+        // cases measure the CPU twice and hide the very crossover being looked for.
         if (gpu is GpuComputeBackend concrete) concrete.MinimumWorkPerCall = 0;
         _gpu = gpu;
-
-        Console.WriteLine($"[GpuBenchmarks] backend: {_gpu.Name}");
 
         var random = new FastRandom(1);
         _weights = new float[Width * Width];

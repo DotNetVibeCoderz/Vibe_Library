@@ -57,6 +57,48 @@ melawan 4 milik CartPole — pembersihannya mengalahkan fisikanya. Pendulum pali
 keempatnya karena `Math.Sin`, `Math.Cos`, dan normalisasi sudutnya adalah panggilan transendental
 pada setiap langkah.
 
+## Jaringannya sendiri
+
+Forward, forward+backward, dan gradient step lengkap termasuk optimizer:
+
+| Batch | Lebar | Forward | + backward | + optimizer | Dialokasikan |
+|---:|---:|---:|---:|---:|---:|
+| 1 | 64 | 1,3 µs | 3,9 µs | 63,0 µs | 0 B |
+| 1 | 256 | 8,2 µs | 36,4 µs | 283,1 µs | 0 B |
+| 64 | 64 | 123,5 µs | 313,7 µs | 313,2 µs | 0 B |
+| 64 | 256 | 797,5 µs | 2.290,5 µs | 2.621,3 µs | 0 B |
+| 256 | 64 | 513,8 µs | 1.284,3 µs | 1.262,5 µs | 0 B |
+| 256 | 256 | 2.951,2 µs | 9.396,4 µs | 9.676,8 µs | 0 B |
+
+**Nol byte dialokasikan, di setiap konfigurasi.** Inilah tabel yang mendukung klaim itu; benchmark
+agen tidak bisa menunjukkannya karena membangun replay buffer di dalam pengukurannya.
+
+Backward berbiaya sekitar 2,5–3× forward, dan itu rasio yang diharapkan: ia menghitung dua perkalian
+(gradien terhadap input, dan terhadap weight) sementara forward menghitung satu.
+
+### Biaya Adam tidak menskala dengan ukuran batch
+
+Bandingkan baris batch-1 dengan baris batch-64. Pada batch 64 optimizernya nyaris gratis — 313,7
+melawan 313,2 µs, tak terbedakan. Pada batch 1 dengan jaringan selebar 256, jaringannya 36 µs
+melawan total 283 µs: **optimizernya 87% dari langkah itu.**
+
+Itu melekat pada Adam, bukan cacat. Ia menyentuh setiap parameter di jaringan berapa pun
+minibatch-nya, jadi biayanya tetap sementara forward dan backward mengecil bersama batch.
+Konsekuensi praktisnya: batch yang sangat kecil tidak efisien karena alasan yang sama sekali tidak
+berkaitan dengan jaringannya.
+
+Itu juga sebabnya `AdamOptimizer.Apply` divektorkan alih-alih memakai loop skalar yang lebih jelas.
+Perubahan itu terukur:
+
+| | Adam skalar | Tervektorkan | |
+|---|---:|---:|---|
+| Langkah optimizer, batch 1, lebar 64 | 290,5 µs | 59,1 µs | **4,9× lebih cepat** |
+| Langkah optimizer, batch 1, lebar 256 | 1.924,4 µs | 246,7 µs | **7,8× lebih cepat** |
+| Gradient step penuh, batch 1, lebar 256 | 1.969,5 µs | 283,1 µs | **7,0× lebih cepat** |
+
+Pada batch 64 perubahan yang sama bernilai sekitar 10%, dan pada 256 ia lenyap dalam derau — tapi
+rollout pendek A2C dan pembaruan online satu langkah apa pun berada tepat di rentang yang penting.
+
 ## Replay buffer
 
 256 transisi diambil dari buffer berisi **1.000.000 entri**:
@@ -146,6 +188,12 @@ byte ≈ kapasitas × (2 × observationSize + actionSize + 2) × 4
 ```
 
 Satu juta transisi atas observasi 8 dimensi kira-kira 76 MB.
+
+## GPU
+
+Diukur pada Intel UHD 620 terintegrasi di mesin ini lewat OpenCL, pada batch 256 — GPU-nya tidak
+pernah menang di sini, tapi jaraknya menyempit mantap seiring melebarnya jaringan. Tabel lengkapnya
+dan artinya untuk kartu diskret ada di [halaman GPU](06-gpu.md#baca-ini-dulu).
 
 ## Mengulanginya
 

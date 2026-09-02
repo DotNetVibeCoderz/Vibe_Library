@@ -56,6 +56,48 @@ GridWorld is slower than CartPole despite being simpler, because its observation
 floats to CartPole's 4 — the clear beats the physics. Pendulum is slowest of the four because
 `Math.Sin`, `Math.Cos` and the angle normalisation are transcendental calls on every step.
 
+## The network itself
+
+Forward, forward+backward, and the complete gradient step including the optimiser:
+
+| Batch | Width | Forward | + backward | + optimiser | Allocated |
+|---:|---:|---:|---:|---:|---:|
+| 1 | 64 | 1.3 µs | 3.9 µs | 63.0 µs | 0 B |
+| 1 | 256 | 8.2 µs | 36.4 µs | 283.1 µs | 0 B |
+| 64 | 64 | 123.5 µs | 313.7 µs | 313.2 µs | 0 B |
+| 64 | 256 | 797.5 µs | 2,290.5 µs | 2,621.3 µs | 0 B |
+| 256 | 64 | 513.8 µs | 1,284.3 µs | 1,262.5 µs | 0 B |
+| 256 | 256 | 2,951.2 µs | 9,396.4 µs | 9,676.8 µs | 0 B |
+
+**Zero bytes allocated, in every configuration.** This is the table that backs the claim; the agent
+benchmarks cannot show it because they construct their replay buffer inside the measurement.
+
+Backward costs about 2.5–3× forward, which is the expected ratio: it computes two products
+(gradient with respect to input, and with respect to weights) where forward computes one.
+
+### Adam's cost does not scale with batch size
+
+Look at the batch-1 rows against the batch-64 rows. At batch 64 the optimiser is nearly free — 313.7
+to 313.2 µs, indistinguishable. At batch 1 with a 256-wide network it is 36 µs of network against
+283 µs total: **the optimiser is 87% of the step.**
+
+That is inherent to Adam rather than a defect. It touches every parameter in the network whatever
+the minibatch was, so its cost is fixed while the forward and backward passes shrink with the batch.
+The practical consequence: very small batches are inefficient in a way that has nothing to do with
+the network.
+
+It is also why `AdamOptimizer.Apply` is vectorised rather than the obvious scalar loop. Making that
+change measured:
+
+| | Scalar Adam | Vectorised | |
+|---|---:|---:|---|
+| Optimiser step, batch 1, width 64 | 290.5 µs | 59.1 µs | **4.9× faster** |
+| Optimiser step, batch 1, width 256 | 1,924.4 µs | 246.7 µs | **7.8× faster** |
+| Full gradient step, batch 1, width 256 | 1,969.5 µs | 283.1 µs | **7.0× faster** |
+
+At a batch of 64 the same change is worth about 10%, and at 256 it disappears into the noise — but
+A2C's short rollouts and any online single-step update sit squarely in the range where it matters.
+
 ## Replay buffers
 
 256 transitions drawn from a **1,000,000-entry** buffer:
@@ -140,6 +182,12 @@ bytes ≈ capacity × (2 × observationSize + actionSize + 2) × 4
 ```
 
 A million transitions over an 8-dimensional observation is about 76 MB.
+
+## GPU
+
+Measured on this machine's integrated Intel UHD 620 over OpenCL, at a batch of 256 — the GPU never
+wins here, but the gap narrows steadily with width. The full table and what it means for a discrete
+card is on the [GPU page](06-gpu.md#read-this-first).
 
 ## Reproducing
 

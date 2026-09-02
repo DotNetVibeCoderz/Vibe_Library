@@ -20,9 +20,13 @@ namespace RLNet.Gpu;
 /// what RLNet does it is slower. Classic-control networks are two or three layers of 64 to 256
 /// units; a forward pass over a batch of 256 is a few hundred microseconds of arithmetic, while
 /// the round trip to move the batch across the bus and bring the result back costs tens of
-/// microseconds on its own and does not shrink as the network does. The crossover is roughly a
-/// hidden width of 512 with a batch of 256 — below that, <see cref="CpuComputeBackend"/> wins.
-/// Measure on the actual configuration before switching.
+/// microseconds on its own and does not shrink as the network does.
+/// </para>
+/// <para>
+/// Where the crossover falls depends entirely on the device — a discrete card and an integrated GPU
+/// sharing system memory behave nothing alike — so this ships no number for it.
+/// <c>GpuBenchmarks</c> is parameterised across hidden width precisely so you can measure it on the
+/// hardware you have, and that is worth doing before switching anything over.
 /// </para>
 /// <para>
 /// Where it does pay off: wide networks over image-like observations, large-batch offline

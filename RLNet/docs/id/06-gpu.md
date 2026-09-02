@@ -21,18 +21,36 @@ lambat.**
 Jaringan classic control adalah dua atau tiga layer berisi 64 sampai 256 unit. Satu forward pass
 atas batch 256 hanya beberapa ratus mikrodetik aritmetika, sementara perjalanan bolak-balik untuk
 memindahkan batch melintasi bus dan mengembalikan hasilnya sendiri memakan puluhan mikrodetik — dan
-tidak mengecil seiring mengecilnya jaringan. Di bawah kira-kira lebar tersembunyi 512 dengan batch
-256, [`CpuComputeBackend`](05-neural-network.md) menang telak.
+tidak mengecil seiring mengecilnya jaringan. Pada ukuran itu
+[`CpuComputeBackend`](05-neural-network.md) umumnya menang telak.
+
+**Di mana CPU berhenti unggul sepenuhnya bergantung pada perangkatnya**, jadi tidak ada satu angka
+titik impas yang bisa disebutkan. Berikut hasil ukur `GpuBenchmarks` di mesin pengembangan — satu
+forward pass dense pada batch 256, di Intel UHD 620 *terintegrasi* lewat OpenCL:
+
+| Lebar tersembunyi | CPU SIMD | GPU (Intel UHD 620) | GPU |
+|---:|---:|---:|---|
+| 64 | 338 µs | 2.802 µs | **8,3× lebih lambat** |
+| 256 | 3.932 µs | 8.424 µs | **2,2× lebih lambat** |
+| 1.024 | 75.070 µs | 112.921 µs | **1,5× lebih lambat** |
+
+GPU-nya tidak pernah menang di perangkat keras ini — tapi perhatikan jaraknya menyempit mantap
+seiring melebarnya jaringan (8,3× → 2,2× → 1,5×), yang persis merupakan biaya transfer yang
+teramortisasi atas aritmetika yang lebih banyak. GPU terintegrasi berbagi bandwidth memori dengan CPU
+yang seharusnya ia kalahkan, jadi ini mendekati kasus terburuk; kartu diskret dengan memorinya
+sendiri akan mencapai titik impas jauh lebih awal. Bentuk trennya itulah yang bisa dipindahkan, bukan
+angkanya.
 
 Di mana ia menguntungkan:
 
-- Jaringan lebar — layer tersembunyi 512 atau lebih
+- Jaringan lebar, pada GPU diskret — tren di atas mengarah ke kemenangan, perangkat keras ini saja
+  yang tidak pernah mencapainya
 - Pembaruan offline dengan batch besar
 - Observasi menyerupai citra, kalau Anda memperluas library sejauh itu
 - Sapuan yang melatih banyak agen sekaligus
 
-**Ukur pada konfigurasi Anda sendiri.** `GpuBenchmarks` diparameterkan atas lebar tersembunyi justru
-supaya titik impasnya bisa dibaca, bukan ditebak:
+**Ukur di perangkat keras Anda.** `GpuBenchmarks` diparameterkan atas lebar tersembunyi (64, 256,
+1024 pada batch 256) justru supaya titik impasnya bisa dibaca, bukan ditebak:
 
 ```bash
 dotnet run -c Release --project benchmarks/RLNet.Benchmarks -- --filter '*GpuBenchmarks*'

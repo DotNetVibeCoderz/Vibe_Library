@@ -168,8 +168,9 @@ Bandingkan dengan [benchmark](09-benchmark.md) untuk melihat apakah angka Anda t
 
 ### GPU malah membuatnya lebih lambat
 
-Wajar di bawah lebar tersembunyi sekitar 512. Lihat [GPU](06-gpu.md) — biaya transfernya tidak
-mengecil seiring mengecilnya jaringan.
+Wajar pada ukuran jaringan classic control. Lihat [GPU](06-gpu.md) — biaya transfernya tidak mengecil
+seiring mengecilnya jaringan, jadi di bawah lebar tertentu yang bergantung perangkat, backend CPU
+memang menang. Jalankan `GpuBenchmarks` untuk menemukan di mana lebar itu pada perangkat Anda.
 
 ### Memori terus bertambah
 
