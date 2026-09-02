@@ -1,4 +1,7 @@
-# Packs RLNet and RLNet.Gpu and pushes them to nuget.org.
+# Packs Gravicode.RLNet and Gravicode.RLNet.Gpu and pushes them to nuget.org.
+#
+# The ids are prefixed because plain "RLNet" belongs to an unrelated roguelike library on
+# nuget.org, and NuGet ids are case-insensitive. Assemblies and namespaces are unaffected.
 #
 # Trigger with a tag: RLNet-v0.1.0 (namespaced because Vibe_Library holds several projects and a
 # bare v* tag would be ambiguous). A manual run without "push" ticked is a dry run: it builds,

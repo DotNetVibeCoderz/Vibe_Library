@@ -3,7 +3,7 @@
 [← Documentation index](README.md) · [Bahasa Indonesia](../id/06-gpu.md)
 
 ```bash
-dotnet add package RLNet.Gpu
+dotnet add package Gravicode.RLNet.Gpu
 ```
 
 ```csharp

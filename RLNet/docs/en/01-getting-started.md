@@ -5,7 +5,7 @@
 ## Install
 
 ```bash
-dotnet add package RLNet
+dotnet add package Gravicode.RLNet
 ```
 
 Requires the .NET 10 SDK. There are no other dependencies — no native binaries, no Python, nothing
@@ -14,7 +14,7 @@ to install alongside it.
 The GPU backend is a separate, optional package:
 
 ```bash
-dotnet add package RLNet.Gpu   # only worth it for wide networks; see docs/en/06-gpu.md
+dotnet add package Gravicode.RLNet.Gpu   # only worth it for wide networks; see docs/en/06-gpu.md
 ```
 
 ## The shortest useful program

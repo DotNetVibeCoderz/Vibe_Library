@@ -6,12 +6,14 @@
   </PropertyGroup>
 
   <!--
-    The package is published as "RLNet" even though the assembly is RLNet.Core: RLNet is the
-    library users install, and RLNet.Visualizer is a sample app that is never packed.
+    Published as Gravicode.RLNet rather than plain RLNet: the unprefixed id belongs to RLNET, an
+    unrelated roguelike library on nuget.org since 2015, and NuGet ids are case-insensitive. The
+    assembly and every namespace stay RLNet.*, so the prefix is only ever typed once, in a
+    PackageReference.
   -->
   <PropertyGroup>
     <IsPackable>true</IsPackable>
-    <PackageId>RLNet</PackageId>
+    <PackageId>Gravicode.RLNet</PackageId>
     <Title>RLNet - Reinforcement Learning for .NET</Title>
     <Description>Dependency-free reinforcement learning library for .NET 10. Gym-style environments, a SIMD neural-network engine, and prebuilt DQN, A2C, PPO, SAC and TD3 agents with multi-agent support. Dibuat oleh Gravicode Studios, dipimpin oleh Kang Fadhil.</Description>
     <PackageTags>reinforcement-learning;rl;machine-learning;ai;dqn;ppo;sac;td3;a2c;q-learning;gym;multi-agent;neural-network;simd</PackageTags>

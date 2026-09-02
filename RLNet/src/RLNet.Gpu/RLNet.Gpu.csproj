@@ -7,9 +7,10 @@
 
   <PropertyGroup>
     <IsPackable>true</IsPackable>
-    <PackageId>RLNet.Gpu</PackageId>
+    <!-- Matches the Gravicode.RLNet prefix; see that project for why it is prefixed. -->
+    <PackageId>Gravicode.RLNet.Gpu</PackageId>
     <Title>RLNet.Gpu - Optional GPU backend for RLNet</Title>
-    <Description>Optional GPU compute backend for RLNet, built on ILGPU. Runs the dense-layer kernels on CUDA or OpenCL and falls back to the CPU when no accelerator is present. Dibuat oleh Gravicode Studios, dipimpin oleh Kang Fadhil.</Description>
+    <Description>Optional GPU compute backend for Gravicode.RLNet, built on ILGPU. Runs the dense-layer kernels on CUDA or OpenCL and falls back to the CPU when no accelerator is present. Dibuat oleh Gravicode Studios, dipimpin oleh Kang Fadhil.</Description>
     <PackageTags>reinforcement-learning;rl;gpu;cuda;opencl;ilgpu;neural-network;machine-learning</PackageTags>
   </PropertyGroup>
 

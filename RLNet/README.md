@@ -53,8 +53,8 @@ the solve threshold, and a deterministic evaluation of the finished policy score
 ## Install
 
 ```bash
-dotnet add package RLNet
-dotnet add package RLNet.Gpu   # optional, only for wide networks
+dotnet add package Gravicode.RLNet
+dotnet add package Gravicode.RLNet.Gpu   # optional, only for wide networks
 ```
 
 Requires the .NET 10 SDK.
@@ -193,8 +193,8 @@ mendapat nilai sempurna 500.
 ## Instalasi
 
 ```bash
-dotnet add package RLNet
-dotnet add package RLNet.Gpu   # opsional, hanya untuk jaringan lebar
+dotnet add package Gravicode.RLNet
+dotnet add package Gravicode.RLNet.Gpu   # opsional, hanya untuk jaringan lebar
 ```
 
 Butuh .NET 10 SDK.

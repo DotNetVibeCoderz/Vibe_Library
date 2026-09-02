@@ -35,7 +35,7 @@ them while iterating.
 Five projects. `RLNet.Core` is the library and the only one that matters for most work.
 
 ```
-src/RLNet.Core/         the library (packs as NuGet id "RLNet", assembly RLNet.Core)
+src/RLNet.Core/         the library (packs as "Gravicode.RLNet", assembly RLNet.Core)
   Spaces/               DiscreteSpace, BoxSpace - environments self-describe
   Environments/         IEnvironment + EnvironmentBase, then Classic/ Control/ Domain/ MultiAgent/
   Neural/               MlpNetwork, DenseLayer, AdamOptimizer, IComputeBackend, QNetworkPair
@@ -44,7 +44,7 @@ src/RLNet.Core/         the library (packs as NuGet id "RLNet", assembly RLNet.C
   Agents/               QTable, Dqn, A2C, Ppo, Sac, Td3, IndependentLearners, Schedule
   Training/             Trainer - the loop; TrainingReport
   Catalog.cs            name -> environment -> configured agent
-src/RLNet.Gpu/          optional ILGPU backend, packs as "RLNet.Gpu"
+src/RLNet.Gpu/          optional ILGPU backend, packs as "Gravicode.RLNet.Gpu"
 src/RLNet.Visualizer/   Avalonia console (not packable)
 tests/RLNet.Tests/      xunit.v3, 88 tests
 benchmarks/             BenchmarkDotNet
@@ -133,6 +133,13 @@ reproducible via the visualizer's CLI flags.
 
 Any performance or result figure quoted in the docs was measured. If you change something that moves
 a number, re-measure rather than adjusting the prose.
+
+## Package ids
+
+Published as `Gravicode.RLNet` and `Gravicode.RLNet.Gpu`. The unprefixed `RLNet` belongs to an
+unrelated roguelike library on nuget.org (since 2015), and NuGet ids are case-insensitive — a push
+to it returns 403. Assembly names and namespaces are unaffected and stay `RLNet.*`; the prefix is
+only ever typed in a `PackageReference`.
 
 ## Attribution
 
