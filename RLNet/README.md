@@ -103,8 +103,9 @@ matters.
 **No PyTorch, on purpose.** TorchSharp would bring autograd and CUDA, and a large native dependency
 per platform with it. For the network sizes classic control needs — two or three layers of 64 to
 256 units — a SIMD CPU implementation is not the compromise it sounds like. A full
-forward-backward-update cycle allocates zero bytes. Where GPU genuinely pays off, `RLNet.Gpu` is
-there; [the measured crossover is in the docs](docs/en/05-neural-network.md).
+forward-backward-update cycle allocates zero bytes. Where GPU genuinely pays off — wide networks,
+large batches — `RLNet.Gpu` is there, and [measuring the crossover on your own hardware](docs/en/06-gpu.md)
+is a one-command job.
 
 **The seams are real.** Replay buffers, compute backends and encoders are interfaces the agents
 take rather than construct, so swapping uniform for prioritised replay — or plugging in your own —
@@ -126,7 +127,7 @@ console, benchmarks, and how to extend any of it.
 
 ```bash
 dotnet build RLNet.slnx -c Release
-dotnet run --project tests/RLNet.Tests -c Release          # 81 tests
+dotnet run --project tests/RLNet.Tests -c Release          # 88 tests
 dotnet run -c Release --project benchmarks/RLNet.Benchmarks
 ```
 
@@ -243,7 +244,8 @@ melakukan ini di semua tempat yang penting.
 besar untuk setiap platform. Untuk ukuran jaringan yang dibutuhkan classic control — dua atau tiga
 layer berisi 64 sampai 256 unit — implementasi SIMD di CPU bukan kompromi seperti yang terdengar.
 Satu siklus penuh forward-backward-update tidak mengalokasikan memori sama sekali. Jika GPU memang
-menguntungkan, `RLNet.Gpu` tersedia; [titik impasnya terukur di dokumentasi](docs/id/05-neural-network.md).
+menguntungkan — jaringan lebar, batch besar — `RLNet.Gpu` tersedia, dan
+[mengukur titik impasnya di perangkat Anda sendiri](docs/id/06-gpu.md) cukup satu perintah.
 
 **Sambungannya nyata.** Replay buffer, compute backend, dan encoder adalah interface yang diterima
 agen lewat konstruktor, bukan yang dibuat sendiri di dalamnya — jadi mengganti uniform replay
@@ -267,7 +269,7 @@ memperluas semuanya.
 
 ```bash
 dotnet build RLNet.slnx -c Release
-dotnet run --project tests/RLNet.Tests -c Release          # 81 tes
+dotnet run --project tests/RLNet.Tests -c Release          # 88 tes
 dotnet run -c Release --project benchmarks/RLNet.Benchmarks
 ```
 
