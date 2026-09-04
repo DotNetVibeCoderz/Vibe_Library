@@ -42,7 +42,6 @@ The membership layer is deliberately simple, and simple has limits worth being e
 
 | Theme | Why it matters |
 | --- | --- |
-| `AdvertisedHost` / `AdvertisedPort` | `Host` is both the bind address and what peers dial, so `0.0.0.0` and published-port mappings cannot be expressed. |
 | Phi-accrual failure detection | A fixed deadline calls a GC pause a failure. An adaptive detector does not. |
 | Gossip fanout limits | Every node gossips to every node: fine at tens, quadratic past that. |
 | Split-brain resolution | Two halves of a partitioned cluster each believe they own the whole ring. Today nothing arbitrates. |

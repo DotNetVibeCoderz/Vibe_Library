@@ -22,6 +22,14 @@ public class NodeSettings : Spectre.Console.Cli.CommandSettings
     [System.ComponentModel.Description("Port to bind. 0 picks a free one. Default 9000.")]
     public int Port { get; init; } = 9000;
 
+    [Spectre.Console.Cli.CommandOption("--advertised-host <HOST>")]
+    [System.ComponentModel.Description("Address peers should dial, when that differs from --host. Needed when binding 0.0.0.0.")]
+    public string? AdvertisedHost { get; init; }
+
+    [Spectre.Console.Cli.CommandOption("--advertised-port <PORT>")]
+    [System.ComponentModel.Description("Port peers should dial, when that differs from --port. Needed behind a published container port.")]
+    public int? AdvertisedPort { get; init; }
+
     [Spectre.Console.Cli.CommandOption("--seed <HOST:PORT>")]
     [System.ComponentModel.Description("A cluster seed to join. Repeat for several. Supplying any seed turns clustering on.")]
     public string[] Seeds { get; init; } = [];
@@ -59,6 +67,8 @@ internal static class NodeFactory
         };
 
         if (settings.NodeId is { Length: > 0 } id) options.NodeId = id;
+        if (settings.AdvertisedHost is { Length: > 0 } advertised) options.AdvertisedHost = advertised;
+        if (settings.AdvertisedPort is { } advertisedPort) options.AdvertisedPort = advertisedPort;
 
         // Clustering is on if this node is joining someone, or if it was told to be the one
         // others join. Without the second case the first node of a cluster runs standalone: it
@@ -114,6 +124,9 @@ internal static class NodeFactory
         var table = Theme.Facts()
             .Fact("Node", system.NodeId)
             .Fact("Listening", system.Options.EnableNetworking ? $"{system.Options.Host}:{system.BoundPort}" : "in-process only")
+            .Fact("Peers dial", system.Options.EnableNetworking
+                ? $"{system.Options.EffectiveAdvertisedHost}:{system.Options.AdvertisedPort ?? system.BoundPort}"
+                : "n/a")
             .Fact("Clustering", system.Options.Cluster.Enabled
                 ? $"on, {system.Cluster.Members.Count} member(s)"
                 : "off, standalone")

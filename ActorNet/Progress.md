@@ -50,7 +50,7 @@ works and something automated proves it** — not when the code exists.
 - [x] `--cluster` for the first node, which has no seeds of its own
 - [x] Nodes across machines, bound to a routable address - verified on a real network interface
 - [x] Hostname advertising for containers - binds all interfaces, advertises the name
-- [ ] `AdvertisedHost` / `AdvertisedPort` separate from the bind address
+- [x] `AdvertisedHost` / `AdvertisedPort` separate from the bind address, with startup validation
 - [ ] Phi-accrual failure detection
 - [ ] Split-brain resolution
 - [ ] Replica placement using `PreferenceList`
@@ -144,8 +144,9 @@ works and something automated proves it** — not when the code exists.
 - [x] CI: every persistence provider run against a real server, with a guard that fails the job if one was skipped
 - [x] Publish workflow, tag-triggered (`ActorNet-v*`), with a dry-run mode
 - [x] NuGet metadata pointing at the subfolder, SourceLink, symbol packages
-- [ ] Published to nuget.org (the workflow is ready; nothing has been pushed)
-- [ ] A tagged release
+- [x] Published to nuget.org - 8 packages at 0.1.0
+- [x] Published to npm (`actornet-client`, with type definitions) and PyPI (`actornet`)
+- [ ] A tagged release (`ActorNet-v0.1.0`); 0.1.0 was pushed by hand, not by the workflow
 
 ---
 
@@ -163,10 +164,6 @@ Ticking a box means it works, not that it is finished. These are the caveats wor
   but increment. It measures the runtime's floor, not an application's throughput.
 - **Rebalancing deactivates rather than migrates.** An actor whose key moves is flushed and
   reactivated from the store on its new owner, so an actor with no persistent state loses it.
-- **`Host` is both the bind address and the advertised address.** `--host 0.0.0.0` binds fine and
-  then advertises an address peers cannot dial, so they mark the node unreachable; a container whose
-  port is published under a different number cannot advertise it either. Bind the address you want
-  peers to use.
 - **A cluster has only ever run on one machine here.** Two nodes were verified over a real network
   interface and two over a hostname, which exercises the advertise-then-dial path - but not across
   separate hosts, a firewall, or real containers.

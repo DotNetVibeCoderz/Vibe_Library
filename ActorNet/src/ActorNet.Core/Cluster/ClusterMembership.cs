@@ -49,12 +49,20 @@ public sealed class ClusterMembership : IClusterView, IAsyncDisposable
     /// <inheritdoc />
     public event Action<IReadOnlyList<ClusterMember>>? MembershipChanged;
 
-    public ClusterMembership(string nodeId, string host, int port, ClusterOptions options, ILogger logger)
+    /// <param name="advertisedHost">
+    /// What peers are told to dial - not necessarily what the listener binds to. A node binding
+    /// every interface still has to advertise one address a peer can actually reach.
+    /// </param>
+    /// <param name="advertisedPort">
+    /// The port peers dial. Superseded by <see cref="SetAdvertisedPort"/> once the listener has
+    /// bound, unless the caller pinned one.
+    /// </param>
+    public ClusterMembership(string nodeId, string advertisedHost, int advertisedPort, ClusterOptions options, ILogger logger)
     {
         SelfNodeId = nodeId;
         _options = options;
         _logger = logger;
-        _members[nodeId] = new ClusterMember(nodeId, host, port, MemberStatus.Up, DateTimeOffset.UtcNow, _incarnation);
+        _members[nodeId] = new ClusterMember(nodeId, advertisedHost, advertisedPort, MemberStatus.Up, DateTimeOffset.UtcNow, _incarnation);
         _ring = BuildRing();
     }
 
@@ -81,8 +89,15 @@ public sealed class ClusterMembership : IClusterView, IAsyncDisposable
     /// <inheritdoc />
     public bool IsLocal(ActorId id) => string.Equals(OwnerOf(id), SelfNodeId, StringComparison.Ordinal);
 
-    /// <summary>Updates this node's advertised port once the transport has bound one.</summary>
-    public void SetSelfPort(int port)
+    /// <summary>
+    /// Sets the port peers are told to dial, once the transport has bound one.
+    /// </summary>
+    /// <remarks>
+    /// This is what resolves a configured port of zero: the real port is only known after the
+    /// listener starts. A caller that pinned an advertised port passes that instead, which is the
+    /// published-port case.
+    /// </remarks>
+    public void SetAdvertisedPort(int port)
     {
         _members.AddOrUpdate(SelfNodeId,
             _ => throw new InvalidOperationException("Self member is missing."),
@@ -150,6 +165,9 @@ public sealed class ClusterMembership : IClusterView, IAsyncDisposable
     private bool IsSelfHost(string host) =>
         string.Equals(host, _members[SelfNodeId].Host, StringComparison.OrdinalIgnoreCase) ||
         host is "127.0.0.1" or "localhost" or "0.0.0.0";
+
+    /// <summary>The address this node advertises, for diagnostics and the console.</summary>
+    public string AdvertisedAddress => _members[SelfNodeId].Address;
 
     private async Task HeartbeatLoopAsync(CancellationToken cancellationToken)
     {

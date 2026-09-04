@@ -97,7 +97,12 @@ public sealed class ActorSystem : IActorSystem
         _services = services;
         Serializer = serializer ?? new JsonMessageSerializer();
         MetricsCollector = new MetricsCollector(Options.NodeId);
-        _cluster = new ClusterMembership(Options.NodeId, Options.Host, Options.Port, Options.Cluster, LoggerFactory.CreateLogger<ClusterMembership>());
+        _cluster = new ClusterMembership(
+            Options.NodeId,
+            Options.EffectiveAdvertisedHost,
+            Options.AdvertisedPort ?? Options.Port,
+            Options.Cluster,
+            LoggerFactory.CreateLogger<ClusterMembership>());
         _cluster.MembershipChanged += OnMembershipChanged;
     }
 
@@ -137,7 +142,9 @@ public sealed class ActorSystem : IActorSystem
         {
             _transport = new TcpTransport(Options.Host, Options.Port, OnFrameAsync, _cluster.Resolve, LoggerFactory.CreateLogger<TcpTransport>());
             await _transport.StartAsync(cancellationToken).ConfigureAwait(false);
-            _cluster.SetSelfPort(_transport.BoundPort);
+            // The bound port unless one was pinned - a published container port is not the port
+            // the listener actually opened.
+            _cluster.SetAdvertisedPort(Options.AdvertisedPort ?? _transport.BoundPort);
             await _cluster.StartAsync(_transport, cancellationToken).ConfigureAwait(false);
         }
         else if (Options.Cluster.Enabled)

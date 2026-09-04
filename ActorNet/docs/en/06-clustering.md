@@ -202,16 +202,32 @@ A `Host` that is not parseable as an IP makes the listener bind to all interface
 advertising the name, which is exactly what a container needs. Verified with a hostname on one
 machine; not yet verified across real containers.
 
-### `--host 0.0.0.0` does not work
+### Binding one address and advertising another
 
-It binds correctly and then advertises `0.0.0.0`, which peers cannot dial. The observed result is a
-node discovered once and then marked `Unreachable`, with the connection attempts failing in a loop.
+`Host` and `Port` are what the listener binds. `AdvertisedHost` and `AdvertisedPort` are what peers
+are told to dial. Leave the advertised pair unset and the bind pair is used, which is right whenever
+a node binds to an address peers can already route to.
 
-There is no way today to bind one address and advertise another, which also means a container whose
-port is **published on a different number** cannot advertise the published port. Both need a
-separate `AdvertisedHost` / `AdvertisedPort`, which is on the [roadmap](../../Plan.md).
+They differ in two common cases:
 
-Until then: bind the address you want peers to use.
+```bash
+# Accept on every interface, but tell peers a routable address.
+actornet run --node-id a --host 0.0.0.0 --advertised-host 10.0.1.5 --port 9000 --cluster
+
+# Bind 9000 inside a container that publishes it as 19000.
+actornet run --node-id a --host 0.0.0.0 --advertised-host node-a.example.com   --port 9000 --advertised-port 19000 --cluster
+```
+
+Verified: two nodes bound to `0.0.0.0`, advertising a LAN address, converged with no failed
+connection attempts.
+
+**Advertising a bind address is refused at startup.** `0.0.0.0`, `::` and `*` mean "every
+interface" to a listener and nothing at all to a dialler, so a clustered node configured that way
+fails immediately with a message naming the fix — rather than starting, being discovered once, and
+then being marked `Unreachable` while perfectly healthy.
+
+A port of `0` is fine: the real port is only known once the listener is up, and that is what gets
+advertised.
 
 ## Known limits
 

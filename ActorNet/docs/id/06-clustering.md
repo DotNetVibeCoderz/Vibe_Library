@@ -203,16 +203,32 @@ services:
 mengiklankan namanya, dan itu persis yang dibutuhkan container. Sudah diuji dengan hostname di satu
 mesin; belum diuji lintas container sungguhan.
 
-### `--host 0.0.0.0` tidak bekerja
+### Mem-bind satu alamat dan mengiklankan alamat lain
 
-Ia bind dengan benar lalu mengiklankan `0.0.0.0`, yang tidak bisa dihubungi peer. Hasil yang teramati:
-sebuah node ditemukan sekali lalu ditandai `Unreachable`, dengan percobaan koneksi gagal berulang.
+`Host` dan `Port` adalah yang di-bind listener. `AdvertisedHost` dan `AdvertisedPort` adalah yang
+diberitahukan ke peer untuk dihubungi. Biarkan pasangan iklan kosong dan pasangan bind yang dipakai,
+dan itu tepat setiap kali sebuah node terikat ke alamat yang sudah bisa dirutekan peer.
 
-Saat ini tidak ada cara mem-bind satu alamat dan mengiklankan alamat lain, yang juga berarti container
-yang port-nya **dipublikasikan dengan nomor berbeda** tidak bisa mengiklankan port publikasinya.
-Keduanya butuh `AdvertisedHost` / `AdvertisedPort` terpisah, yang ada di [roadmap](../../Plan.md).
+Keduanya berbeda dalam dua kasus yang umum:
 
-Sampai saat itu: bind-lah alamat yang Anda ingin dipakai peer.
+```bash
+# Terima di semua antarmuka, tapi beri tahu peer alamat yang bisa dirutekan.
+actornet run --node-id a --host 0.0.0.0 --advertised-host 10.0.1.5 --port 9000 --cluster
+
+# Bind 9000 di dalam container yang mempublikasikannya sebagai 19000.
+actornet run --node-id a --host 0.0.0.0 --advertised-host node-a.example.com   --port 9000 --advertised-port 19000 --cluster
+```
+
+Sudah diuji: dua node terikat ke `0.0.0.0`, mengiklankan alamat LAN, konvergen tanpa satu pun
+percobaan koneksi yang gagal.
+
+**Mengiklankan alamat bind ditolak saat start.** `0.0.0.0`, `::`, dan `*` berarti "semua antarmuka"
+bagi listener dan tidak berarti apa pun bagi yang menghubungi, jadi node ber-cluster yang
+dikonfigurasi begitu langsung gagal dengan pesan yang menyebutkan perbaikannya — alih-alih tetap
+jalan, ditemukan sekali, lalu ditandai `Unreachable` padahal sehat.
+
+Port `0` tidak masalah: port sesungguhnya baru diketahui setelah listener naik, dan itulah yang
+diiklankan.
 
 ## Batas yang diketahui
 

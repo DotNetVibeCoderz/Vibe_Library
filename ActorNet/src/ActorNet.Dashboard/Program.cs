@@ -25,6 +25,8 @@ builder.Services.AddActorNet(actors =>
     actors.Options.NodeId = settings.NodeId ?? $"console-{Environment.MachineName.ToLowerInvariant()}";
     actors.Options.Host = settings.Host;
     actors.Options.Port = settings.Port;
+    actors.Options.AdvertisedHost = settings.AdvertisedHost;
+    actors.Options.AdvertisedPort = settings.AdvertisedPort;
     actors.Options.IdleTimeout = TimeSpan.FromSeconds(settings.IdleTimeoutSeconds);
     actors.Options.SweepInterval = TimeSpan.FromSeconds(Math.Clamp(settings.IdleTimeoutSeconds / 4.0, 1, 30));
 
@@ -79,6 +81,12 @@ namespace ActorNet.Dashboard
 
         /// <summary>Port the actor transport binds to.</summary>
         public int Port { get; set; } = 9100;
+
+        /// <summary>Address peers should dial, when that differs from the bind host.</summary>
+        public string? AdvertisedHost { get; set; }
+
+        /// <summary>Port peers should dial, when that differs from the bound port.</summary>
+        public int? AdvertisedPort { get; set; }
 
         /// <summary>Cluster seeds as <c>host:port</c>. Any seed turns clustering on.</summary>
         public List<string> Seeds { get; set; } = [];
