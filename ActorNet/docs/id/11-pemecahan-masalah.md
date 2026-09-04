@@ -111,8 +111,12 @@ Atau `--data ./data` di CLI.
 Store bawaannya per-proses. Saat key sebuah actor berpindah ke node lain, ia diaktifkan di sana dan
 tidak menemukan apa pun.
 
-Cluster sungguhan butuh store yang bisa dibaca kedua node — sebuah provider basis data, yang belum
-dibangun. Sampai saat itu, hanya cluster-kan actor yang state-nya bisa dibangun ulang.
+Cluster sungguhan butuh store yang bisa dibaca kedua node. Store memori, file, dan SQLite semuanya
+bersifat per-proses; beralihlah ke PostgreSQL, SQL Server, MySQL, atau Redis:
+
+```csharp
+options.UsePostgreSql("Host=db;Database=actornet;Username=app;Password=…", types);
+```
 
 ## Sebuah node tampil sebagai `Unreachable`
 
@@ -201,4 +205,4 @@ sibuk berarti ribuan baris per detik — dan itulah sebabnya ia bukan bawaan.
 
 - [Supervisi](04-supervisi.md)
 - [Clustering](06-clustering.md)
-- [Roadmap](../../Plan.md) — apa yang diketahui masih kurang
+- [Pelacakan pengembangan](../../Progress.md) — apa yang diketahui masih kurang

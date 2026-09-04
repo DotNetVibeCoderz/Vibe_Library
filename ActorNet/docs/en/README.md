@@ -19,6 +19,7 @@
 
 Also worth reading:
 
-- [Roadmap and development checklist](../../Plan.md) — including an honest list of what is not built
+- [Product roadmap](../../Plan.md) — where this is going, and what is deliberately not planned
+- [Development tracking](../../Progress.md) — what is built, with an honest list of what is not
 - [Client SDKs](../../clients/README.md) — the protocol, and what a client can and cannot do
 - [Screenshots](../images/) — real captures of the running console and samples

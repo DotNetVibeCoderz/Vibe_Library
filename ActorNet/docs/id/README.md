@@ -19,6 +19,7 @@
 
 Layak dibaca juga:
 
-- [Roadmap dan checklist pengembangan](../../Plan.md) — termasuk daftar jujur apa yang belum dibangun
+- [Roadmap produk](../../Plan.md) — arah proyek ini, dan apa yang sengaja tidak direncanakan
+- [Pelacakan pengembangan](../../Progress.md) — apa yang sudah dibangun, dengan daftar jujur apa yang belum
 - [SDK klien](../../clients/README.md) — protokolnya, dan apa yang bisa serta tidak bisa dilakukan klien
 - [Tangkapan layar](../images/) — hasil tangkapan asli dari konsol dan sample yang berjalan

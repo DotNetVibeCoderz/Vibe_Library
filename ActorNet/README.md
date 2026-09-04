@@ -296,7 +296,8 @@ it with `actornet bench` or `dotnet run -c Release --project benchmarks/ActorNet
 | [Performance](docs/en/10-performance.md) | What was measured, and what it does not show |
 | [Troubleshooting](docs/en/11-troubleshooting.md) | The failures people actually hit |
 
-[Roadmap and development checklist](Plan.md) — including an honest list of what is *not* built.
+[Product roadmap](Plan.md) — where this is going.
+[Development tracking](Progress.md) — what is built, and an honest list of what is *not*.
 
 ## Building
 
@@ -467,8 +468,8 @@ Inggrisnya:
 | [Performa](docs/id/10-performa.md) | Apa yang diukur, dan apa yang tidak ditunjukkannya |
 | [Pemecahan masalah](docs/id/11-pemecahan-masalah.md) | Kegagalan yang benar-benar sering terjadi |
 
-[Roadmap dan checklist pengembangan](Plan.md) — termasuk daftar jujur tentang apa yang *belum*
-dibangun.
+[Roadmap produk](Plan.md) — arah proyek ini.
+[Pelacakan pengembangan](Progress.md) — apa yang sudah dibangun, dan daftar jujur apa yang *belum*.
 
 ## Lisensi
 

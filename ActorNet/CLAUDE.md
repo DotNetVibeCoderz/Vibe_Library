@@ -158,8 +158,10 @@ still resolve is worth running after any rename.
 taken by driving the apps and capturing the window; if a UI change makes one stale, retake it rather
 than describing something the picture does not show.
 
-`Plan.md` carries the roadmap and an honest checklist of what is *not* built. Keep it honest — a box
-is ticked only when something automated proves the feature works.
+`Plan.md` is the product roadmap; `Progress.md` is the development checklist. They are separate
+files on purpose - direction and status answer different questions. Keep `Progress.md` honest: a
+box is ticked only when something automated proves the feature works, and the closing section
+lists the gaps in what *is* ticked.
 
 ## Package ids
 

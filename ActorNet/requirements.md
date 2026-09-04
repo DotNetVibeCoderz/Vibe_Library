@@ -46,5 +46,5 @@ Notes:
 * add screenshots in readme and docs
 * publish nuget package ActorNet dengan projectUrl dan repository ke url https://github.com/DotNetVibeCoderz/Vibe\_Library/tree/main/ActorNet
 * buatkan CI workflow juga
-* Plan.md for product roadmap and Plan.md for development tracking checklist
+* Plan.md for product roadmap and Progress.md for development tracking checklist
 

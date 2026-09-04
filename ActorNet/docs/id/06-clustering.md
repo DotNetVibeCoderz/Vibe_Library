@@ -121,9 +121,9 @@ Itulah separuh "elastis" dari penskalaan elastis. Deaktivasi menuliskan state, d
 mengaktifkan actor itu di pemilik barunya dari store — sehingga scale-out memigrasikan kira-kira 1/N
 actor dan sisanya tidak bergerak.
 
-**Ini membutuhkan store yang bisa dibaca kedua node.** Dengan store memori bawaan, actor yang
-berpindah tidak menemukan apa pun. Di cluster sungguhan itu berarti provider basis data, yang belum
-dibangun.
+**Ini membutuhkan store yang bisa dibaca kedua node.** Dengan store memori bawaan — atau store file
+dan SQLite, yang bersifat per-proses — actor yang berpindah tidak menemukan apa pun. Pakai PostgreSQL,
+SQL Server, MySQL, atau Redis; lihat [Persistensi](05-persistensi.md).
 
 **State yang hanya di memori tidak selamat dari rebalance.** Memigrasikan state hidup berarti protokol
 serah-terima terdistribusi; store sudah menyelesaikan masalahnya.
@@ -166,6 +166,53 @@ ribuan kali per detik, dan node yang mati 200 ms tidak boleh menunggu semenit.
 - **Seed masih berupa string statis.** Penemuan lewat DNS atau API Kubernetes ada di roadmap.
 - **Tidak ada TLS dan tidak ada autentikasi antar node.** Jalankan cluster di jaringan tepercaya.
   Allow-list tipe membatasi apa yang bisa dibuat peer, tapi itu bukan pengganti jaringan tertutup.
+
+## Menerapkan lintas mesin
+
+`Host` merangkap dua tugas: alamat yang di-bind listener **dan** alamat yang diberitahukan ke peer
+untuk dihubungi. Itu punya satu konsekuensi yang perlu diketahui sebelum menerapkannya.
+
+### Mesin atau VM terpisah
+
+Setel `Host` ke alamat yang benar-benar dimiliki mesin itu dan bisa dirutekan peer:
+
+```bash
+# di mesin 10.0.1.5
+actornet run --node-id a --host 10.0.1.5 --port 9000 --cluster
+
+# di mesin 10.0.1.6
+actornet run --node-id b --host 10.0.1.6 --port 9000 --seed 10.0.1.5:9000
+```
+
+Sudah diuji pada antarmuka jaringan sungguhan, bukan loopback: dua node yang terikat ke alamat LAN
+konvergen dan masing-masing melihat yang lain `Up`.
+
+### Docker atau Kubernetes
+
+Pakai nama yang bisa diselesaikan container lain:
+
+```yaml
+services:
+  node-a:
+    command: run --node-id a --host node-a --port 9000 --cluster
+  node-b:
+    command: run --node-id b --host node-b --port 9000 --seed node-a:9000
+```
+
+`Host` yang tidak bisa di-parse sebagai IP membuat listener bind ke semua antarmuka sambil tetap
+mengiklankan namanya, dan itu persis yang dibutuhkan container. Sudah diuji dengan hostname di satu
+mesin; belum diuji lintas container sungguhan.
+
+### `--host 0.0.0.0` tidak bekerja
+
+Ia bind dengan benar lalu mengiklankan `0.0.0.0`, yang tidak bisa dihubungi peer. Hasil yang teramati:
+sebuah node ditemukan sekali lalu ditandai `Unreachable`, dengan percobaan koneksi gagal berulang.
+
+Saat ini tidak ada cara mem-bind satu alamat dan mengiklankan alamat lain, yang juga berarti container
+yang port-nya **dipublikasikan dengan nomor berbeda** tidak bisa mengiklankan port publikasinya.
+Keduanya butuh `AdvertisedHost` / `AdvertisedPort` terpisah, yang ada di [roadmap](../../Plan.md).
+
+Sampai saat itu: bind-lah alamat yang Anda ingin dipakai peer.
 
 ## Batas yang diketahui
 

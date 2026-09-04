@@ -110,8 +110,12 @@ Or `--data ./data` on the CLI.
 The default stores are per-process. When an actor's key moves to another node, it reactivates there
 and finds nothing.
 
-A real cluster needs a store both nodes can read — a database provider, which is not built yet.
-Until then, cluster only actors whose state can be rebuilt.
+A real cluster needs a store both nodes can read. The in-memory, file and SQLite stores are all
+per-process; switch to PostgreSQL, SQL Server, MySQL or Redis:
+
+```csharp
+options.UsePostgreSql("Host=db;Database=actornet;Username=app;Password=…", types);
+```
 
 ## A node shows as `Unreachable`
 
@@ -199,4 +203,4 @@ node is thousands of lines a second — which is why it is not the default.
 
 - [Supervision](04-supervision.md)
 - [Clustering](06-clustering.md)
-- [Roadmap](../../Plan.md) — what is known to be missing
+- [Development tracking](../../Progress.md) — what is known to be missing

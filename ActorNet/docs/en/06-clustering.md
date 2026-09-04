@@ -118,8 +118,9 @@ That is the elastic half of elastic scaling. Deactivation flushes state, and the
 activates the actor on its new owner from the store — so scaling out migrates roughly 1/N of the
 actors and nothing else moves.
 
-**It requires a store both nodes can read.** With the default in-memory store, an actor that moves
-finds nothing. In a real cluster that means a database provider, which is not built yet.
+**It requires a store both nodes can read.** With the default in-memory store - or the file and
+SQLite ones, which are per-process - an actor that moves finds nothing. Use PostgreSQL, SQL Server,
+MySQL or Redis; see [Persistence](05-persistence.md).
 
 **In-memory-only state does not survive a rebalance.** Migrating live state would mean a
 distributed handover protocol; the store already solves the problem.
@@ -164,6 +165,53 @@ thousands of times a second, and one down for 200 ms should not wait a minute.
 - **There is no TLS and no authentication between nodes.** Run the cluster on a trusted network.
   The type allow-list limits what a peer can make a node construct, but it is not a substitute for
   a closed network.
+
+## Deploying across machines
+
+`Host` does double duty: it is the address the listener binds to **and** the address peers are told
+to dial. That has one consequence worth knowing before you deploy.
+
+### Separate machines or VMs
+
+Set `Host` to an address that machine actually owns and peers can route to:
+
+```bash
+# on the machine at 10.0.1.5
+actornet run --node-id a --host 10.0.1.5 --port 9000 --cluster
+
+# on the machine at 10.0.1.6
+actornet run --node-id b --host 10.0.1.6 --port 9000 --seed 10.0.1.5:9000
+```
+
+Verified on a real network interface rather than loopback: two nodes bound to a LAN address
+converged and each saw the other `Up`.
+
+### Docker or Kubernetes
+
+Use a name the other containers can resolve:
+
+```yaml
+services:
+  node-a:
+    command: run --node-id a --host node-a --port 9000 --cluster
+  node-b:
+    command: run --node-id b --host node-b --port 9000 --seed node-a:9000
+```
+
+A `Host` that is not parseable as an IP makes the listener bind to all interfaces while still
+advertising the name, which is exactly what a container needs. Verified with a hostname on one
+machine; not yet verified across real containers.
+
+### `--host 0.0.0.0` does not work
+
+It binds correctly and then advertises `0.0.0.0`, which peers cannot dial. The observed result is a
+node discovered once and then marked `Unreachable`, with the connection attempts failing in a loop.
+
+There is no way today to bind one address and advertise another, which also means a container whose
+port is **published on a different number** cannot advertise the published port. Both need a
+separate `AdvertisedHost` / `AdvertisedPort`, which is on the [roadmap](../../Plan.md).
+
+Until then: bind the address you want peers to use.
 
 ## Known limits
 
