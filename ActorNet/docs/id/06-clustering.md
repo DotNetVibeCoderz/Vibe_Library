@@ -164,8 +164,9 @@ ribuan kali per detik, dan node yang mati 200 ms tidak boleh menunggu semenit.
 - **`Host` dan `Port` harus terjangkau oleh peer**, bukan sekadar ter-bind lokal. Peer menghubungi
   alamat yang diiklankan sebuah node.
 - **Seed masih berupa string statis.** Penemuan lewat DNS atau API Kubernetes ada di roadmap.
-- **Tidak ada TLS dan tidak ada autentikasi antar node.** Jalankan cluster di jaringan tepercaya.
-  Allow-list tipe membatasi apa yang bisa dibuat peer, tapi itu bukan pengganti jaringan tertutup.
+- **TLS dan autentikasi tersedia tapi mati secara bawaan.** Lihat di bawah. Sampai keduanya
+  dinyalakan, jalankan cluster di jaringan tepercaya - allow-list tipe membatasi apa yang bisa
+  dibuat peer, tapi itu bukan pengganti jaringan tertutup.
 
 ## Menerapkan lintas mesin
 
@@ -229,6 +230,71 @@ jalan, ditemukan sekali, lalu ditandai `Unreachable` padahal sehat.
 
 Port `0` tidak masalah: port sesungguhnya baru diketahui setelah listener naik, dan itulah yang
 diiklankan.
+
+## Mengamankan cluster
+
+Enkripsi dan autentikasi keduanya mati secara bawaan — itulah sebabnya catatan penerapan menyarankan
+menjaga cluster di jaringan tepercaya sampai keduanya dinyalakan. Keduanya menjawab pertanyaan
+berbeda dan berdiri sendiri-sendiri.
+
+### Autentikasi: shared secret
+
+```bash
+actornet run --node-id a --port 9000 --cluster --secret "$ACTORNET_SECRET"
+actornet run --node-id b --port 9001 --seed 10.0.1.5:9000 --secret "$ACTORNET_SECRET"
+```
+
+```csharp
+options.Security.SharedSecret = Environment.GetEnvironmentVariable("ACTORNET_SECRET");
+```
+
+**Secret-nya tidak pernah dikirim.** Sisi yang mendengarkan menawarkan nonce acak, sisi yang
+menyambung menjawab dengan HMAC atasnya, dan jawabannya dibandingkan dalam waktu tetap. Pengamat
+pasif hanya mendapat sebuah nonce dan sebuah MAC, dan keduanya tidak bisa dipakai ulang — jadi ini
+aman dijalankan tanpa TLS, dan operator bisa menyalakan autentikasi tanpa harus lebih dulu
+menyelesaikan urusan distribusi sertifikat.
+
+Inilah yang mencegah *proses tak berwenang* bergabung ke cluster. Tanpa itu, apa pun yang bisa
+menjangkau port-nya bisa mengirim `Join` dan mulai menerima actor. Secret di bawah 16 karakter
+ditolak saat start.
+
+Sudah diuji: node yang dijalankan dengan secret salah tidak pernah muncul di tabel member, dan
+penolakannya tercatat di node yang menolaknya.
+
+### Enkripsi: TLS
+
+```bash
+actornet run --node-id a --port 9000 --cluster   --tls-cert ./node.pfx --tls-password "$PFX_PASSWORD" --tls-pin A1B2C3...
+```
+
+```csharp
+options.Security.ServerCertificate = X509CertificateLoader.LoadPkcs12FromFile("node.pfx", password);
+options.Security.PinnedThumbprint("A1B2C3…");     // atau isi RemoteCertificateValidation
+```
+
+TLS 1.2 atau 1.3, dinegosiasikan sebelum satu frame pun dibaca.
+
+Node cluster biasanya menyajikan sertifikat dari CA privat atau yang ditandatangani sendiri, dan
+bawaan platform akan menolaknya — jadi pin thumbprint-nya, atau isi validasi Anda sendiri.
+`AcceptAnyCertificate()` ada untuk pengembangan dan sengaja dibuat sebagai metode bernama alih-alih
+sebuah flag supaya mudah dicari saat review: ia mengenkripsi lalu lintas dan tidak mengautentikasi
+siapa pun.
+
+**Semua node harus sepakat soal TLS.** Node yang menyalakannya tidak bisa bicara dengan yang
+mematikannya, dan kegagalannya berupa galat handshake alih-alih sesuatu yang halus — cluster yang
+setengah bermigrasi gagal dengan nyaring. Sebarkan sertifikatnya ke semua node sebelum menyalakannya
+di mana pun.
+
+### Mutual TLS
+
+```csharp
+options.Security.RequireClientCertificate = true;
+options.Security.ClientCertificate = X509CertificateLoader.LoadPkcs12FromFile("node.pfx", password);
+```
+
+Pilihan terkuat sekaligus paling banyak kerjanya: setiap node butuh sepasang kunci dan cara
+merotasinya. Shared secret adalah jawaban yang lebih murah untuk pertanyaan yang sama, dan keduanya
+bisa digabung.
 
 ## Batas yang diketahui
 

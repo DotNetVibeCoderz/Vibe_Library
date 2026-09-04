@@ -38,6 +38,22 @@ public class NodeSettings : Spectre.Console.Cli.CommandSettings
     [System.ComponentModel.Description("Join a cluster with no seeds of its own - what the first node of a cluster needs, since it has nobody to join.")]
     public bool Cluster { get; init; }
 
+    [Spectre.Console.Cli.CommandOption("--secret <SECRET>")]
+    [System.ComponentModel.Description("Shared secret every node must know. Turns on a challenge-response handshake; the secret itself is never sent.")]
+    public string? SharedSecret { get; init; }
+
+    [Spectre.Console.Cli.CommandOption("--tls-cert <PATH>")]
+    [System.ComponentModel.Description("PKCS#12 (.pfx) certificate to serve. Turns on TLS between nodes; every node must agree.")]
+    public string? TlsCertificate { get; init; }
+
+    [Spectre.Console.Cli.CommandOption("--tls-password <PASSWORD>")]
+    [System.ComponentModel.Description("Password for the certificate file, if it has one.")]
+    public string? TlsPassword { get; init; }
+
+    [Spectre.Console.Cli.CommandOption("--tls-pin <THUMBPRINT>")]
+    [System.ComponentModel.Description("Accept only this certificate thumbprint from peers. Without it, peers must present a certificate the machine already trusts.")]
+    public string? TlsPin { get; init; }
+
     [Spectre.Console.Cli.CommandOption("--data <DIRECTORY>")]
     [System.ComponentModel.Description("Persist state and events under this directory instead of in memory, so they survive a restart.")]
     public string? DataDirectory { get; init; }
@@ -74,6 +90,16 @@ internal static class NodeFactory
         // others join. Without the second case the first node of a cluster runs standalone: it
         // answers a join handshake but never gossips, so every peer eventually marks it
         // unreachable while it is perfectly healthy.
+        if (settings.SharedSecret is { Length: > 0 } secret) options.Security.SharedSecret = secret;
+
+        if (settings.TlsCertificate is { Length: > 0 } certificatePath)
+        {
+            options.Security.ServerCertificate = System.Security.Cryptography.X509Certificates
+                .X509CertificateLoader.LoadPkcs12FromFile(certificatePath, settings.TlsPassword);
+
+            if (settings.TlsPin is { Length: > 0 } pin) options.Security.PinnedThumbprint(pin);
+        }
+
         if (settings.Seeds.Length > 0 || settings.Cluster)
         {
             options.Cluster.Enabled = true;
@@ -131,9 +157,25 @@ internal static class NodeFactory
                 ? $"on, {system.Cluster.Members.Count} member(s)"
                 : "off, standalone")
             .Fact("Idle timeout", $"{system.Options.IdleTimeout.TotalSeconds:N0}s")
-            .Fact("Persistence", system.Options.StateStore is FileStateStore ? "files on disk" : "in memory");
+            .Fact("Persistence", system.Options.StateStore is FileStateStore ? "files on disk" : "in memory")
+            .Fact("Security", Describe(system.Options.Security));
 
         AnsiConsole.Write(table);
         AnsiConsole.WriteLine();
     }
+
+    /// <summary>
+    /// Says plainly what is protecting the cluster, including when the answer is nothing.
+    /// </summary>
+    /// <remarks>
+    /// An operator who has just typed a --secret wants confirmation it took effect, and one who has
+    /// not should be told rather than left to assume.
+    /// </remarks>
+    private static string Describe(Network.ClusterSecurityOptions security) => (security.TlsEnabled, security.AuthenticationEnabled) switch
+    {
+        (true, true) => "TLS, shared secret",
+        (true, false) => "TLS, no authentication",
+        (false, true) => "shared secret, no encryption",
+        _ => "none - keep this cluster on a trusted network",
+    };
 }

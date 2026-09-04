@@ -3,6 +3,7 @@
 using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Sockets;
+using System.Security.Authentication;
 using System.Threading.Channels;
 using ActorNet.Serialization;
 using Microsoft.Extensions.Logging;
@@ -53,6 +54,7 @@ public sealed class TcpTransport : ITransport
 {
     private readonly string _host;
     private readonly int _requestedPort;
+    private readonly ClusterSecurityOptions _security;
     private readonly Func<WireEnvelope, Task> _onFrame;
     private readonly Func<string, (string Host, int Port)?> _resolveNode;
     private readonly ILogger _logger;
@@ -82,10 +84,12 @@ public sealed class TcpTransport : ITransport
         int port,
         Func<WireEnvelope, Task> onFrame,
         Func<string, (string Host, int Port)?> resolveNode,
-        ILogger logger)
+        ILogger logger,
+        ClusterSecurityOptions? security = null)
     {
         _host = host;
         _requestedPort = port;
+        _security = security ?? new ClusterSecurityOptions();
         _onFrame = onFrame;
         _resolveNode = resolveNode;
         _logger = logger;
@@ -134,8 +138,8 @@ public sealed class TcpTransport : ITransport
         }
 
         var peer = _peers.GetOrAdd(nodeId, static (id, state) =>
-            new PeerConnection(id, state.Address.Host, state.Address.Port, state.Logger, state.OnFrame, state.Token),
-            (Address: address.Value, Logger: _logger, OnFrame: _onFrame, Token: _shutdown.Token));
+            new PeerConnection(id, state.Address.Host, state.Address.Port, state.Logger, state.OnFrame, state.Security, state.Token),
+            (Address: address.Value, Logger: _logger, OnFrame: _onFrame, Security: _security, Token: _shutdown.Token));
 
         return peer.SendAsync(frame, cancellationToken);
     }
@@ -147,7 +151,7 @@ public sealed class TcpTransport : ITransport
         // connectionless: dial, send, hang up. Everything after the handshake uses SendAsync.
         using var client = new TcpClient();
         await client.ConnectAsync(host, port, cancellationToken).ConfigureAwait(false);
-        await using var stream = client.GetStream();
+        await using var stream = await SecureChannel.ConnectAsync(client, host, _security, cancellationToken).ConfigureAwait(false);
         await FrameCodec.WriteAsync(stream, frame, cancellationToken).ConfigureAwait(false);
     }
 
@@ -180,7 +184,9 @@ public sealed class TcpTransport : ITransport
         try
         {
             client.NoDelay = true;
-            await using var stream = client.GetStream();
+
+            // Security first: a peer that cannot prove it belongs never gets a frame parsed.
+            await using var stream = await SecureChannel.AcceptAsync(client, _security, cancellationToken).ConfigureAwait(false);
             var connection = new InboundConnection(stream, client);
 
             while (!cancellationToken.IsCancellationRequested)
@@ -210,6 +216,16 @@ public sealed class TcpTransport : ITransport
         catch (OperationCanceledException)
         {
             // Shutting down.
+        }
+        catch (ClusterAuthenticationException ex)
+        {
+            // A warning rather than an error: a refused peer is the feature working. It is also
+            // the one line an operator needs when a rollout has mismatched settings.
+            _logger.LogWarning("Refused an inbound connection: {Reason}", ex.Message);
+        }
+        catch (AuthenticationException ex)
+        {
+            _logger.LogWarning(ex, "TLS handshake failed on an inbound connection. Check that every node agrees on TLS.");
         }
         catch (Exception ex) when (ex is IOException or SocketException or EndOfStreamException or ObjectDisposedException)
         {
@@ -286,13 +302,17 @@ public sealed class TcpTransport : ITransport
         private readonly int _port;
         private readonly ILogger _logger;
         private readonly Func<WireEnvelope, Task> _onFrame;
+        private readonly ClusterSecurityOptions _security;
         private readonly Channel<WireEnvelope> _outbound;
         private readonly CancellationTokenSource _cts;
         private readonly Task _writerLoop;
 
-        public PeerConnection(string nodeId, string host, int port, ILogger logger, Func<WireEnvelope, Task> onFrame, CancellationToken shutdown)
+        public PeerConnection(
+            string nodeId, string host, int port, ILogger logger,
+            Func<WireEnvelope, Task> onFrame, ClusterSecurityOptions security, CancellationToken shutdown)
         {
             _nodeId = nodeId;
+            _security = security;
             _host = host;
             _port = port;
             _logger = logger;
@@ -334,7 +354,7 @@ public sealed class TcpTransport : ITransport
                 {
                     using var client = new TcpClient { NoDelay = true };
                     await client.ConnectAsync(_host, _port, cancellationToken).ConfigureAwait(false);
-                    await using var stream = client.GetStream();
+                    await using var stream = await SecureChannel.ConnectAsync(client, _host, _security, cancellationToken).ConfigureAwait(false);
 
                     backoff = TimeSpan.FromMilliseconds(100);
                     _logger.LogDebug("Connected to {NodeId} at {Host}:{Port}.", _nodeId, _host, _port);

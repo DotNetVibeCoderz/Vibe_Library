@@ -21,6 +21,15 @@
 
   <ItemGroup>
     <!--
+      So the suite can test internals that should not be public API - the challenge-response
+      answer, for one. Exposing it publicly to make it testable would put an implementation detail
+      in the package's surface forever.
+    -->
+    <InternalsVisibleTo Include="ActorNet.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
       Abstractions only. A library that forces a logging or DI implementation on its host is
       not "deep .NET integration", it is a conflict waiting to happen.
     -->

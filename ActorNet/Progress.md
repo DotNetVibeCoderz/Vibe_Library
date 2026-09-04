@@ -82,8 +82,8 @@ works and something automated proves it** — not when the code exists.
 - [x] Explicit type allow-list — an unregistered alias is refused, never resolved by name
 - [x] Frame size cap against hostile input
 - [x] Replies to non-member clients over their inbound connection
-- [ ] TLS
-- [ ] Authentication between nodes
+- [x] TLS between nodes (1.2/1.3), with thumbprint pinning and optional mutual TLS
+- [x] Authentication between nodes - HMAC challenge-response, the secret never sent
 - [ ] Binary serialization option
 
 ## Streams

@@ -86,6 +86,15 @@ public sealed class ActorSystemOptions
     public ClusterOptions Cluster { get; set; } = new();
 
     /// <summary>
+    /// Encryption and authentication between nodes. Both off by default.
+    /// </summary>
+    /// <remarks>
+    /// Off is the honest default for a library whose first run is on a laptop, and the reason the
+    /// documentation says to keep a cluster on a trusted network until they are on.
+    /// </remarks>
+    public Network.ClusterSecurityOptions Security { get; set; } = new();
+
+    /// <summary>
     /// Where <see cref="PersistentActor{TState}"/> keeps state. Defaults to an in-memory store,
     /// which is durable across deactivation but not across a process restart.
     /// </summary>
@@ -126,6 +135,7 @@ public sealed class ActorSystemOptions
         if (DefaultAskTimeout <= TimeSpan.Zero)
             throw new ArgumentOutOfRangeException(nameof(DefaultAskTimeout), DefaultAskTimeout, "DefaultAskTimeout must be positive.");
         Cluster.Validate();
+        Security.Validate();
     }
 
     /// <summary>Addresses that mean "every interface" to a listener and nothing at all to a dialler.</summary>

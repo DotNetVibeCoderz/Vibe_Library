@@ -27,6 +27,7 @@ builder.Services.AddActorNet(actors =>
     actors.Options.Port = settings.Port;
     actors.Options.AdvertisedHost = settings.AdvertisedHost;
     actors.Options.AdvertisedPort = settings.AdvertisedPort;
+    actors.Options.Security.SharedSecret = settings.SharedSecret;
     actors.Options.IdleTimeout = TimeSpan.FromSeconds(settings.IdleTimeoutSeconds);
     actors.Options.SweepInterval = TimeSpan.FromSeconds(Math.Clamp(settings.IdleTimeoutSeconds / 4.0, 1, 30));
 
@@ -87,6 +88,9 @@ namespace ActorNet.Dashboard
 
         /// <summary>Port peers should dial, when that differs from the bound port.</summary>
         public int? AdvertisedPort { get; set; }
+
+        /// <summary>Shared secret every node in the cluster must know. Off when unset.</summary>
+        public string? SharedSecret { get; set; }
 
         /// <summary>Cluster seeds as <c>host:port</c>. Any seed turns clustering on.</summary>
         public List<string> Seeds { get; set; } = [];

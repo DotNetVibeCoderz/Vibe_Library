@@ -162,9 +162,9 @@ thousands of times a second, and one down for 200 ms should not wait a minute.
   a node advertises.
 - **Seeds are static strings today.** Discovery through DNS or the Kubernetes API is on the
   roadmap.
-- **There is no TLS and no authentication between nodes.** Run the cluster on a trusted network.
-  The type allow-list limits what a peer can make a node construct, but it is not a substitute for
-  a closed network.
+- **TLS and authentication are available but off by default.** See below. Until they are on, run
+  the cluster on a trusted network - the type allow-list limits what a peer can make a node
+  construct, but it is not a substitute for a closed network.
 
 ## Deploying across machines
 
@@ -228,6 +228,67 @@ then being marked `Unreachable` while perfectly healthy.
 
 A port of `0` is fine: the real port is only known once the listener is up, and that is what gets
 advertised.
+
+## Securing a cluster
+
+Both encryption and authentication are off by default, which is why the deployment notes say to keep
+a cluster on a trusted network until they are on. They answer different questions and are
+independent.
+
+### Authentication: a shared secret
+
+```bash
+actornet run --node-id a --port 9000 --cluster --secret "$ACTORNET_SECRET"
+actornet run --node-id b --port 9001 --seed 10.0.1.5:9000 --secret "$ACTORNET_SECRET"
+```
+
+```csharp
+options.Security.SharedSecret = Environment.GetEnvironmentVariable("ACTORNET_SECRET");
+```
+
+**The secret is never sent.** The listening side offers a random nonce, the connecting side answers
+with an HMAC of it, and the answer is compared in constant time. A passive observer learns a nonce
+and a MAC, neither of which is reusable — so this is safe to run without TLS, and an operator can
+turn on authentication without first solving certificate distribution.
+
+This is what stops an *unauthorised process* joining the cluster. Without it, anything that can
+reach the port can send a `Join` and start receiving actors. Secrets under 16 characters are refused
+at startup.
+
+Verified: a node started with the wrong secret never appears in the member table, and the refusal is
+logged on the node that rejected it.
+
+### Encryption: TLS
+
+```bash
+actornet run --node-id a --port 9000 --cluster   --tls-cert ./node.pfx --tls-password "$PFX_PASSWORD" --tls-pin A1B2C3...
+```
+
+```csharp
+options.Security.ServerCertificate = X509CertificateLoader.LoadPkcs12FromFile("node.pfx", password);
+options.Security.PinnedThumbprint("A1B2C3…");     // or supply RemoteCertificateValidation
+```
+
+TLS 1.2 or 1.3, negotiated before a single frame is read.
+
+Cluster nodes usually serve certificates from a private CA or self-signed ones, which the platform
+default will refuse — so pin a thumbprint, or supply your own validation. `AcceptAnyCertificate()`
+exists for development and is a named method rather than a flag precisely so it is greppable in a
+review: it encrypts the traffic and authenticates nobody.
+
+**Every node must agree about TLS.** A node with it on cannot talk to one with it off, and the
+failure is a handshake error rather than anything subtle — a half-migrated cluster fails loudly.
+Roll the certificate out everywhere before enabling it anywhere.
+
+### Mutual TLS
+
+```csharp
+options.Security.RequireClientCertificate = true;
+options.Security.ClientCertificate = X509CertificateLoader.LoadPkcs12FromFile("node.pfx", password);
+```
+
+The strongest option and the most work: every node needs a key pair and a rotation story. The shared
+secret is the cheaper answer to the same question, and the two can be combined.
 
 ## Known limits
 
