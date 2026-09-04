@@ -1,0 +1,165 @@
+@* Dibuat oleh Gravicode Studios, dipimpin oleh Kang Fadhil. *@
+@page "/"
+@rendermode InteractiveServer
+@implements IDisposable
+@inject ActorSystem System
+@using System.Globalization
+
+<PageTitle>Overview - ActorNet Console</PageTitle>
+
+<div class="page">
+    <header class="page__head">
+        <div>
+            <h1 class="page__title">Overview</h1>
+            <p class="page__lede">
+                What this node is doing right now. Counters are cumulative since it started;
+                the ring is the placement view it is currently routing by.
+            </p>
+        </div>
+        <span class="pulse"><span class="pulse__dot"></span>live, every @(RefreshInterval.TotalMilliseconds.ToString("0", CultureInfo.InvariantCulture))ms</span>
+    </header>
+
+    <section class="vitals">
+        <div class="vital vital--brass">
+            <div class="vital__label">Throughput</div>
+            <div class="vital__value">@N(_snapshot.MessagesPerSecond)<span class="vital__unit">msg/s</span></div>
+        </div>
+        <div class="vital">
+            <div class="vital__label">Processed</div>
+            <div class="vital__value">@N(_snapshot.MessagesProcessed)</div>
+        </div>
+        <div class="vital @(_snapshot.InFlight > 1000 ? "vital--brass" : string.Empty)">
+            <div class="vital__label">In flight</div>
+            <div class="vital__value">@N(_snapshot.InFlight)</div>
+        </div>
+        <div class="vital vital--teal">
+            <div class="vital__label">Active actors</div>
+            <div class="vital__value">@N(_snapshot.ActiveActors)</div>
+        </div>
+        <div class="vital @(_snapshot.MessagesFailed > 0 ? "vital--rose" : string.Empty)">
+            <div class="vital__label">Failed</div>
+            <div class="vital__value">@N(_snapshot.MessagesFailed)</div>
+        </div>
+        <div class="vital @(_snapshot.Restarts > 0 ? "vital--rose" : string.Empty)">
+            <div class="vital__label">Restarts</div>
+            <div class="vital__value">@N(_snapshot.Restarts)</div>
+        </div>
+    </section>
+
+    <div class="split">
+        <section class="panel">
+            <header class="panel__head">
+                <span class="panel__title">Placement ring</span>
+                <span class="panel__note">@(System.Options.Cluster.Enabled ? "clustered" : "standalone")</span>
+            </header>
+            <div class="panel__body">
+                <HashRingView Ring="System.Cluster.Ring" SelfNodeId="@System.NodeId" />
+            </div>
+        </section>
+
+        <section class="panel">
+            <header class="panel__head">
+                <span class="panel__title">Busiest actors</span>
+                <span class="panel__note">@N(_snapshot.Actors.Count) activated</span>
+            </header>
+            <div class="panel__body panel__body--flush">
+                @if (_snapshot.Actors.Count == 0)
+                {
+                    <div class="empty">
+                        <strong>Nothing is activated</strong>
+                        An actor appears here when its first message arrives.
+                    </div>
+                }
+                else
+                {
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Address</th>
+                                <th class="num">Handled</th>
+                                <th class="num">Mailbox</th>
+                                <th class="num">Avg</th>
+                                <th class="num">Idle</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var actor in _snapshot.Actors.OrderByDescending(a => a.MessagesProcessed).Take(10))
+                            {
+                                <tr>
+                                    <td><Address Value="@actor.Id" /></td>
+                                    <td class="num">@N(actor.MessagesProcessed)</td>
+                                    <td class="num"><MailboxDepth Depth="actor.MailboxDepth" /></td>
+                                    <td class="num">@actor.AverageProcessingMicroseconds.ToString("N1", CultureInfo.InvariantCulture)<span style="color: var(--faint)">us</span></td>
+                                    <td class="num" style="color: var(--faint)">@actor.Idle.TotalSeconds.ToString("N0", CultureInfo.InvariantCulture)s</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+            </div>
+        </section>
+    </div>
+
+    <div class="split">
+        <section class="panel">
+            <header class="panel__head"><span class="panel__title">Lifecycle</span></header>
+            <div class="panel__body panel__body--flush">
+                <table class="table">
+                    <tbody>
+                        <tr><td>Activations</td><td class="num">@N(_snapshot.Activations)</td></tr>
+                        <tr><td>Deactivations</td><td class="num">@N(_snapshot.Deactivations)</td></tr>
+                        <tr><td>Uptime</td><td class="num">@_snapshot.Uptime.ToString(@"hh\:mm\:ss")</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="panel">
+            <header class="panel__head"><span class="panel__title">Latency and traffic</span></header>
+            <div class="panel__body panel__body--flush">
+                <table class="table">
+                    <tbody>
+                        <tr><td>Time in handler</td><td class="num">@_snapshot.AverageProcessingMicroseconds.ToString("N1", CultureInfo.InvariantCulture) us</td></tr>
+                        <tr><td>Time waiting in a mailbox</td><td class="num">@_snapshot.AverageQueueLatencyMicroseconds.ToString("N1", CultureInfo.InvariantCulture) us</td></tr>
+                        <tr><td>Asks issued</td><td class="num">@N(_snapshot.AsksIssued)</td></tr>
+                        <tr><td>Asks timed out</td><td class="num">@N(_snapshot.AsksTimedOut)</td></tr>
+                        <tr><td>Frames sent to other nodes</td><td class="num">@N(_snapshot.RemoteSent)</td></tr>
+                        <tr><td>Frames received</td><td class="num">@N(_snapshot.RemoteReceived)</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </div>
+
+    <p class="note">
+        <strong>This page shows one node.</strong> Counters and the actor list are local to
+        @System.NodeId; the ring and the member table are this node's view of the whole cluster.
+        There is no cross-node metrics aggregation - open a console on each node to see all of them.
+    </p>
+</div>
+
+@code {
+    /// <summary>
+    /// Fast enough to feel live, slow enough that a node with thousands of actors is not
+    /// re-serializing its whole actor table into the circuit several times a second.
+    /// </summary>
+    private static readonly TimeSpan RefreshInterval = TimeSpan.FromMilliseconds(750);
+
+    private ActorSystemSnapshot _snapshot = default!;
+    private Timer? _timer;
+
+    protected override void OnInitialized()
+    {
+        _snapshot = System.Metrics.Snapshot();
+
+        _timer = new Timer(_ => _ = InvokeAsync(() =>
+        {
+            _snapshot = System.Metrics.Snapshot();
+            StateHasChanged();
+        }), null, RefreshInterval, RefreshInterval);
+    }
+
+    private static string N(double value) => value.ToString("N0", CultureInfo.InvariantCulture);
+
+    public void Dispose() => _timer?.Dispose();
+}

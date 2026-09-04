@@ -1,0 +1,209 @@
+@* Dibuat oleh Gravicode Studios, dipimpin oleh Kang Fadhil. *@
+@using System.Globalization
+
+@*
+    The console's signature: the placement ring, drawn as it actually is.
+
+    Each arc is a span of hash space and the colour is its owning node, so the picture answers two
+    questions a table cannot - who owns what, and whether the split is even. The stripes are not
+    decoration: they are the virtual nodes, and their interleaving is exactly why adding a member
+    moves roughly 1/N of the keyspace instead of reshuffling all of it.
+
+    The probe below it hashes an address and drops a marker on the arc that owns it, which is the
+    same computation the runtime does on every send.
+*@
+
+<svg class="ring" viewBox="0 0 240 240" role="img" aria-label="@AriaLabel">
+    <circle cx="120" cy="120" r="@Radius" fill="none" stroke="var(--line)" stroke-width="@Thickness" />
+
+    @if (_fullCircle is { } single)
+    {
+        @* A single member owns the whole ring. An arc path from a point back to itself draws
+           nothing in SVG, so this case has to be a circle. *@
+        <circle class="ring__arc" cx="120" cy="120" r="@Radius"
+                fill="none" stroke="@single.Colour" stroke-width="@Thickness">
+            <title>@single.Owner</title>
+        </circle>
+    }
+    else
+    {
+        @foreach (var arc in _arcs)
+        {
+            <path class="ring__arc"
+                  d="@arc.Path"
+                  fill="none"
+                  stroke="@arc.Colour"
+                  stroke-width="@Thickness"
+                  stroke-linecap="butt">
+                <title>@arc.Owner</title>
+            </path>
+        }
+    }
+
+    @if (_probeAngle is { } angle)
+    {
+        var inner = PointOn(Radius - Thickness / 2 - 6, angle);
+        var outer = PointOn(Radius + Thickness / 2 + 6, angle);
+
+        <line x1="@F(inner.X)" y1="@F(inner.Y)" x2="@F(outer.X)" y2="@F(outer.Y)"
+              stroke="var(--ink)" stroke-width="1.5" />
+        <circle cx="@F(outer.X)" cy="@F(outer.Y)" r="2.5" fill="var(--ink)" />
+    }
+
+    <text class="ring__centre-label" x="120" y="112" text-anchor="middle">@CentreLabel</text>
+    <text class="ring__centre-value" x="120" y="130" text-anchor="middle">@CentreValue</text>
+</svg>
+
+<div class="legend">
+    @foreach (var (node, share) in _shares)
+    {
+        <span class="legend__item">
+            <span class="legend__swatch" style="background: @ColourFor(node)"></span>
+            @node <span style="color: var(--faint)">@share.ToString("P1", CultureInfo.InvariantCulture)</span>
+        </span>
+    }
+</div>
+
+<div class="probe">
+    <div class="probe__row">
+        <input @bind="ProbeKey" @bind:event="oninput" spellcheck="false"
+               aria-label="Actor address to place on the ring"
+               placeholder="BankAccountActor/alice" />
+    </div>
+    @if (_probeOwner is { Length: > 0 })
+    {
+        <p class="probe__result">
+            Owned by <strong>@_probeOwner</strong>@(_probeIsLocal ? " - this node" : ", reached over the network")
+        </p>
+    }
+    else
+    {
+        <p class="probe__result">Type an actor address to see which node owns it.</p>
+    }
+</div>
+
+@code {
+    private const double Radius = 88;
+    private const double Thickness = 26;
+
+    /// <summary>The ring to draw.</summary>
+    [Parameter, EditorRequired] public required Cluster.HashRing Ring { get; set; }
+
+    /// <summary>The observing node, so the probe can say whether a key is local.</summary>
+    [Parameter, EditorRequired] public required string SelfNodeId { get; set; }
+
+    private string _probeKey = string.Empty;
+    private string? _probeOwner;
+    private bool _probeIsLocal;
+    private double? _probeAngle;
+
+    private IReadOnlyList<Arc> _arcs = [];
+    private Arc? _fullCircle;
+    private IReadOnlyList<KeyValuePair<string, double>> _shares = [];
+
+    private string ProbeKey
+    {
+        get => _probeKey;
+        set
+        {
+            _probeKey = value;
+            UpdateProbe();
+        }
+    }
+
+    private string CentreLabel => Ring.IsEmpty ? "ring" : Ring.Nodes.Count == 1 ? "member" : "members";
+
+    private string CentreValue => Ring.IsEmpty ? "empty" : Ring.Nodes.Count.ToString(CultureInfo.InvariantCulture);
+
+    private string AriaLabel => Ring.IsEmpty
+        ? "The placement ring has no members."
+        : $"Placement ring across {Ring.Nodes.Count} member(s): {string.Join(", ", _shares.Select(s => $"{s.Key} owns {s.Value:P0}"))}.";
+
+    protected override void OnParametersSet()
+    {
+        _arcs = BuildArcs();
+        _shares = Ring.OwnershipShare().OrderByDescending(pair => pair.Value).ToArray();
+        UpdateProbe();
+    }
+
+    private void UpdateProbe()
+    {
+        if (Ring.IsEmpty || !ActorId.TryParse(_probeKey, out var id))
+        {
+            _probeOwner = null;
+            _probeAngle = null;
+            return;
+        }
+
+        _probeOwner = Ring.OwnerOf(id.ToString());
+        _probeIsLocal = _probeOwner == SelfNodeId;
+        _probeAngle = AngleOf(Cluster.HashRing.Hash(id.ToString()));
+    }
+
+    private IReadOnlyList<Arc> BuildArcs()
+    {
+        var segments = Ring.Segments();
+        var arcs = new List<Arc>(segments.Count);
+        _fullCircle = null;
+
+        foreach (var segment in segments)
+        {
+            if (segment.IsFullCircle)
+            {
+                _fullCircle = new Arc(string.Empty, ColourFor(segment.Owner), $"{segment.Owner} - the whole keyspace");
+                continue;
+            }
+
+            // Sub-degree arcs are invisible and cost a DOM node each; a ring at 128 replicas has
+            // plenty of them.
+            var sweep = segment.Width / (double)ulong.MaxValue * 360.0;
+            if (sweep < 0.35) continue;
+
+            arcs.Add(new Arc(
+                Path: ArcPath(AngleOf(segment.Start), AngleOf(segment.End)),
+                Colour: ColourFor(segment.Owner),
+                Owner: $"{segment.Owner} - {sweep / 360.0:P2} of the keyspace"));
+        }
+
+        return arcs;
+    }
+
+    /// <summary>Zero is at twelve o'clock and the ring runs clockwise, the way a dial reads.</summary>
+    private static double AngleOf(ulong position) => position / (double)ulong.MaxValue * 360.0 - 90.0;
+
+    private static (double X, double Y) PointOn(double radius, double degrees)
+    {
+        var radians = degrees * Math.PI / 180.0;
+        return (120 + radius * Math.Cos(radians), 120 + radius * Math.Sin(radians));
+    }
+
+    private static string ArcPath(double startAngle, double endAngle)
+    {
+        var sweep = endAngle - startAngle;
+        if (sweep < 0) sweep += 360;
+
+        var start = PointOn(Radius, startAngle);
+        var end = PointOn(Radius, endAngle);
+        var largeArc = sweep > 180 ? 1 : 0;
+
+        return $"M {F(start.X)} {F(start.Y)} A {F(Radius)} {F(Radius)} 0 {largeArc} 1 {F(end.X)} {F(end.Y)}";
+    }
+
+    private static string F(double value) => value.ToString("0.###", CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// A member's colour, derived from its id so it stays the same across pages and reloads.
+    /// </summary>
+    /// <remarks>
+    /// Picked from a fixed set rather than generated: an arbitrary hue can land on the rose used
+    /// for failures, and a healthy node the colour of an alarm is worse than a repeated hue.
+    /// </remarks>
+    private string ColourFor(string nodeId)
+    {
+        string[] palette = ["var(--brass)", "var(--teal)", "var(--violet)", "#7FA9D8", "#C9A227", "#6FBF73"];
+        var index = Ring.Nodes.ToList().IndexOf(nodeId);
+        return palette[(index < 0 ? Math.Abs(nodeId.GetHashCode()) : index) % palette.Length];
+    }
+
+    private sealed record Arc(string Path, string Colour, string Owner);
+}

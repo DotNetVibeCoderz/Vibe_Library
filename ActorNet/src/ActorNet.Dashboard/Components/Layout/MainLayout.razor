@@ -1,0 +1,45 @@
+@* Dibuat oleh Gravicode Studios, dipimpin oleh Kang Fadhil. *@
+@inherits LayoutComponentBase
+@inject ActorSystem System
+
+<div class="shell">
+    <aside class="rail">
+        <a class="brand" href="/">
+            <div class="brand__mark">actor<span>net</span></div>
+            <div class="brand__sub">console</div>
+        </a>
+
+        <div class="identity">
+            <div class="identity__label">This node</div>
+            <div class="identity__value">@System.NodeId</div>
+            <div class="identity__meta">
+                @(System.Options.EnableNetworking ? $"{System.Options.Host}:{System.BoundPort}" : "in-process")
+            </div>
+            <div class="identity__meta">
+                @(System.Options.Cluster.Enabled ? $"{System.Cluster.Members.Count} member(s)" : "standalone")
+            </div>
+        </div>
+
+        <nav class="nav">
+            @* The key column is the keyboard-shortcut-shaped hint that these are addresses of a
+               kind: each page is one view of the same running node. *@
+            <NavLink class="nav__link" href="/" Match="NavLinkMatch.All">
+                <span class="nav__key">01</span> Overview
+            </NavLink>
+            <NavLink class="nav__link" href="/actors">
+                <span class="nav__key">02</span> Actors
+            </NavLink>
+            <NavLink class="nav__link" href="/cluster">
+                <span class="nav__key">03</span> Cluster
+            </NavLink>
+        </nav>
+
+        <div class="rail__foot">
+            Dibuat oleh Gravicode Studios,<br />dipimpin oleh Kang Fadhil.
+        </div>
+    </aside>
+
+    <main>
+        @Body
+    </main>
+</div>

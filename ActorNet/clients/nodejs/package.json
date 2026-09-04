@@ -1,0 +1,18 @@
+{
+  "name": "actornet-client",
+  "version": "0.1.0",
+  "description": "Node.js client for ActorNet. Dibuat oleh Gravicode Studios, dipimpin oleh Kang Fadhil.",
+  "main": "actornet.js",
+  "types": "actornet.d.ts",
+  "license": "MIT",
+  "engines": { "node": ">=18" },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/DotNetVibeCoderz/Vibe_Library",
+    "directory": "ActorNet/clients/nodejs"
+  },
+  "keywords": ["actornet", "actor-model", "virtual-actors", "distributed"],
+  "scripts": {
+    "example": "node examples/banking.js"
+  }
+}

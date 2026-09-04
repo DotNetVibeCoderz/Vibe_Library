@@ -1,0 +1,103 @@
+<!-- Dibuat oleh Gravicode Studios, dipimpin oleh Kang Fadhil. -->
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:ActorNet.Samples.Avalonia.ViewModels"
+             x:Class="ActorNet.Samples.Avalonia.Views.TelemetryView"
+             x:DataType="vm:TelemetryViewModel">
+
+    <UserControl.Styles>
+        <!-- A device in alarm turns rose. It is the only thing on this screen that does, so it
+             reads at a glance in a table that is otherwise all numbers. -->
+        <Style Selector="TextBlock.reading">
+            <Setter Property="Foreground" Value="{StaticResource Ink}" />
+        </Style>
+        <Style Selector="TextBlock.reading.alarm">
+            <Setter Property="Foreground" Value="{StaticResource Rose}" />
+        </Style>
+    </UserControl.Styles>
+
+    <DockPanel Margin="26,22">
+        <StackPanel DockPanel.Dock="Top" Spacing="2">
+            <TextBlock Classes="title" Text="{Binding Name}" />
+            <TextBlock Classes="lede" Text="{Binding Claim}" />
+        </StackPanel>
+
+        <Border DockPanel.Dock="Top" Classes="panel" Margin="0,20,0,0" Padding="14">
+            <StackPanel Orientation="Horizontal" Spacing="10">
+                <Button Content="{Binding IsStreaming, Converter={x:Static vm:Converters.StreamLabel}}"
+                        Command="{Binding ToggleStreamCommand}" />
+                <Button Content="Heat sensor-004" Command="{Binding HeatUpCommand}" />
+                <Button Content="Cool sensor-004" Command="{Binding CoolDownCommand}" />
+                <Button Content="Deactivate all devices" Command="{Binding SweepCommand}" />
+                <StackPanel VerticalAlignment="Center" Margin="14,0,0,0">
+                    <TextBlock Classes="label" Text="ACTIVE ALARMS" />
+                    <TextBlock Classes="mono" FontSize="12" Foreground="{StaticResource Brass}" Text="{Binding ActiveAlarms}" />
+                </StackPanel>
+            </StackPanel>
+        </Border>
+
+        <Border DockPanel.Dock="Bottom" Classes="note" Margin="0,16,0,0">
+            <TextBlock TextWrapping="Wrap" Foreground="{StaticResource Muted}"
+                       Text="Each reading is routed by device id, so a device's whole history lands on one activation and needs no locking. Deactivate them all and keep streaming: they come back with their counts, because the aggregate was flushed on the way out." />
+        </Border>
+
+        <Grid ColumnDefinitions="*,320" Margin="0,16,0,0">
+            <Border Grid.Column="0" Classes="panel" Margin="0,0,14,0">
+                <DockPanel>
+                    <Grid DockPanel.Dock="Top" ColumnDefinitions="110,80,80,80,80,90,*"
+                          Background="Transparent" Margin="14,11">
+                        <TextBlock Grid.Column="0" Classes="label" Text="DEVICE" />
+                        <TextBlock Grid.Column="1" Classes="label" Text="LATEST" />
+                        <TextBlock Grid.Column="2" Classes="label" Text="AVERAGE" />
+                        <TextBlock Grid.Column="3" Classes="label" Text="MIN" />
+                        <TextBlock Grid.Column="4" Classes="label" Text="MAX" />
+                        <TextBlock Grid.Column="5" Classes="label" Text="READINGS" />
+                        <TextBlock Grid.Column="6" Classes="label" Text="ALARMS" />
+                    </Grid>
+                    <Border DockPanel.Dock="Top" Height="1" Background="{StaticResource Line}" />
+                    <ScrollViewer>
+                        <ItemsControl ItemsSource="{Binding Devices_}" Margin="0,4">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:DeviceRow">
+                                    <Grid ColumnDefinitions="110,80,80,80,80,90,*" Margin="14,6">
+                                        <TextBlock Grid.Column="0" Classes="mono" Text="{Binding Id}" />
+                                        <TextBlock Grid.Column="1" Classes="mono reading"
+                                                   Classes.alarm="{Binding InAlarm}"
+                                                   Text="{Binding Latest, StringFormat={}{0:N1}}" />
+                                        <TextBlock Grid.Column="2" Classes="mono" Text="{Binding Average, StringFormat={}{0:N1}}" />
+                                        <TextBlock Grid.Column="3" Classes="mono" Foreground="{StaticResource Faint}"
+                                                   Text="{Binding Minimum, StringFormat={}{0:N1}}" />
+                                        <TextBlock Grid.Column="4" Classes="mono" Foreground="{StaticResource Faint}"
+                                                   Text="{Binding Maximum, StringFormat={}{0:N1}}" />
+                                        <TextBlock Grid.Column="5" Classes="mono" Foreground="{StaticResource Muted}"
+                                                   Text="{Binding Readings}" />
+                                        <TextBlock Grid.Column="6" Classes="mono" Foreground="{StaticResource Brass}"
+                                                   Text="{Binding Alarms}" />
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </DockPanel>
+            </Border>
+
+            <Border Grid.Column="1" Classes="panel">
+                <DockPanel>
+                    <Border DockPanel.Dock="Top" BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1" Padding="14,11">
+                        <TextBlock Classes="mono" FontSize="12" Text="LOG" Foreground="{StaticResource Muted}" />
+                    </Border>
+                    <ScrollViewer>
+                        <ItemsControl ItemsSource="{Binding Log}" Margin="14,10">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="x:String">
+                                    <TextBlock Classes="mono" FontSize="11" TextWrapping="Wrap"
+                                               Foreground="{StaticResource Muted}" Text="{Binding}" Margin="0,0,0,5" />
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </DockPanel>
+            </Border>
+        </Grid>
+    </DockPanel>
+</UserControl>

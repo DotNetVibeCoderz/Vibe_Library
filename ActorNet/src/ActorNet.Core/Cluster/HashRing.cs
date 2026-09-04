@@ -4,6 +4,29 @@ using System.Text;
 
 namespace ActorNet.Cluster;
 
+/// <summary>One arc of the ring: the half-open hash span <c>[Start, End)</c> owned by a member.</summary>
+/// <remarks>
+/// Arcs wrap. The first arc of a ring starts past the last position and runs through zero, so its
+/// <see cref="Start"/> exceeds its <see cref="End"/>; <see cref="Width"/> accounts for that where
+/// subtracting the two directly does not.
+/// </remarks>
+public readonly record struct RingSegment(ulong Start, ulong End, string Owner)
+{
+    /// <summary>True when this arc covers the entire ring, which happens with a single member.</summary>
+    /// <remarks>
+    /// Every raw arc has non-zero width, so <c>Start == End</c> after merging can only mean the
+    /// arc went all the way round - never that it is empty.
+    /// </remarks>
+    public bool IsFullCircle => Start == End;
+
+    /// <summary>How much of the hash space this arc covers, wrapping and full circles included.</summary>
+    public ulong Width => IsFullCircle
+        ? ulong.MaxValue
+        : End > Start
+            ? End - Start
+            : ulong.MaxValue - Start + End;
+}
+
 /// <summary>
 /// Consistent hashing over cluster members, with virtual nodes. Decides which node owns an actor
 /// key without any node needing to ask another.
@@ -96,6 +119,58 @@ public sealed class HashRing
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// The ring as ownership arcs, in order: each entry is the half-open span of hash space
+    /// <c>[Start, End)</c> that <c>Owner</c> is responsible for.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Adjacent replicas of the same member are merged, so the result is the ownership map rather
+    /// than the raw replica list. For three members at 128 replicas that is typically a few
+    /// hundred arcs, not 384.
+    /// </para>
+    /// <para>
+    /// This is what the console draws, and it is also the honest way to answer "is the keyspace
+    /// evenly split?" - summing each owner's arc widths measures the ring itself, where sampling
+    /// keys only estimates it.
+    /// </para>
+    /// </remarks>
+    public IReadOnlyList<RingSegment> Segments()
+    {
+        if (IsEmpty) return [];
+
+        var segments = new List<RingSegment>(_positions.Length);
+
+        for (var i = 0; i < _positions.Length; i++)
+        {
+            // A position owns the span that ends at it, running back from the previous position -
+            // which for the first entry wraps around from the last one.
+            var start = i == 0 ? _positions[^1] : _positions[i - 1];
+            var owner = _owners[i];
+
+            if (segments.Count > 0 && segments[^1].Owner == owner)
+            {
+                segments[^1] = segments[^1] with { End = _positions[i] };
+                continue;
+            }
+
+            segments.Add(new RingSegment(start, _positions[i], owner));
+        }
+
+        return segments;
+    }
+
+    /// <summary>The share of the keyspace each member owns, as a fraction summing to one.</summary>
+    public IReadOnlyDictionary<string, double> OwnershipShare()
+    {
+        var shares = Nodes.ToDictionary(node => node, _ => 0.0, StringComparer.Ordinal);
+        if (IsEmpty) return shares;
+
+        foreach (var segment in Segments()) shares[segment.Owner] += segment.Width / (double)ulong.MaxValue;
+
+        return shares;
     }
 
     /// <summary>FNV-1a over the UTF-8 bytes of <paramref name="value"/>, then an avalanche mix.</summary>

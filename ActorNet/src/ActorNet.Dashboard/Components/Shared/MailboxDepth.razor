@@ -1,0 +1,32 @@
+@* Dibuat oleh Gravicode Studios, dipimpin oleh Kang Fadhil. *@
+@using System.Globalization
+
+@*
+    Mailbox depth as a bar rather than a number, because the question is never "how many exactly"
+    but "is this actor keeping up". Zero is the healthy case and is deliberately quiet.
+*@
+
+@if (Depth <= 0)
+{
+    <span class="depth__zero">0</span>
+}
+else
+{
+    <span class="depth">
+        <span>@Depth.ToString("N0", CultureInfo.InvariantCulture)</span>
+        <span class="depth__bar">
+            <span class="depth__fill" style="width: @(Fraction.ToString("P0", CultureInfo.InvariantCulture).Replace(" ", ""))"></span>
+        </span>
+    </span>
+}
+
+@code {
+    [Parameter, EditorRequired] public required int Depth { get; set; }
+
+    /// <summary>
+    /// Log-scaled against a 1,000-message reference. A linear bar is useless here: a healthy
+    /// mailbox sits at single digits and a struggling one at tens of thousands, so linear would
+    /// render both as empty until the moment it saturates.
+    /// </summary>
+    private double Fraction => Math.Clamp(Math.Log10(Depth + 1) / 3.0, 0.06, 1.0);
+}

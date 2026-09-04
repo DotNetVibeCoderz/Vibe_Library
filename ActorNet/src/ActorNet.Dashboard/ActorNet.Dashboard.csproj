@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <RootNamespace>ActorNet.Dashboard</RootNamespace>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../ActorNet.Core/ActorNet.Core.csproj" />
+    <ProjectReference Include="../ActorNet.Demo/ActorNet.Demo.csproj" />
+  </ItemGroup>
+
+</Project>

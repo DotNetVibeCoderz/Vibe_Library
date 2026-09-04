@@ -181,3 +181,54 @@ public sealed class ClusterTests
         Assert.False(ClusterOptions.TryParseSeed(seed, out _, out _));
     }
 }
+
+public sealed class ClusterMetricsTests
+{
+    [Fact]
+    public async Task ForwardedMessagesAreNotCountedAsInFlightOnTheSendingNode()
+    {
+        await using var harness = new TestHarness();
+
+        var first = await harness.NetworkedAsync("node-1", seeds: []);
+        var second = await harness.NetworkedAsync("node-2", seeds: [$"127.0.0.1:{first.BoundPort}"]);
+
+        await TestHarness.AssertEventuallyAsync(
+            () => first.Cluster.Members.Count == 2 && second.Cluster.Members.Count == 2,
+            "the cluster should have converged", TimeSpan.FromSeconds(15));
+
+        var remote = Enumerable.Range(0, 500)
+            .Select(i => ActorId.For<CounterActor>($"metrics-{i}"))
+            .First(id => first.Cluster.OwnerOf(id) == "node-2");
+
+        for (var i = 0; i < 50; i++) await first.TellAsync(remote, new Add(1));
+
+        await TestHarness.AssertEventuallyAsync(
+            () => second.Metrics.Snapshot(false).MessagesProcessed >= 50,
+            "node-2 should have handled the forwarded messages", TimeSpan.FromSeconds(15));
+
+        // node-1 forwarded all 50 and will never process any of them. Counting a send as
+        // "dispatched" here would make InFlight climb forever on a node that routes remotely -
+        // the console showed 3,524 in flight against 26 active actors before this was fixed.
+        var sender = first.Metrics.Snapshot(false);
+        Assert.Equal(0, sender.InFlight);
+        Assert.True(sender.RemoteSent >= 50, $"expected at least 50 remote sends, saw {sender.RemoteSent}");
+
+        // The receiving node did take them on, so they are counted there.
+        Assert.True(second.Metrics.Snapshot(false).MessagesDispatched >= 50);
+    }
+
+    [Fact]
+    public async Task LocalSendsAreStillCountedAsDispatched()
+    {
+        await using var harness = new TestHarness();
+        var system = await harness.LocalAsync();
+
+        for (var i = 0; i < 20; i++) await system.TellAsync(ActorId.For<CounterActor>("local"), new Add(1));
+        await system.AskAsync<Total>(ActorId.For<CounterActor>("local"), new GetTotal());
+
+        var snapshot = system.Metrics.Snapshot(false);
+        Assert.Equal(21, snapshot.MessagesDispatched);
+        Assert.Equal(21, snapshot.MessagesProcessed);
+        Assert.Equal(0, snapshot.InFlight);
+    }
+}

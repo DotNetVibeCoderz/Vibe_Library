@@ -1,0 +1,123 @@
+<!--
+    Dibuat oleh Gravicode Studios, dipimpin oleh Kang Fadhil.
+
+    The same visual language as the web console: an indigo ground with a brass accent, and a
+    monospace carrying anything that is - or names - an actor address.
+-->
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <Styles.Resources>
+        <Color x:Key="GroundColor">#14161F</Color>
+        <Color x:Key="SurfaceColor">#1B1E29</Color>
+        <Color x:Key="RaisedColor">#232735</Color>
+        <Color x:Key="LineColor">#2C3040</Color>
+
+        <SolidColorBrush x:Key="Ground" Color="#14161F" />
+        <SolidColorBrush x:Key="Surface" Color="#1B1E29" />
+        <SolidColorBrush x:Key="Raised" Color="#232735" />
+        <SolidColorBrush x:Key="Line" Color="#2C3040" />
+        <SolidColorBrush x:Key="Ink" Color="#E8E4DA" />
+        <SolidColorBrush x:Key="Muted" Color="#868CA0" />
+        <SolidColorBrush x:Key="Faint" Color="#5B6076" />
+        <SolidColorBrush x:Key="Brass" Color="#E0A458" />
+        <SolidColorBrush x:Key="Teal" Color="#4FB8A8" />
+        <SolidColorBrush x:Key="Rose" Color="#E06A72" />
+        <SolidColorBrush x:Key="Violet" Color="#9B8AC4" />
+
+        <FontFamily x:Key="MonoFont">Cascadia Mono,Consolas,Menlo,DejaVu Sans Mono,monospace</FontFamily>
+    </Styles.Resources>
+
+    <Style Selector="Window">
+        <Setter Property="Background" Value="{StaticResource Ground}" />
+        <Setter Property="Foreground" Value="{StaticResource Ink}" />
+        <Setter Property="FontSize" Value="13" />
+    </Style>
+
+    <Style Selector="TextBlock.title">
+        <Setter Property="FontFamily" Value="{StaticResource MonoFont}" />
+        <Setter Property="FontSize" Value="21" />
+        <Setter Property="FontWeight" Value="Bold" />
+        <Setter Property="Foreground" Value="{StaticResource Ink}" />
+    </Style>
+
+    <Style Selector="TextBlock.lede">
+        <Setter Property="Foreground" Value="{StaticResource Muted}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+        <Setter Property="MaxWidth" Value="640" />
+        <!-- Without this the capped width centres the block in its column rather than sitting it
+             under the title, which reads as an accidental indent. -->
+        <Setter Property="HorizontalAlignment" Value="Left" />
+        <Setter Property="Margin" Value="0,6,0,0" />
+    </Style>
+
+    <Style Selector="TextBlock.label">
+        <Setter Property="Foreground" Value="{StaticResource Faint}" />
+        <Setter Property="FontSize" Value="10" />
+        <Setter Property="LetterSpacing" Value="1.2" />
+    </Style>
+
+    <Style Selector="TextBlock.value">
+        <Setter Property="FontFamily" Value="{StaticResource MonoFont}" />
+        <Setter Property="FontSize" Value="20" />
+        <Setter Property="Foreground" Value="{StaticResource Ink}" />
+        <Setter Property="Margin" Value="0,4,0,0" />
+    </Style>
+
+    <Style Selector="TextBlock.mono">
+        <Setter Property="FontFamily" Value="{StaticResource MonoFont}" />
+        <Setter Property="Foreground" Value="{StaticResource Ink}" />
+    </Style>
+
+    <Style Selector="TextBlock.muted">
+        <Setter Property="Foreground" Value="{StaticResource Muted}" />
+    </Style>
+
+    <Style Selector="Border.panel">
+        <Setter Property="Background" Value="{StaticResource Surface}" />
+        <Setter Property="BorderBrush" Value="{StaticResource Line}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="4" />
+    </Style>
+
+    <Style Selector="Border.note">
+        <Setter Property="Background" Value="{StaticResource Surface}" />
+        <Setter Property="BorderBrush" Value="{StaticResource Brass}" />
+        <Setter Property="BorderThickness" Value="2,0,0,0" />
+        <Setter Property="Padding" Value="14,11" />
+    </Style>
+
+    <Style Selector="Button">
+        <Setter Property="Background" Value="{StaticResource Raised}" />
+        <Setter Property="Foreground" Value="{StaticResource Ink}" />
+        <Setter Property="BorderBrush" Value="{StaticResource Line}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="4" />
+        <Setter Property="FontFamily" Value="{StaticResource MonoFont}" />
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="Padding" Value="13,7" />
+    </Style>
+
+    <Style Selector="Button:pointerover /template/ ContentPresenter">
+        <Setter Property="Background" Value="{StaticResource Raised}" />
+        <Setter Property="BorderBrush" Value="{StaticResource Brass}" />
+        <Setter Property="TextBlock.Foreground" Value="{StaticResource Brass}" />
+    </Style>
+
+    <Style Selector="TextBox">
+        <Setter Property="Background" Value="{StaticResource Ground}" />
+        <Setter Property="Foreground" Value="{StaticResource Ink}" />
+        <Setter Property="BorderBrush" Value="{StaticResource Line}" />
+        <Setter Property="CornerRadius" Value="4" />
+        <Setter Property="FontFamily" Value="{StaticResource MonoFont}" />
+        <Setter Property="FontSize" Value="12" />
+    </Style>
+
+    <Style Selector="ListBoxItem">
+        <Setter Property="Padding" Value="10,7" />
+    </Style>
+
+    <Style Selector="ListBoxItem:selected /template/ ContentPresenter">
+        <Setter Property="Background" Value="{StaticResource Raised}" />
+    </Style>
+</Styles>

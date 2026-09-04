@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <RootNamespace>ActorNet.Samples.Avalonia</RootNamespace>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="11.3.7" />
+    <PackageReference Include="Avalonia.Desktop" Version="11.3.7" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="11.3.7" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="11.3.7" />
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
+
+    <!--
+      Avalonia.Desktop pulls Tmds.DBus.Protocol 0.21.2 transitively, which carries a known
+      high-severity advisory (GHSA-xrw6-gwf8-vvr9). Referenced directly to pin 0.21.3, the patch
+      for that line. Note that the advisory also covers >= 0.22.0 < 0.92.0, so bumping this to a
+      "newer" 0.2x version reintroduces it - the only other safe choice is 0.92.0.
+      Remove the reference once Avalonia's own floor moves past it.
+    -->
+    <PackageReference Include="Tmds.DBus.Protocol" Version="0.21.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/ActorNet.Core/ActorNet.Core.csproj" />
+    <ProjectReference Include="../../src/ActorNet.Demo/ActorNet.Demo.csproj" />
+  </ItemGroup>
+
+</Project>

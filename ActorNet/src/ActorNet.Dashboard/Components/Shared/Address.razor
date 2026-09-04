@@ -1,0 +1,25 @@
+@* Dibuat oleh Gravicode Studios, dipimpin oleh Kang Fadhil. *@
+
+@*
+    An actor address, rendered so the two halves are distinguishable at a glance: the type is
+    repeated across many rows and the key is the part that identifies the row.
+*@
+
+<span class="address">
+    @if (_split > 0)
+    {
+        <span class="address__type">@Value[.._split]</span><span class="address__sep">/</span><span class="address__key">@Value[(_split + 1)..]</span>
+    }
+    else
+    {
+        <span class="address__key">@Value</span>
+    }
+</span>
+
+@code {
+    [Parameter, EditorRequired] public required string Value { get; set; }
+
+    private int _split;
+
+    protected override void OnParametersSet() => _split = Value.IndexOf('/');
+}

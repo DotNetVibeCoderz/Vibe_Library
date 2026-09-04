@@ -1,0 +1,106 @@
+<!-- Dibuat oleh Gravicode Studios, dipimpin oleh Kang Fadhil. -->
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:ActorNet.Samples.Avalonia.ViewModels"
+             x:Class="ActorNet.Samples.Avalonia.Views.OrderingView"
+             x:DataType="vm:OrderingViewModel">
+
+    <DockPanel Margin="26,22">
+        <StackPanel DockPanel.Dock="Top" Spacing="2">
+            <TextBlock Classes="title" Text="{Binding Name}" />
+            <TextBlock Classes="lede" Text="{Binding Claim}" />
+        </StackPanel>
+
+        <Border DockPanel.Dock="Top" Classes="panel" Margin="0,20,0,0" Padding="14">
+            <WrapPanel Orientation="Horizontal" ItemSpacing="10" LineSpacing="10">
+                <StackPanel Spacing="4">
+                    <TextBlock Classes="label" Text="QUANTITY" />
+                    <TextBox Text="{Binding Quantity}" Width="70" />
+                </StackPanel>
+                <StackPanel Spacing="4">
+                    <TextBlock Classes="label" Text="TOTAL" />
+                    <TextBox Text="{Binding Total}" Width="90" />
+                </StackPanel>
+                <StackPanel Spacing="4">
+                    <TextBlock Classes="label" Text="CREDIT LIMIT" />
+                    <TextBox Text="{Binding CreditLimit}" Width="90" />
+                </StackPanel>
+                <StackPanel Spacing="4" VerticalAlignment="Bottom">
+                    <TextBlock Classes="label" Text=" " />
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <Button Content="Place order" Command="{Binding PlaceCommand}" />
+                        <Button Content="Apply credit limit" Command="{Binding SetCreditCommand}" />
+                        <Button Content="Restock +10" Command="{Binding RestockCommand}" />
+                        <Button Content="Try to oversell" Command="{Binding OversellCommand}" />
+                        <Button Content="Clear list" Command="{Binding ResetCommand}" />
+                    </StackPanel>
+                </StackPanel>
+                <StackPanel Spacing="4" Margin="16,0,0,0" VerticalAlignment="Center">
+                    <TextBlock Classes="label" Text="WIDGET STOCK" />
+                    <StackPanel Orientation="Horizontal" Spacing="10">
+                        <TextBlock Classes="mono" FontSize="16" Foreground="{StaticResource Teal}"
+                                   Text="{Binding Available, StringFormat={}{0} free}" />
+                        <TextBlock Classes="mono" FontSize="16" Foreground="{StaticResource Brass}"
+                                   Text="{Binding Reserved, StringFormat={}{0} held}" />
+                    </StackPanel>
+                </StackPanel>
+            </WrapPanel>
+        </Border>
+
+        <Border DockPanel.Dock="Bottom" Classes="note" Margin="0,16,0,0">
+            <TextBlock TextWrapping="Wrap" Foreground="{StaticResource Muted}"
+                       Text="Set the credit limit below an order's total and the saga fails at the payment step - after stock was already reserved. Watch the held count go back up: that is the compensating release, which is what replaces a transaction here." />
+        </Border>
+
+        <Grid ColumnDefinitions="*,320" Margin="0,16,0,0">
+            <Border Grid.Column="0" Classes="panel" Margin="0,0,14,0">
+                <DockPanel>
+                    <Grid DockPanel.Dock="Top" ColumnDefinitions="110,110,70,90,*" Margin="14,11">
+                        <TextBlock Grid.Column="0" Classes="label" Text="ORDER" />
+                        <TextBlock Grid.Column="1" Classes="label" Text="STATUS" />
+                        <TextBlock Grid.Column="2" Classes="label" Text="QTY" />
+                        <TextBlock Grid.Column="3" Classes="label" Text="TOTAL" />
+                        <TextBlock Grid.Column="4" Classes="label" Text="WHY" />
+                    </Grid>
+                    <Border DockPanel.Dock="Top" Height="1" Background="{StaticResource Line}" />
+                    <ScrollViewer>
+                        <ItemsControl ItemsSource="{Binding Orders}" Margin="0,4">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:OrderRow">
+                                    <Grid ColumnDefinitions="110,110,70,90,*" Margin="14,6">
+                                        <TextBlock Grid.Column="0" Classes="mono" Text="{Binding Id}" />
+                                        <TextBlock Grid.Column="1" Classes="mono" Text="{Binding Status}"
+                                                   Foreground="{Binding Status, Converter={x:Static vm:Converters.OrderStatusBrush}}" />
+                                        <TextBlock Grid.Column="2" Classes="mono" Foreground="{StaticResource Muted}" Text="{Binding Quantity}" />
+                                        <TextBlock Grid.Column="3" Classes="mono" Foreground="{StaticResource Muted}"
+                                                   Text="{Binding Total, StringFormat={}{0:N2}}" />
+                                        <TextBlock Grid.Column="4" Classes="mono" FontSize="11" Foreground="{StaticResource Faint}"
+                                                   Text="{Binding Why}" TextTrimming="CharacterEllipsis" />
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </DockPanel>
+            </Border>
+
+            <Border Grid.Column="1" Classes="panel">
+                <DockPanel>
+                    <Border DockPanel.Dock="Top" BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1" Padding="14,11">
+                        <TextBlock Classes="mono" FontSize="12" Text="LOG" Foreground="{StaticResource Muted}" />
+                    </Border>
+                    <ScrollViewer>
+                        <ItemsControl ItemsSource="{Binding Log}" Margin="14,10">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="x:String">
+                                    <TextBlock Classes="mono" FontSize="11" TextWrapping="Wrap"
+                                               Foreground="{StaticResource Muted}" Text="{Binding}" Margin="0,0,0,5" />
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </DockPanel>
+            </Border>
+        </Grid>
+    </DockPanel>
+</UserControl>

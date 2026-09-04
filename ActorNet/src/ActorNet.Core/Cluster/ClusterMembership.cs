@@ -59,6 +59,9 @@ public sealed class ClusterMembership : IClusterView, IAsyncDisposable
     }
 
     /// <inheritdoc />
+    public HashRing Ring => Volatile.Read(ref _ring);
+
+    /// <inheritdoc />
     public bool IsSingleNode => !_options.Enabled || _members.Count(m => m.Value.IsRoutable) <= 1;
 
     /// <inheritdoc />

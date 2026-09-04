@@ -1,0 +1,152 @@
+@* Dibuat oleh Gravicode Studios, dipimpin oleh Kang Fadhil. *@
+@page "/actors"
+@rendermode InteractiveServer
+@implements IDisposable
+@inject ActorSystem System
+@using System.Globalization
+
+<PageTitle>Actors - ActorNet Console</PageTitle>
+
+<div class="page">
+    <header class="page__head">
+        <div>
+            <h1 class="page__title">Actors</h1>
+            <p class="page__lede">
+                Every actor activated on this node. An address that is not listed is not gone -
+                it is simply not activated, and its next message will bring it back.
+            </p>
+        </div>
+        <span class="pulse"><span class="pulse__dot"></span>@_snapshot.Actors.Count activated</span>
+    </header>
+
+    <div class="toolbar">
+        <input @bind="_filter" @bind:event="oninput" spellcheck="false"
+               aria-label="Filter actors by address"
+               placeholder="filter by address, e.g. BankAccountActor" />
+        <button class="button button--quiet" @onclick="() => _filter = string.Empty">Clear</button>
+    </div>
+
+    <section class="panel">
+        <header class="panel__head">
+            <span class="panel__title">@_view.Count of @_snapshot.Actors.Count</span>
+            <span class="panel__note">sorted by messages handled</span>
+        </header>
+        <div class="panel__body panel__body--flush">
+            @if (_view.Count == 0)
+            {
+                <div class="empty">
+                    <strong>@(_snapshot.Actors.Count == 0 ? "Nothing is activated" : "No address matches that filter")</strong>
+                    @(_snapshot.Actors.Count == 0
+                        ? "An actor appears here when its first message arrives."
+                        : "Try a shorter fragment, or clear the filter.")
+                </div>
+            }
+            else
+            {
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Address</th>
+                            <th class="num">Handled</th>
+                            <th class="num">Failed</th>
+                            <th class="num">Restarts</th>
+                            <th class="num">Mailbox</th>
+                            <th class="num">Avg</th>
+                            <th class="num">Age</th>
+                            <th class="num">Idle</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var actor in _view)
+                        {
+                            <tr>
+                                <td><Address Value="@actor.Id" /></td>
+                                <td class="num">@N(actor.MessagesProcessed)</td>
+                                <td class="num" style="@(actor.MessagesFailed > 0 ? "color: var(--rose)" : "color: var(--faint)")">@N(actor.MessagesFailed)</td>
+                                <td class="num" style="@(actor.Restarts > 0 ? "color: var(--brass)" : "color: var(--faint)")">@N(actor.Restarts)</td>
+                                <td class="num"><MailboxDepth Depth="actor.MailboxDepth" /></td>
+                                <td class="num">@actor.AverageProcessingMicroseconds.ToString("N1", CultureInfo.InvariantCulture)<span style="color: var(--faint)">us</span></td>
+                                <td class="num" style="color: var(--faint)">@Duration(actor.Age)</td>
+                                <td class="num" style="color: var(--faint)">@Duration(actor.Idle)</td>
+                                <td class="num">
+                                    <button class="button button--quiet"
+                                            title="Flush this actor's state and deactivate it. The next message activates it again."
+                                            @onclick="() => DeactivateAsync(actor.Id)">
+                                        Deactivate
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </div>
+    </section>
+
+    @if (_lastAction is { Length: > 0 })
+    {
+        <p class="note">@_lastAction</p>
+    }
+
+    <p class="note">
+        <strong>Deactivating is not destructive.</strong> It runs the actor's deactivation hook,
+        which is where a persistent actor flushes its state, and removes it from this node. The
+        address stays valid and the next message activates a fresh instance from the store - which
+        is the same thing the idle sweeper does after
+        @System.Options.IdleTimeout.TotalSeconds.ToString("N0", CultureInfo.InvariantCulture)s of silence.
+    </p>
+</div>
+
+@code {
+    private static readonly TimeSpan RefreshInterval = TimeSpan.FromMilliseconds(750);
+
+    private ActorSystemSnapshot _snapshot = default!;
+    private IReadOnlyList<ActorSnapshot> _view = [];
+    private Timer? _timer;
+    private string _filter = string.Empty;
+    private string? _lastAction;
+
+    protected override void OnInitialized()
+    {
+        Refresh();
+        _timer = new Timer(_ => _ = InvokeAsync(() =>
+        {
+            Refresh();
+            StateHasChanged();
+        }), null, RefreshInterval, RefreshInterval);
+    }
+
+    private void Refresh()
+    {
+        _snapshot = System.Metrics.Snapshot();
+        _view = _snapshot.Actors
+            .Where(a => _filter.Length == 0 || a.Id.Contains(_filter, StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(a => a.MessagesProcessed)
+            .Take(200)
+            .ToArray();
+    }
+
+    private async Task DeactivateAsync(string address)
+    {
+        if (!ActorId.TryParse(address, out var id))
+        {
+            _lastAction = $"'{address}' is not a routable address.";
+            return;
+        }
+
+        await System.DeactivateAsync(id);
+        _lastAction = $"Deactivated {address}. Its state was flushed; the next message will activate it again.";
+        Refresh();
+    }
+
+    private static string N(double value) => value.ToString("N0", CultureInfo.InvariantCulture);
+
+    private static string Duration(TimeSpan span) => span.TotalSeconds < 90
+        ? $"{span.TotalSeconds:N0}s"
+        : span.TotalMinutes < 90
+            ? $"{span.TotalMinutes:N0}m"
+            : $"{span.TotalHours:N0}h";
+
+    public void Dispose() => _timer?.Dispose();
+}

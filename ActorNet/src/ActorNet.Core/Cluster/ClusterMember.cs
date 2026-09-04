@@ -58,6 +58,12 @@ public interface IClusterView
     /// <summary>Every member this node knows about, including itself.</summary>
     IReadOnlyList<ClusterMember> Members { get; }
 
+    /// <summary>
+    /// The placement ring as this node currently sees it. Exposed so tooling can show ownership
+    /// rather than infer it by sampling keys.
+    /// </summary>
+    HashRing Ring { get; }
+
     /// <summary>Which node owns an actor key, per the consistent-hash ring.</summary>
     string OwnerOf(ActorId id);
 

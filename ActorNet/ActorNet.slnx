@@ -1,7 +1,12 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/ActorNet.Core/ActorNet.Core.csproj" />
+    <Project Path="src/ActorNet.Demo/ActorNet.Demo.csproj" />
     <Project Path="src/ActorNet.Cli/ActorNet.Cli.csproj" />
+    <Project Path="src/ActorNet.Dashboard/ActorNet.Dashboard.csproj" />
+  </Folder>
+  <Folder Name="/samples/">
+    <Project Path="samples/ActorNet.Samples.Avalonia/ActorNet.Samples.Avalonia.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/ActorNet.Tests/ActorNet.Tests.csproj" />

@@ -57,6 +57,18 @@ public sealed class TcpTransport : ITransport
     private readonly Func<string, (string Host, int Port)?> _resolveNode;
     private readonly ILogger _logger;
     private readonly ConcurrentDictionary<string, PeerConnection> _peers = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Inbound connections, keyed by the id the peer stamps on its frames.
+    /// </summary>
+    /// <remarks>
+    /// Cluster peers are mutually dialable, so a reply to one normally travels on this node's own
+    /// outbound connection. An external client is not: it dialled in, it is not in the membership
+    /// table, and there is no address to dial back. Keeping its inbound connection addressable is
+    /// what lets an SDK client use ask at all.
+    /// </remarks>
+    private readonly ConcurrentDictionary<string, InboundConnection> _inbound = new(StringComparer.Ordinal);
+
     private readonly CancellationTokenSource _shutdown = new();
 
     private TcpListener? _listener;
@@ -110,10 +122,20 @@ public sealed class TcpTransport : ITransport
     /// <inheritdoc />
     public ValueTask SendAsync(string nodeId, WireEnvelope frame, CancellationToken cancellationToken)
     {
-        var address = _resolveNode(nodeId) ?? throw new NodeUnreachableException(nodeId);
+        var address = _resolveNode(nodeId);
+        if (address is null)
+        {
+            // Not a cluster member. If it dialled in and is still connected, answer down that
+            // connection - this is the path every external SDK client's ask reply takes.
+            if (_inbound.TryGetValue(nodeId, out var client) && client.IsConnected)
+                return client.SendAsync(frame, cancellationToken);
+
+            throw new NodeUnreachableException(nodeId);
+        }
+
         var peer = _peers.GetOrAdd(nodeId, static (id, state) =>
             new PeerConnection(id, state.Address.Host, state.Address.Port, state.Logger, state.OnFrame, state.Token),
-            (Address: address, Logger: _logger, OnFrame: _onFrame, Token: _shutdown.Token));
+            (Address: address.Value, Logger: _logger, OnFrame: _onFrame, Token: _shutdown.Token));
 
         return peer.SendAsync(frame, cancellationToken);
     }
@@ -153,14 +175,26 @@ public sealed class TcpTransport : ITransport
 
     private async Task ReadInboundAsync(TcpClient client, CancellationToken cancellationToken)
     {
+        InboundConnection? registered = null;
+
         try
         {
             client.NoDelay = true;
             await using var stream = client.GetStream();
+            var connection = new InboundConnection(stream, client);
+
             while (!cancellationToken.IsCancellationRequested)
             {
                 var frame = await FrameCodec.ReadAsync(stream, cancellationToken).ConfigureAwait(false);
                 if (frame is null) return;
+
+                // Learned from the first frame. A peer that never names itself simply cannot be
+                // replied to, which is the correct outcome rather than an error.
+                if (registered is null && frame.FromNode is { Length: > 0 } from)
+                {
+                    registered = connection;
+                    _inbound[from] = connection;
+                }
 
                 try
                 {
@@ -187,6 +221,16 @@ public sealed class TcpTransport : ITransport
         }
         finally
         {
+            if (registered is not null)
+            {
+                registered.MarkClosed();
+
+                // Remove only this exact connection: the peer may already have reconnected, and
+                // evicting its live entry would break the reply path it just established.
+                foreach (var (id, existing) in _inbound)
+                    if (ReferenceEquals(existing, registered)) _inbound.TryRemove(new KeyValuePair<string, InboundConnection>(id, existing));
+            }
+
             client.Dispose();
         }
     }
@@ -196,6 +240,38 @@ public sealed class TcpTransport : ITransport
     {
         await StopAsync(CancellationToken.None).ConfigureAwait(false);
         _shutdown.Dispose();
+    }
+
+    /// <summary>
+    /// A connection someone else opened to this node, kept addressable so replies can go back
+    /// down it.
+    /// </summary>
+    /// <remarks>
+    /// The write gate is not optional. The reader loop and any number of reply-producing actor
+    /// threads can all want this socket at once, and two concurrent writes would interleave their
+    /// bytes into frames neither of them sent.
+    /// </remarks>
+    private sealed class InboundConnection(Stream stream, TcpClient client)
+    {
+        private readonly SemaphoreSlim _writeGate = new(1, 1);
+        private volatile bool _closed;
+
+        public bool IsConnected => !_closed && client.Connected;
+
+        public void MarkClosed() => _closed = true;
+
+        public async ValueTask SendAsync(WireEnvelope frame, CancellationToken cancellationToken)
+        {
+            await _writeGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                await FrameCodec.WriteAsync(stream, frame, cancellationToken).ConfigureAwait(false);
+            }
+            finally
+            {
+                _writeGate.Release();
+            }
+        }
     }
 
     /// <summary>

@@ -26,6 +26,10 @@ public class NodeSettings : Spectre.Console.Cli.CommandSettings
     [System.ComponentModel.Description("A cluster seed to join. Repeat for several. Supplying any seed turns clustering on.")]
     public string[] Seeds { get; init; } = [];
 
+    [Spectre.Console.Cli.CommandOption("--cluster")]
+    [System.ComponentModel.Description("Join a cluster with no seeds of its own - what the first node of a cluster needs, since it has nobody to join.")]
+    public bool Cluster { get; init; }
+
     [Spectre.Console.Cli.CommandOption("--data <DIRECTORY>")]
     [System.ComponentModel.Description("Persist state and events under this directory instead of in memory, so they survive a restart.")]
     public string? DataDirectory { get; init; }
@@ -56,7 +60,11 @@ internal static class NodeFactory
 
         if (settings.NodeId is { Length: > 0 } id) options.NodeId = id;
 
-        if (settings.Seeds.Length > 0)
+        // Clustering is on if this node is joining someone, or if it was told to be the one
+        // others join. Without the second case the first node of a cluster runs standalone: it
+        // answers a join handshake but never gossips, so every peer eventually marks it
+        // unreachable while it is perfectly healthy.
+        if (settings.Seeds.Length > 0 || settings.Cluster)
         {
             options.Cluster.Enabled = true;
             options.Cluster.Seeds = settings.Seeds.ToList();

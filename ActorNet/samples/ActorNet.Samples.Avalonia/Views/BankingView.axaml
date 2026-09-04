@@ -1,0 +1,91 @@
+<!-- Dibuat oleh Gravicode Studios, dipimpin oleh Kang Fadhil. -->
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:ActorNet.Samples.Avalonia.ViewModels"
+             x:Class="ActorNet.Samples.Avalonia.Views.BankingView"
+             x:DataType="vm:BankingViewModel">
+
+    <DockPanel Margin="26,22">
+        <StackPanel DockPanel.Dock="Top" Spacing="2">
+            <TextBlock Classes="title" Text="{Binding Name}" />
+            <TextBlock Classes="lede" Text="{Binding Claim}" />
+        </StackPanel>
+
+        <Border DockPanel.Dock="Top" Classes="panel" Margin="0,20,0,0" Padding="14">
+            <WrapPanel Orientation="Horizontal" ItemSpacing="10" LineSpacing="10">
+                <StackPanel Spacing="4">
+                    <TextBlock Classes="label" Text="ACCOUNT" />
+                    <ComboBox ItemsSource="{Binding AccountChoices}" SelectedItem="{Binding SelectedAccount}" MinWidth="110" />
+                </StackPanel>
+                <StackPanel Spacing="4">
+                    <TextBlock Classes="label" Text="AMOUNT" />
+                    <TextBox Text="{Binding Amount}" Width="100" />
+                </StackPanel>
+                <StackPanel Spacing="4">
+                    <TextBlock Classes="label" Text="TRANSFER TO" />
+                    <ComboBox ItemsSource="{Binding AccountChoices}" SelectedItem="{Binding TransferTo}" MinWidth="110" />
+                </StackPanel>
+                <StackPanel Spacing="4" VerticalAlignment="Bottom">
+                    <TextBlock Classes="label" Text=" " />
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <Button Content="Deposit" Command="{Binding DepositCommand}" />
+                        <Button Content="Withdraw" Command="{Binding WithdrawCommand}" />
+                        <Button Content="Transfer" Command="{Binding TransferCommand}" />
+                        <Button Content="800 concurrent deposits" Command="{Binding HammerCommand}" />
+                        <Button Content="Deactivate and reload" Command="{Binding DeactivateCommand}" />
+                    </StackPanel>
+                </StackPanel>
+            </WrapPanel>
+        </Border>
+
+        <Border DockPanel.Dock="Bottom" Classes="note" Margin="0,16,0,0">
+            <TextBlock TextWrapping="Wrap" Foreground="{StaticResource Muted}"
+                       Text="Balances are a fold over an event journal, not a stored number - which is why deactivating an account and asking again gives the same answer. Nothing in BankAccountActor takes a lock." />
+        </Border>
+
+        <Grid ColumnDefinitions="*,340" Margin="0,16,0,0">
+            <Border Grid.Column="0" Classes="panel" Margin="0,0,14,0">
+                <DockPanel>
+                    <Border DockPanel.Dock="Top" BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1" Padding="14,11">
+                        <TextBlock Classes="mono" FontSize="12" Text="ACCOUNTS" Foreground="{StaticResource Muted}" />
+                    </Border>
+                    <ItemsControl ItemsSource="{Binding Accounts}" Margin="0,4">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vm:AccountRow">
+                                <Grid ColumnDefinitions="110,140,90,*" Margin="14,7">
+                                    <TextBlock Grid.Column="0" Classes="mono" Text="{Binding Id}" VerticalAlignment="Center" />
+                                    <TextBlock Grid.Column="1" Classes="mono" FontSize="16"
+                                               Foreground="{StaticResource Brass}"
+                                               Text="{Binding Balance, StringFormat={}{0:N2}}" VerticalAlignment="Center" />
+                                    <TextBlock Grid.Column="2" Classes="mono" Foreground="{StaticResource Muted}"
+                                               Text="{Binding Transactions, StringFormat={}{0} ev}" VerticalAlignment="Center" />
+                                    <TextBlock Grid.Column="3" Classes="mono" FontSize="11"
+                                               Foreground="{StaticResource Faint}"
+                                               Text="{Binding Recent}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </DockPanel>
+            </Border>
+
+            <Border Grid.Column="1" Classes="panel">
+                <DockPanel>
+                    <Border DockPanel.Dock="Top" BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1" Padding="14,11">
+                        <TextBlock Classes="mono" FontSize="12" Text="LOG" Foreground="{StaticResource Muted}" />
+                    </Border>
+                    <ScrollViewer>
+                        <ItemsControl ItemsSource="{Binding Log}" Margin="14,10">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="x:String">
+                                    <TextBlock Classes="mono" FontSize="11" TextWrapping="Wrap"
+                                               Foreground="{StaticResource Muted}" Text="{Binding}" Margin="0,0,0,5" />
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </DockPanel>
+            </Border>
+        </Grid>
+    </DockPanel>
+</UserControl>

@@ -1,0 +1,88 @@
+<!-- Dibuat oleh Gravicode Studios, dipimpin oleh Kang Fadhil. -->
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:ActorNet.Samples.Avalonia.ViewModels"
+             x:Class="ActorNet.Samples.Avalonia.Views.SupervisionView"
+             x:DataType="vm:SupervisionViewModel">
+
+    <DockPanel Margin="26,22">
+        <StackPanel DockPanel.Dock="Top" Spacing="2">
+            <TextBlock Classes="title" Text="{Binding Name}" />
+            <TextBlock Classes="lede" Text="{Binding Claim}" />
+        </StackPanel>
+
+        <Border DockPanel.Dock="Top" Classes="panel" Margin="0,20,0,0" Padding="14">
+            <StackPanel Orientation="Horizontal" Spacing="10">
+                <Button Content="Add 10 to each" Command="{Binding CountCommand}" />
+                <Button Content="Throw once in each" Command="{Binding FailOnceCommand}" />
+                <Button Content="Exhaust the restart budget" Command="{Binding ExhaustBudgetCommand}" />
+            </StackPanel>
+        </Border>
+
+        <Border DockPanel.Dock="Bottom" Classes="note" Margin="0,16,0,0">
+            <TextBlock TextWrapping="Wrap" Foreground="{StaticResource Muted}"
+                       Text="All four actors are the same class. Only their registered strategy differs, which is the whole argument: how a failure is handled is a deployment decision, not something the actor has to code around. Add some counts, then throw - and watch which totals survive." />
+        </Border>
+
+        <Grid ColumnDefinitions="*,320" Margin="0,16,0,0">
+            <Border Grid.Column="0" Classes="panel" Margin="0,0,14,0">
+                <StackPanel Margin="16,14" Spacing="14">
+
+                    <!-- Four side-by-side outcomes for one exception. The strategy line under each
+                         is the explanation; the state line is the evidence. -->
+                    <StackPanel Spacing="3">
+                        <TextBlock Classes="mono" FontSize="13" Foreground="{StaticResource Teal}" Text="Resume" />
+                        <TextBlock Classes="muted" FontSize="12"
+                                   Text="Drop the offending message, keep the instance and its state." />
+                        <TextBlock Classes="mono" FontSize="17" Text="{Binding ResumeState}" />
+                    </StackPanel>
+
+                    <Border Height="1" Background="{StaticResource Line}" />
+
+                    <StackPanel Spacing="3">
+                        <TextBlock Classes="mono" FontSize="13" Foreground="{StaticResource Brass}" Text="Restart" />
+                        <TextBlock Classes="muted" FontSize="12"
+                                   Text="Throw the instance away and build a fresh one. The address and the mailbox survive; in-memory state does not." />
+                        <TextBlock Classes="mono" FontSize="17" Text="{Binding RestartState}" />
+                    </StackPanel>
+
+                    <Border Height="1" Background="{StaticResource Line}" />
+
+                    <StackPanel Spacing="3">
+                        <TextBlock Classes="mono" FontSize="13" Foreground="{StaticResource Rose}" Text="Stop" />
+                        <TextBlock Classes="muted" FontSize="12"
+                                   Text="Deactivate. The address stays valid, so the next message activates a new instance." />
+                        <TextBlock Classes="mono" FontSize="17" Text="{Binding StopState}" />
+                    </StackPanel>
+
+                    <Border Height="1" Background="{StaticResource Line}" />
+
+                    <StackPanel Spacing="3">
+                        <TextBlock Classes="mono" FontSize="13" Foreground="{StaticResource Violet}" Text="Restart, budgeted" />
+                        <TextBlock Classes="muted" FontSize="12"
+                                   Text="Restart, but at most 3 times in 30 seconds. Past that it stops, so a poison message cannot spin forever." />
+                        <TextBlock Classes="mono" FontSize="17" Text="{Binding BudgetState}" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <Border Grid.Column="1" Classes="panel">
+                <DockPanel>
+                    <Border DockPanel.Dock="Top" BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1" Padding="14,11">
+                        <TextBlock Classes="mono" FontSize="12" Text="LOG" Foreground="{StaticResource Muted}" />
+                    </Border>
+                    <ScrollViewer>
+                        <ItemsControl ItemsSource="{Binding Log}" Margin="14,10">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="x:String">
+                                    <TextBlock Classes="mono" FontSize="11" TextWrapping="Wrap"
+                                               Foreground="{StaticResource Muted}" Text="{Binding}" Margin="0,0,0,5" />
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </DockPanel>
+            </Border>
+        </Grid>
+    </DockPanel>
+</UserControl>

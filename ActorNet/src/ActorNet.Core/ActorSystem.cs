@@ -194,8 +194,6 @@ public sealed class ActorSystem : IActorSystem
         ArgumentNullException.ThrowIfNull(message);
         if (target.IsEmpty) throw new ArgumentException("Target actor id is empty.", nameof(target));
 
-        MetricsCollector.RecordDispatched();
-
         return _cluster.IsLocal(target)
             ? DispatchLocalAsync(Envelope.Create(target, message, sender), cancellationToken)
             : SendRemoteAsync(_cluster.OwnerOf(target), WireKind.Message, target, message, sender, null, cancellationToken);
@@ -211,7 +209,6 @@ public sealed class ActorSystem : IActorSystem
         var pending = new PendingAsk();
         _pendingAsks[correlationId] = pending;
 
-        MetricsCollector.RecordDispatched();
         MetricsCollector.RecordAskIssued();
 
         using var timeoutSource = new CancellationTokenSource(window);
@@ -259,6 +256,13 @@ public sealed class ActorSystem : IActorSystem
     /// </remarks>
     internal ValueTask DispatchLocalAsync(Envelope envelope, CancellationToken cancellationToken)
     {
+        // Counted here rather than at the send, so that "dispatched" means "accepted for handling
+        // on this node". Counting every send would include messages this node forwarded to another
+        // owner, which it will never process - and InFlight, being dispatched minus processed,
+        // would then climb forever on any node that routes remotely. Inbound remote frames land
+        // here too, which is correct: they are in flight locally.
+        MetricsCollector.RecordDispatched();
+
         // Fast path: an unbounded mailbox on a live actor always accepts immediately, so the
         // common case returns without ever building an async state machine.
         var cell = GetOrCreateCell(envelope.Target, ActorId.None, null);

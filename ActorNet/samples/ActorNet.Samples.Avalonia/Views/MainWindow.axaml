@@ -1,0 +1,77 @@
+<!-- Dibuat oleh Gravicode Studios, dipimpin oleh Kang Fadhil. -->
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:ActorNet.Samples.Avalonia.ViewModels"
+        xmlns:views="using:ActorNet.Samples.Avalonia.Views"
+        x:Class="ActorNet.Samples.Avalonia.Views.MainWindow"
+        x:DataType="vm:ShellViewModel"
+        Title="ActorNet samples"
+        Width="1280" Height="700"
+        MinWidth="900" MinHeight="560">
+
+    <Window.DataTemplates>
+        <DataTemplate DataType="vm:BankingViewModel"><views:BankingView /></DataTemplate>
+        <DataTemplate DataType="vm:TelemetryViewModel"><views:TelemetryView /></DataTemplate>
+        <DataTemplate DataType="vm:OrderingViewModel"><views:OrderingView /></DataTemplate>
+        <DataTemplate DataType="vm:SupervisionViewModel"><views:SupervisionView /></DataTemplate>
+    </Window.DataTemplates>
+
+    <Grid ColumnDefinitions="248,*">
+
+        <!-- The rail carries the node's identity and its live vitals, because every scenario is
+             driven into the same node and the counters are the proof of that. -->
+        <Border Grid.Column="0" Background="{StaticResource Surface}"
+                BorderBrush="{StaticResource Line}" BorderThickness="0,0,1,0">
+            <DockPanel Margin="18,22">
+
+                <StackPanel DockPanel.Dock="Top" Spacing="3">
+                    <TextBlock Classes="title" FontSize="18">
+                        <Run Text="actor" /><Run Text="net" Foreground="{StaticResource Brass}" />
+                    </TextBlock>
+                    <TextBlock Classes="label" Text="SAMPLES" />
+                </StackPanel>
+
+                <Border DockPanel.Dock="Top" Classes="panel" Margin="0,18,0,0" Padding="11">
+                    <StackPanel Spacing="4">
+                        <TextBlock Classes="label" Text="NODE" />
+                        <TextBlock Classes="mono" FontSize="12" TextWrapping="Wrap"
+                                   Foreground="{StaticResource Brass}" Text="{Binding NodeId}" />
+                        <TextBlock Classes="mono" FontSize="11" Foreground="{StaticResource Muted}"
+                                   Text="in-process, no socket" />
+                    </StackPanel>
+                </Border>
+
+                <ItemsControl DockPanel.Dock="Bottom" Margin="0,18,0,0">
+                    <Border Classes="panel" Padding="11">
+                        <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto,Auto,Auto" >
+                            <TextBlock Grid.Row="0" Grid.Column="0" Classes="label" Text="MSG/S" />
+                            <TextBlock Grid.Row="1" Grid.Column="0" Classes="mono" FontSize="16"
+                                       Foreground="{StaticResource Brass}" Text="{Binding Throughput}" Margin="0,0,0,7" />
+                            <TextBlock Grid.Row="0" Grid.Column="1" Classes="label" Text="ACTORS" />
+                            <TextBlock Grid.Row="1" Grid.Column="1" Classes="mono" FontSize="16"
+                                       Foreground="{StaticResource Teal}" Text="{Binding ActiveActors}" Margin="0,0,0,7" />
+                            <TextBlock Grid.Row="2" Grid.Column="0" Classes="label" Text="HANDLED" />
+                            <TextBlock Grid.Row="3" Grid.Column="0" Classes="mono" FontSize="13" Text="{Binding Processed}" />
+                            <TextBlock Grid.Row="2" Grid.Column="1" Classes="label" Text="RESTARTS" />
+                            <TextBlock Grid.Row="3" Grid.Column="1" Classes="mono" FontSize="13" Text="{Binding Restarts}" />
+                        </Grid>
+                    </Border>
+                </ItemsControl>
+
+                <ListBox ItemsSource="{Binding Scenarios}"
+                         SelectedItem="{Binding Current}"
+                         Background="Transparent"
+                         BorderThickness="0"
+                         Margin="0,20,0,0">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate x:DataType="vm:ScenarioViewModel">
+                            <TextBlock Text="{Binding Name}" FontSize="13" />
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </DockPanel>
+        </Border>
+
+        <ContentControl Grid.Column="1" Content="{Binding Current}" />
+    </Grid>
+</Window>

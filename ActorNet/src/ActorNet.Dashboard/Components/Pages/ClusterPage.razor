@@ -1,0 +1,128 @@
+@* Dibuat oleh Gravicode Studios, dipimpin oleh Kang Fadhil. *@
+@page "/cluster"
+@rendermode InteractiveServer
+@implements IDisposable
+@inject ActorSystem System
+@using System.Globalization
+
+<PageTitle>Cluster - ActorNet Console</PageTitle>
+
+<div class="page">
+    <header class="page__head">
+        <div>
+            <h1 class="page__title">Cluster</h1>
+            <p class="page__lede">
+                This node's view of the membership. Every node keeps its own table and gossips it,
+                so a peer that looks unreachable here may be perfectly healthy elsewhere.
+            </p>
+        </div>
+        <span class="pulse"><span class="pulse__dot"></span>@_members.Count member(s)</span>
+    </header>
+
+    @if (!System.Options.Cluster.Enabled)
+    {
+        <div class="panel">
+            <div class="empty">
+                <strong>Clustering is off</strong>
+                This node owns the whole keyspace. Start it with a seed to join a cluster:<br />
+                <code style="font-family: var(--mono); color: var(--brass)">--seed 127.0.0.1:9000</code>
+            </div>
+        </div>
+    }
+
+    <div class="split">
+        <section class="panel">
+            <header class="panel__head">
+                <span class="panel__title">Placement ring</span>
+                <span class="panel__note">@System.Options.Cluster.VirtualNodesPerMember replicas each</span>
+            </header>
+            <div class="panel__body">
+                <HashRingView Ring="System.Cluster.Ring" SelfNodeId="@System.NodeId" />
+            </div>
+        </section>
+
+        <section class="panel">
+            <header class="panel__head">
+                <span class="panel__title">Members</span>
+                <span class="panel__note">
+                    unreachable after @System.Options.Cluster.UnreachableAfter.TotalSeconds.ToString("N0", CultureInfo.InvariantCulture)s,
+                    down after @System.Options.Cluster.DownAfter.TotalSeconds.ToString("N0", CultureInfo.InvariantCulture)s
+                </span>
+            </header>
+            <div class="panel__body panel__body--flush">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Node</th>
+                            <th>Address</th>
+                            <th>Status</th>
+                            <th class="num">Last seen</th>
+                            <th class="num">Incarnation</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var member in _members)
+                        {
+                            <tr>
+                                <td class="address">
+                                    @member.NodeId
+                                    @if (member.NodeId == System.NodeId)
+                                    {
+                                        <span style="color: var(--faint)"> (this node)</span>
+                                    }
+                                </td>
+                                <td class="address" style="color: var(--muted)">@member.Address</td>
+                                <td><span class="status @StatusClass(member.Status)">@member.Status</span></td>
+                                <td class="num" style="color: var(--faint)">@Ago(member.LastSeen)</td>
+                                <td class="num" style="color: var(--faint)">@member.Incarnation</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </div>
+
+    <p class="note">
+        <strong>Unreachable is not down.</strong> A member that misses heartbeats stays on the ring,
+        because the usual cause is a pause rather than a departure and moving its keys would be
+        worse than waiting. Only after the longer <em>down</em> deadline is it taken off the ring
+        and its share of the keyspace redistributed - at which point the actors that moved
+        deactivate here and reactivate on their new owner from the state store.
+    </p>
+</div>
+
+@code {
+    private static readonly TimeSpan RefreshInterval = TimeSpan.FromSeconds(1);
+
+    private IReadOnlyList<ClusterMember> _members = [];
+    private Timer? _timer;
+
+    protected override void OnInitialized()
+    {
+        _members = System.Cluster.Members;
+        _timer = new Timer(_ => _ = InvokeAsync(() =>
+        {
+            _members = System.Cluster.Members;
+            StateHasChanged();
+        }), null, RefreshInterval, RefreshInterval);
+    }
+
+    private static string StatusClass(MemberStatus status) => status switch
+    {
+        MemberStatus.Up => "status--up",
+        MemberStatus.Unreachable => "status--unreachable",
+        MemberStatus.Down => "status--down",
+        _ => "status--other",
+    };
+
+    private static string Ago(DateTimeOffset at)
+    {
+        var elapsed = DateTimeOffset.UtcNow - at;
+        return elapsed.TotalSeconds < 90
+            ? $"{elapsed.TotalSeconds:N0}s ago"
+            : $"{elapsed.TotalMinutes:N0}m ago";
+    }
+
+    public void Dispose() => _timer?.Dispose();
+}
