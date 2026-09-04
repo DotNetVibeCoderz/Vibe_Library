@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>ActorNet.Cli</RootNamespace>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+
+    <!--
+      Packed as a .NET tool so the command is "actornet" without the assembly having to be named
+      that. The assembly cannot be called "actornet": NuGet ids are case-insensitive, and a
+      project by that name is ambiguous with the ActorNet package this repository also produces.
+    -->
+    <IsPackable>true</IsPackable>
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>actornet</ToolCommandName>
+    <PackageId>ActorNet.Cli</PackageId>
+    <Description>Console tooling for ActorNet: run a node, watch it live, join a cluster, and run the worked scenarios. Dibuat oleh Gravicode Studios, dipimpin oleh Kang Fadhil.</Description>
+    <PackageTags>actornet;actor-model;cli;dotnet-tool;cluster;monitoring</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="../../README.md" Pack="true" PackagePath="/" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      The library takes only the logging abstractions, so the CLI brings its own concrete
+      provider - LoggerFactory.Create and AddSimpleConsole live here, not in Abstractions.
+    -->
+    <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="10.0.0" />
+    <PackageReference Include="Spectre.Console" Version="0.55.0" />
+    <PackageReference Include="Spectre.Console.Cli" Version="0.55.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../ActorNet.Core/ActorNet.Core.csproj" />
+    <ProjectReference Include="../ActorNet.Demo/ActorNet.Demo.csproj" />
+  </ItemGroup>
+
+</Project>

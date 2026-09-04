@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>ActorNet.Tests</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+
+    <!--
+      xunit.v3 runs on Microsoft.Testing.Platform, which the .NET 10 SDK no longer bridges to
+      VSTest. The test project is its own executable and is run directly with "dotnet run".
+    -->
+    <OutputType>Exe</OutputType>
+    <TestingPlatformDotnetTestSupport>true</TestingPlatformDotnetTestSupport>
+    <UseMicrosoftTestingPlatformRunner>true</UseMicrosoftTestingPlatformRunner>
+
+    <!--
+      xUnit1051 wants TestContext.Current.CancellationToken threaded through every call. This
+      suite is about timing behaviour - ask timeouts, idle sweeps, heartbeat deadlines - so it
+      carries its own explicit deadlines (TestHarness.WaitForAsync and per-call timeouts), and a
+      second ambient token on every line would obscure the one the test is actually asserting on.
+    -->
+    <NoWarn>$(NoWarn);xUnit1051</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="xunit.v3" Version="4.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/ActorNet.Core/ActorNet.Core.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>ActorNet.Demo</RootNamespace>
+    <AssemblyName>ActorNet.Demo</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../ActorNet.Core/ActorNet.Core.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>ActorNet</RootNamespace>
+    <AssemblyName>ActorNet.Core</AssemblyName>
+
+    <!--
+      The package id is the bare "ActorNet" the requirements ask for; it was unclaimed on
+      nuget.org when this was set up. (The sibling RLNet project had to take a Gravicode.
+      prefix because its bare id was already taken - that is not the case here.)
+    -->
+    <IsPackable>true</IsPackable>
+    <PackageId>ActorNet</PackageId>
+    <Description>A hybrid .NET actor framework: Orleans-style virtual actors with Akka-style supervision, clustering, persistence, event sourcing and reactive streams. Dibuat oleh Gravicode Studios, dipimpin oleh Kang Fadhil.</Description>
+    <PackageTags>actor;actor-model;virtual-actors;grains;distributed;cluster;supervision;event-sourcing;streams;orleans;akka</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="../../README.md" Pack="true" PackagePath="/" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      Abstractions only. A library that forces a logging or DI implementation on its host is
+      not "deep .NET integration", it is a conflict waiting to happen.
+    -->
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.0" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Options" Version="10.0.0" />
+  </ItemGroup>
+
+</Project>

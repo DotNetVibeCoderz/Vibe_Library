@@ -1,0 +1,12 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/ActorNet.Core/ActorNet.Core.csproj" />
+    <Project Path="src/ActorNet.Cli/ActorNet.Cli.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/ActorNet.Tests/ActorNet.Tests.csproj" />
+  </Folder>
+  <Folder Name="/benchmarks/">
+    <Project Path="benchmarks/ActorNet.Benchmarks/ActorNet.Benchmarks.csproj" />
+  </Folder>
+</Solution>
