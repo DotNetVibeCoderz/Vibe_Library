@@ -124,28 +124,115 @@ dan snapshot bukan jejak audit.
 
 ## Store
 
-Tiga sambungan, ditukar lewat options:
+Tiga sambungan, ditukar lewat options. Setiap provider lulus suite konformans yang sama, jadi mereka
+bisa saling menggantikan.
+
+| Provider | Paket | Selamat dari restart | Dibagi antar node | Diverifikasi |
+| --- | --- | --- | --- | --- |
+| Memori (bawaan) | bawaan | tidak | tidak | di suite |
+| File | bawaan | ya | tidak | di suite |
+| SQLite | `ActorNet.Persistence.Sqlite` | ya | tidak | di suite, setiap kali dijalankan |
+| PostgreSQL | `ActorNet.Persistence.PostgreSql` | ya | **ya** | di CI, terhadap server sungguhan |
+| SQL Server | `ActorNet.Persistence.SqlServer` | ya | **ya** | di CI, terhadap server sungguhan |
+| MySQL / MariaDB | `ActorNet.Persistence.MySql` | ya | **ya** | di CI, terhadap server sungguhan |
+| Redis | `ActorNet.Persistence.Redis` | bisa dikonfigurasi | **ya** | di CI, terhadap server sungguhan |
 
 ```csharp
-options.StateStore    = new FileStateStore("./data/state");
-options.EventJournal  = new FileEventJournal("./data/journal", types);
-options.SnapshotStore = new FileSnapshotStore("./data/snapshots");
+options.UsePostgreSql("Host=db;Database=actornet;Username=app;Password=…", system.Serializer.Types);
+options.UseSqlServer("Server=db;Database=actornet;…", types);
+options.UseMySql("Server=db;Database=actornet;…", types);
+options.UseSqlite("Data Source=./data/actornet.db", types);
+options.UseRedis(ConnectionMultiplexer.Connect("localhost:6379"), types);
 ```
 
-| Store | Selamat dari deaktivasi | Selamat dari restart | Dibagi antar node |
-| --- | --- | --- | --- |
-| `InMemory*` (bawaan) | ya | tidak | tidak |
-| `File*` | ya | ya | tidak |
-| Provider basis data | ya | ya | ya — **belum dibangun** |
+Atau pasang ketiga store secara terpisah, yang Anda inginkan saat journal dan state sebaiknya berada
+di tempat berbeda:
 
-Store di memori menjadi bawaan karena ia membuat framework langsung bekerja dan membuat tes cepat.
-Ia menjadi pilihan yang salah begitu state-nya penting. Store file membuat "matikan, jalankan lagi,
-saldonya masih ada" bisa diperagakan alih-alih sekadar diklaim — ia menulis ke file sementara lalu
-memindahkannya, karena file JSON yang tertulis separuh tidak bisa dipulihkan.
+```csharp
+options.StateStore    = PostgreSqlPersistence.StateStore(connectionString);
+options.EventJournal  = PostgreSqlPersistence.EventJournal(connectionString, types);
+options.SnapshotStore = RedisPersistence.SnapshotStore(redis);
+```
 
-**Keduanya tidak dibagi antar node.** Di cluster sungguhan, actor yang di-rebalance ke node lain harus
-menemukan state-nya di sana, dan itu berarti store yang bisa dibaca kedua node. Provider PostgreSQL
-adalah item teratas di [roadmap](../../Plan.md).
+### Memilih salah satu
+
+**Memori** menjadi bawaan karena ia membuat framework langsung bekerja dan membuat tes cepat. Ia
+selamat dari deaktivasi, bukan dari restart proses, dan tidak ada yang dibagi. Hanya untuk
+pengembangan dan tes.
+
+**File** membuat "matikan, jalankan lagi, saldonya masih ada" bisa diperagakan alih-alih sekadar
+diklaim. Hanya satu node.
+
+**SQLite** adalah janji yang sama dengan basis data sungguhan di bawahnya — SQL sungguhan, constraint
+sungguhan, konkurensi sungguhan. Tetap satu node: sebuah file tidak dibagi. Ia juga yang dijalani
+suite konformans pada setiap kali tes dijalankan, sehingga ia provider yang paling terlatih di sini.
+
+**PostgreSQL, SQL Server, MySQL** adalah jawaban untuk cluster. Rebalancing bekerja dengan
+menonaktifkan actor di satu node dan mengaktifkannya di node lain, dan itu hanya memulihkan state
+bila kedua node bisa membaca store yang sama.
+
+**Redis** cepat dan bisa dibagi, dengan satu catatan yang perlu dinyatakan terus terang: persistensi
+Redis bisa dikonfigurasi dan sering dimatikan, dan dengan snapshot RDB bawaan sebuah crash kehilangan
+tulisan beberapa detik terakhir. Cocok untuk proyeksi atau actor berbentuk cache; tidak cocok untuk
+buku besar.
+
+### Skemanya
+
+Tiga tabel, dibuat saat pertama dipakai:
+
+```
+actornet_state      actor_key, state_version, payload, updated_at
+actornet_events     persistence_id, seq_no, type_alias, payload, created_at   PK (persistence_id, seq_no)
+actornet_snapshots  persistence_id, seq_no, payload, created_at
+```
+
+Matikan pembuatan otomatisnya dan serahkan DDL-nya ke apa pun yang mengelola skema Anda:
+
+```csharp
+var options = new RelationalStoreOptions { AutoCreateSchema = false, TablePrefix = "app_" };
+foreach (var statement in RelationalSchema.StatementsFor(PostgreSqlDialect.Instance, options))
+    Console.WriteLine(statement);
+```
+
+Dua detail yang bukan pilihan sembarangan:
+
+**Key actor dibatasi 400 karakter.** Kolomnya adalah primary key di empat basis data sekaligus. SQL
+Server membatasi key indeks pada 900 byte dan `NVARCHAR`-nya dua byte per karakter, yang menaruh
+plafonnya di 450; InnoDB milik MySQL membatasinya pada 3072 byte, yang dengan `utf8mb4` berarti 768.
+400 melewati keduanya, dan alamat actor sepanjang itu sudah merupakan masalah desain tersendiri.
+
+**Primary key journal adalah `(persistence_id, seq_no)`, dan itulah yang membuat append bersamaan
+aman** — bukan lock dan bukan tingkat isolasi. Sebuah append membaca ujung stream, memeriksanya, lalu
+menyisipkan di ujung+1; bila aktivasi lain sampai lebih dulu, basis datanya menolak sisipan itu dan
+yang kalah diberi tahu.
+
+**Timestamp berupa milidetik Unix dalam `BIGINT`.** Tipe tanggal dan waktu adalah tempat keempat basis
+data paling berbeda, dan tidak satu pun store membandingkan atau merentang pada kolom itu — ia hanya
+informatif.
+
+### Menulis provider
+
+```csharp
+public interface ISqlDialect
+{
+    string Name { get; }
+    DbConnection CreateConnection(string connectionString);
+    IReadOnlyList<string> SchemaStatements(RelationalStoreOptions options);
+    bool IsUniqueViolation(DbException exception);
+}
+```
+
+Empat anggota, karena setiap perintah yang dikeluarkan store adalah SQL biasa yang diterima keempat
+basis data tanpa perubahan. Dialek yang harus menulis ulang DML-nya adalah tanda DML itu sudah melenceng
+ke sesuatu yang tidak portabel.
+
+`IsUniqueViolation` bersifat menopang, bukan kosmetik: kedua store mengandalkan primary key agar
+penulisan bersamaan gagal alih-alih saling menyelip, jadi salah melaporkan bentrokan key sebagai galat
+biasa mengubah konflik yang terdeteksi menjadi tulisan yang hilang.
+
+Untuk store non-relasional, implementasikan `IStateStore`, `IEventJournal`, dan `ISnapshotStore`
+langsung — provider Redis adalah contoh jadinya — lalu jalankan `PersistenceProviderConformance`
+terhadapnya.
 
 ### Satu kehalusan pada store di memori
 

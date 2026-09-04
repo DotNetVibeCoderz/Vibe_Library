@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>ActorNet.Persistence.PostgreSql</RootNamespace>
+    <AssemblyName>ActorNet.Persistence.PostgreSql</AssemblyName>
+
+    <IsPackable>true</IsPackable>
+    <PackageId>ActorNet.Persistence.PostgreSql</PackageId>
+    <PackageTags>actornet;actor-model;persistence;event-sourcing;PostgreSql</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="../../README.md" Pack="true" PackagePath="/" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Npgsql" Version="9.0.5" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../ActorNet.Persistence.Relational/ActorNet.Persistence.Relational.csproj" />
+  </ItemGroup>
+
+</Project>

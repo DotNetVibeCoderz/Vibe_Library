@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>ActorNet.Persistence.SqlServer</RootNamespace>
+    <AssemblyName>ActorNet.Persistence.SqlServer</AssemblyName>
+
+    <IsPackable>true</IsPackable>
+    <PackageId>ActorNet.Persistence.SqlServer</PackageId>
+    <PackageTags>actornet;actor-model;persistence;event-sourcing;SqlServer</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="../../README.md" Pack="true" PackagePath="/" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Data.SqlClient" Version="6.1.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../ActorNet.Persistence.Relational/ActorNet.Persistence.Relational.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -121,28 +121,111 @@ sourcing, and a snapshot is not one.
 
 ## The stores
 
-Three seams, swapped through options:
+Three seams, swapped through options. Every provider passes the same conformance suite, so they are
+interchangeable.
+
+| Provider | Package | Survives a restart | Shared between nodes | Verified |
+| --- | --- | --- | --- | --- |
+| In-memory (default) | built in | no | no | in the suite |
+| Files | built in | yes | no | in the suite |
+| SQLite | `ActorNet.Persistence.Sqlite` | yes | no | in the suite, on every run |
+| PostgreSQL | `ActorNet.Persistence.PostgreSql` | yes | **yes** | in CI, against a real server |
+| SQL Server | `ActorNet.Persistence.SqlServer` | yes | **yes** | in CI, against a real server |
+| MySQL / MariaDB | `ActorNet.Persistence.MySql` | yes | **yes** | in CI, against a real server |
+| Redis | `ActorNet.Persistence.Redis` | configurable | **yes** | in CI, against a real server |
 
 ```csharp
-options.StateStore    = new FileStateStore("./data/state");
-options.EventJournal  = new FileEventJournal("./data/journal", types);
-options.SnapshotStore = new FileSnapshotStore("./data/snapshots");
+options.UsePostgreSql("Host=db;Database=actornet;Username=app;Password=…", system.Serializer.Types);
+options.UseSqlServer("Server=db;Database=actornet;…", types);
+options.UseMySql("Server=db;Database=actornet;…", types);
+options.UseSqlite("Data Source=./data/actornet.db", types);
+options.UseRedis(ConnectionMultiplexer.Connect("localhost:6379"), types);
 ```
 
-| Store | Survives deactivation | Survives a restart | Shared between nodes |
-| --- | --- | --- | --- |
-| `InMemory*` (default) | yes | no | no |
-| `File*` | yes | yes | no |
-| A database provider | yes | yes | yes — **not built yet** |
+Or wire the three stores individually, which is what you want when the journal and the state belong
+in different places:
 
-The in-memory stores are the default because they make the framework work out of the box and tests
-fast. They are the wrong choice the moment the state matters. The file stores make "stop it, start
-it again, the balance is still there" demonstrable rather than merely claimed — write to a
-temporary file and move it into place, because a half-written JSON file is unrecoverable.
+```csharp
+options.StateStore    = PostgreSqlPersistence.StateStore(connectionString);
+options.EventJournal  = PostgreSqlPersistence.EventJournal(connectionString, types);
+options.SnapshotStore = RedisPersistence.SnapshotStore(redis);
+```
 
-**Neither is shared between nodes.** In a real cluster, an actor that rebalances onto another node
-must find its state there, which means a store both nodes can read. A PostgreSQL provider is the
-top item on the [roadmap](../../Plan.md).
+### Choosing one
+
+**In-memory** is the default because it makes the framework work out of the box and tests fast. It
+survives deactivation, not a process restart, and nothing is shared. Development and tests only.
+
+**Files** make "stop it, start it again, the balance is still there" demonstrable rather than merely
+claimed. One node only.
+
+**SQLite** is the same promise with a real database underneath - real SQL, real constraints, real
+concurrency. Still one node: a file is not shared. It is also what the conformance suite runs
+against on every single test run, which makes it the best-exercised provider here.
+
+**PostgreSQL, SQL Server, MySQL** are the cluster answer. Rebalancing works by deactivating an actor
+on one node and reactivating it on another, and that only recovers state if both nodes can read the
+same store.
+
+**Redis** is shared and fast, with a caveat worth stating plainly: Redis persistence is configurable
+and often off, and with default RDB snapshotting a crash loses the last few seconds of writes. Fine
+for a projection or a cache-shaped actor; not fine for a ledger.
+
+### The schema
+
+Three tables, created on first use:
+
+```
+actornet_state      actor_key, state_version, payload, updated_at
+actornet_events     persistence_id, seq_no, type_alias, payload, created_at   PK (persistence_id, seq_no)
+actornet_snapshots  persistence_id, seq_no, payload, created_at
+```
+
+Turn auto-creation off and hand the DDL to whatever owns your schema:
+
+```csharp
+var options = new RelationalStoreOptions { AutoCreateSchema = false, TablePrefix = "app_" };
+foreach (var statement in RelationalSchema.StatementsFor(PostgreSqlDialect.Instance, options))
+    Console.WriteLine(statement);
+```
+
+Two details that are not arbitrary:
+
+**Actor keys are capped at 400 characters.** The column is a primary key on four databases at once.
+SQL Server caps an index key at 900 bytes and its `NVARCHAR` is two bytes per character, which puts
+the ceiling at 450; MySQL's InnoDB caps it at 3072 bytes, which with `utf8mb4` is 768. 400 clears
+both, and an actor address that long is already a design problem.
+
+**The journal's primary key is `(persistence_id, seq_no)`, and that is what makes concurrent appends
+safe** - not a lock and not an isolation level. An append reads the tip, checks it, and inserts at
+tip+1; if another activation got there first, the database refuses the insert and the loser is told.
+
+**Timestamps are Unix milliseconds in a `BIGINT`.** Date and time types are where the four databases
+differ most, and none of the stores ever compares or ranges on the column - it is informational.
+
+### Writing a provider
+
+```csharp
+public interface ISqlDialect
+{
+    string Name { get; }
+    DbConnection CreateConnection(string connectionString);
+    IReadOnlyList<string> SchemaStatements(RelationalStoreOptions options);
+    bool IsUniqueViolation(DbException exception);
+}
+```
+
+Four members, because every statement the stores issue is plain SQL all four databases accept
+unchanged. A dialect that had to rewrite the DML would be a sign the DML had drifted somewhere
+non-portable.
+
+`IsUniqueViolation` is load-bearing rather than cosmetic: both stores rely on the primary key to
+make a concurrent write fail rather than interleave, so misreporting a key clash as an ordinary
+error turns a detectable conflict into a lost write.
+
+For a non-relational store, implement `IStateStore`, `IEventJournal` and `ISnapshotStore` directly -
+the Redis provider is the worked example - and run
+`PersistenceProviderConformance` against it.
 
 ### A subtlety in the in-memory stores
 

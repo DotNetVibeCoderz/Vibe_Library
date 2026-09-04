@@ -71,6 +71,109 @@ jobs:
           path: ActorNet/tests/ActorNet.Tests/bin/Release/net10.0/TestResults/*.trx
           if-no-files-found: warn
 
+  # The persistence providers, against real servers. SQLite and the two built-in stores are
+  # covered by the "build" job on every platform; these four cannot be, because they need a server
+  # - so without this job "PostgreSQL conforms" would be an untested claim. The conformance suite
+  # self-skips when a connection string is absent, which is what makes that visible rather than
+  # silently green.
+  providers:
+    name: providers
+    runs-on: ubuntu-latest
+    needs: build
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: actornet
+          POSTGRES_DB: actornet
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+      mysql:
+        image: mysql:9
+        env:
+          MYSQL_ROOT_PASSWORD: actornet
+          MYSQL_DATABASE: actornet
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -pactornet"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+      redis:
+        image: redis:7
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+      sqlserver:
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        env:
+          ACCEPT_EULA: 'Y'
+          MSSQL_SA_PASSWORD: 'ActorNet!Passw0rd'
+        ports: ['1433:1433']
+        options: >-
+          --health-cmd "/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P 'ActorNet!Passw0rd' -Q 'SELECT 1'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      ACTORNET_TEST_POSTGRES: 'Host=127.0.0.1;Port=5432;Database=actornet;Username=postgres;Password=actornet'
+      ACTORNET_TEST_MYSQL: 'Server=127.0.0.1;Port=3306;Database=actornet;User ID=root;Password=actornet'
+      ACTORNET_TEST_REDIS: '127.0.0.1:6379'
+      # TrustServerCertificate because the container serves a self-signed certificate, and this is
+      # a throwaway database on localhost rather than anything worth verifying a chain for.
+      ACTORNET_TEST_SQLSERVER: 'Server=127.0.0.1,1433;Database=master;User ID=sa;Password=ActorNet!Passw0rd;TrustServerCertificate=True'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: ActorNet/global.json
+
+      - name: Build
+        run: dotnet build ActorNet.slnx -c Release
+
+      # Asserted rather than assumed: if a service container failed to start, the suite would skip
+      # its tests and the job would still pass, which is exactly the false green this job exists to
+      # prevent.
+      - name: Run the provider conformance suite
+        run: >
+          dotnet run --project tests/ActorNet.Tests -c Release --no-build --
+          --filter-class '*ProviderTests*'
+          --report-xunit-trx --report-xunit-trx-filename actornet-providers.trx
+
+      - name: Fail if any provider suite was skipped
+        shell: bash
+        run: |
+          trx=$(find tests/ActorNet.Tests/bin/Release/net10.0/TestResults -name 'actornet-providers.trx' | head -1)
+          if [ -z "$trx" ]; then echo "no test results found"; exit 1; fi
+          skipped=$(grep -o 'outcome="NotExecuted"' "$trx" | wc -l)
+          if [ "$skipped" -gt 0 ]; then
+            echo "$skipped provider test(s) were skipped - a service container did not come up."
+            exit 1
+          fi
+          echo "every provider ran against a real server"
+
+      - name: Upload provider test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: actornet-provider-results
+          path: ActorNet/tests/ActorNet.Tests/bin/Release/net10.0/TestResults/*.trx
+          if-no-files-found: warn
+
   clients:
     name: clients
     runs-on: ubuntu-latest

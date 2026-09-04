@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>ActorNet.Persistence.MySql</RootNamespace>
+    <AssemblyName>ActorNet.Persistence.MySql</AssemblyName>
+
+    <IsPackable>true</IsPackable>
+    <PackageId>ActorNet.Persistence.MySql</PackageId>
+    <PackageTags>actornet;actor-model;persistence;event-sourcing;MySql</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="../../README.md" Pack="true" PackagePath="/" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MySqlConnector" Version="2.4.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../ActorNet.Persistence.Relational/ActorNet.Persistence.Relational.csproj" />
+  </ItemGroup>
+
+</Project>

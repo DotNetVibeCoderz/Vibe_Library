@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>ActorNet.Persistence.Sqlite</RootNamespace>
+    <AssemblyName>ActorNet.Persistence.Sqlite</AssemblyName>
+
+    <IsPackable>true</IsPackable>
+    <PackageId>ActorNet.Persistence.Sqlite</PackageId>
+    <PackageTags>actornet;actor-model;persistence;event-sourcing;Sqlite</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="../../README.md" Pack="true" PackagePath="/" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.0" />
+
+    <!--
+      Microsoft.Data.Sqlite pulls SQLitePCLRaw 2.1.11 transitively, whose bundled native SQLite is
+      older than 3.50.2 and so carries CVE-2025-6965 (GHSA-2m69-gcr7-jv3q) - memory corruption on
+      an aggregate whose term count exceeds the available columns. There is no patched 2.1.x; the
+      bundle moved to its own version line, and 3.x ships a fixed native library.
+    -->
+    <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.5" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../ActorNet.Persistence.Relational/ActorNet.Persistence.Relational.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -37,7 +37,6 @@ The things that stand between this and a production pilot.
 
 | Theme | Why it matters |
 | --- | --- |
-| Database persistence providers (PostgreSQL, SQL Server) | The file store survives a restart; it does not survive two nodes or a disk. |
 | Backpressure that reaches the sender | A bounded mailbox blocks the local sender today, but a remote sender only sees a full transport queue. |
 | Structured diagnostics (`ActivitySource`, `Meter`) | The console reads the runtime's own counters; nothing exports to OpenTelemetry yet. |
 | Dead letters | An undeliverable message is logged and dropped. It should be observable and re-drivable. |
@@ -128,8 +127,13 @@ The membership layer is deliberately simple, and simple has limits worth being e
 - [x] In-memory stores (default; survive deactivation, not a restart)
 - [x] File-backed stores (survive a restart; JSON per key, JSONL per stream)
 - [x] Persisting during recovery is refused
-- [ ] PostgreSQL provider
-- [ ] SQL Server provider
+- [x] One conformance suite, run against every provider
+- [x] SQLite provider - runs on every test run
+- [x] PostgreSQL provider - verified in CI against a real server
+- [x] SQL Server provider - verified in CI against a real server
+- [x] MySQL / MariaDB provider - verified in CI against a real server
+- [x] Redis provider - verified in CI against a real server
+- [x] Schema exposed for a migration tool instead of auto-creation
 - [ ] Journal compaction beyond `DeleteToAsync`
 - [ ] Projections / read-model subscriptions off the journal
 
@@ -176,7 +180,7 @@ The membership layer is deliberately simple, and simple has limits worth being e
 
 ### Testing
 
-- [x] 92 tests, all passing
+- [x] 197 tests: 137 run everywhere, 60 skip unless a database server is reachable
 - [x] Addressing, hashing, and ring segment properties
 - [x] Concurrency: 6,400 increments with no lock, no update lost
 - [x] Supervision outcomes and the restart budget
@@ -200,6 +204,7 @@ The membership layer is deliberately simple, and simple has limits worth being e
 
 - [x] CI: build and test on Linux, Windows and macOS
 - [x] CI: all four clients driven against a real node
+- [x] CI: every persistence provider run against a real server, with a guard that fails the job if one was skipped
 - [x] Publish workflow, tag-triggered (`ActorNet-v*`), with a dry-run mode
 - [x] NuGet metadata pointing at the subfolder, SourceLink, symbol packages
 - [ ] Published to nuget.org (the workflow is ready; nothing has been pushed)
@@ -221,3 +226,7 @@ Ticking a box means it works, not that it is finished. These are the caveats wor
   but increment. It measures the runtime's floor, not an application's throughput.
 - **Rebalancing deactivates rather than migrates.** An actor whose key moves is flushed and
   reactivated from the store on its new owner, so an actor with no persistent state loses it.
+- **Four of the seven persistence providers have never run on a developer machine here** - there is
+  no Docker on it. PostgreSQL, SQL Server, MySQL and Redis are exercised by the CI job against
+  service containers, and that job fails if any of their tests were skipped. SQLite and the two
+  built-in stores run on every local test run.

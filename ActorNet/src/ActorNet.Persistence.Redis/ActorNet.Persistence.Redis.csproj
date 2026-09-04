@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>ActorNet.Persistence.Redis</RootNamespace>
+    <AssemblyName>ActorNet.Persistence.Redis</AssemblyName>
+
+    <IsPackable>true</IsPackable>
+    <PackageId>ActorNet.Persistence.Redis</PackageId>
+    <PackageTags>actornet;actor-model;persistence;event-sourcing;redis</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="../../README.md" Pack="true" PackagePath="/" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="StackExchange.Redis" Version="2.9.38" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../ActorNet.Core/ActorNet.Core.csproj" />
+  </ItemGroup>
+
+</Project>

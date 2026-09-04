@@ -28,6 +28,17 @@
 
   <ItemGroup>
     <ProjectReference Include="../../src/ActorNet.Core/ActorNet.Core.csproj" />
+
+    <!--
+      Every persistence provider, so one conformance suite can run against all of them. SQLite and
+      the two built-in stores always run; the server-backed ones self-skip unless their connection
+      string is in the environment.
+    -->
+    <ProjectReference Include="../../src/ActorNet.Persistence.Sqlite/ActorNet.Persistence.Sqlite.csproj" />
+    <ProjectReference Include="../../src/ActorNet.Persistence.SqlServer/ActorNet.Persistence.SqlServer.csproj" />
+    <ProjectReference Include="../../src/ActorNet.Persistence.PostgreSql/ActorNet.Persistence.PostgreSql.csproj" />
+    <ProjectReference Include="../../src/ActorNet.Persistence.MySql/ActorNet.Persistence.MySql.csproj" />
+    <ProjectReference Include="../../src/ActorNet.Persistence.Redis/ActorNet.Persistence.Redis.csproj" />
   </ItemGroup>
 
 </Project>

@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>ActorNet.Persistence.Relational</RootNamespace>
+    <AssemblyName>ActorNet.Persistence.Relational</AssemblyName>
+
+    <IsPackable>true</IsPackable>
+    <PackageId>ActorNet.Persistence.Relational</PackageId>
+    <Description>Shared ADO.NET persistence for ActorNet: state, event journal and snapshot stores over any relational database, with a dialect seam. Referenced by the SQLite, SQL Server, PostgreSQL and MySQL providers rather than used directly. Dibuat oleh Gravicode Studios, dipimpin oleh Kang Fadhil.</Description>
+    <PackageTags>actornet;actor-model;persistence;event-sourcing;ado.net;sql</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="../../README.md" Pack="true" PackagePath="/" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../ActorNet.Core/ActorNet.Core.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,42 @@
+# Dibuat oleh Gravicode Studios, dipimpin oleh Kang Fadhil.
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "actornet"
+version = "0.1.0"
+description = "Python client for ActorNet, a hybrid .NET actor framework with virtual actors, supervision and clustering."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+authors = [{ name = "Kang Fadhil (Gravicode Studios)" }]
+keywords = ["actornet", "actor-model", "virtual-actors", "distributed", "rpc"]
+
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: System :: Distributed Computing",
+    "Framework :: AsyncIO",
+]
+
+# No runtime dependencies on purpose. The whole client is asyncio, struct and json from the
+# standard library, so adding it to a project cannot cause a version conflict.
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/DotNetVibeCoderz/Vibe_Library/tree/main/ActorNet"
+Documentation = "https://github.com/DotNetVibeCoderz/Vibe_Library/blob/main/ActorNet/docs/en/08-clients.md"
+Repository = "https://github.com/DotNetVibeCoderz/Vibe_Library"
+Issues = "https://github.com/DotNetVibeCoderz/Vibe_Library/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["actornet"]
+
+[tool.hatch.build.targets.sdist]
+include = ["actornet", "examples", "README.md"]

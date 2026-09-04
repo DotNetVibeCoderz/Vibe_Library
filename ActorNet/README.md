@@ -157,6 +157,27 @@ Three base classes, picked by what the actor needs:
 | `PersistentActor<TState>` | One row per actor | The current value is what matters |
 | `EventSourcedActor<TState>` | An append-only journal | The history matters — audit, replay, CQRS |
 
+Behind them, seven storage providers - all passing one shared conformance suite, so they are
+interchangeable:
+
+```bash
+dotnet add package ActorNet.Persistence.PostgreSql   # or .SqlServer, .MySql, .Sqlite, .Redis
+```
+
+```csharp
+options.UsePostgreSql("Host=db;Database=actornet;Username=app;Password=…", types);
+```
+
+| Provider | Survives a restart | Shared between nodes |
+| --- | --- | --- |
+| In-memory (default), for development and tests | no | no |
+| Files, SQLite | yes | no |
+| PostgreSQL, SQL Server, MySQL/MariaDB | yes | **yes** |
+| Redis | configurable | **yes** |
+
+A cluster needs a shared store: rebalancing deactivates an actor on one node and reactivates it on
+another, which only recovers state if both can read the same place.
+
 ## Supervision
 
 ```csharp
@@ -281,7 +302,7 @@ it with `actornet bench` or `dotnet run -c Release --project benchmarks/ActorNet
 
 ```bash
 dotnet build ActorNet.slnx -c Release
-dotnet run --project tests/ActorNet.Tests -c Release          # 92 tests
+dotnet run --project tests/ActorNet.Tests -c Release          # 197 tests
 ```
 
 `dotnet test` does not work here: the .NET 10 SDK dropped the VSTest bridge that xunit.v3's
@@ -378,6 +399,23 @@ standalone dan tidak pernah ber-gossip.
 | `VirtualActor` / `ReceiveActor` | Hanya di memori | State berupa cache, atau memang boleh hilang |
 | `PersistentActor<TState>` | Satu baris per actor | Yang penting adalah nilai saat ini |
 | `EventSourcedActor<TState>` | Journal append-only | Yang penting riwayatnya — audit, replay, CQRS |
+
+Di belakangnya ada tujuh provider penyimpanan — semuanya lulus satu suite konformans yang sama,
+sehingga bisa saling menggantikan:
+
+```bash
+dotnet add package ActorNet.Persistence.PostgreSql   # atau .SqlServer, .MySql, .Sqlite, .Redis
+```
+
+| Provider | Selamat dari restart | Dibagi antar node |
+| --- | --- | --- |
+| Memori (bawaan), untuk pengembangan dan tes | tidak | tidak |
+| File, SQLite | ya | tidak |
+| PostgreSQL, SQL Server, MySQL/MariaDB | ya | **ya** |
+| Redis | bisa dikonfigurasi | **ya** |
+
+Cluster membutuhkan store bersama: rebalancing menonaktifkan actor di satu node dan mengaktifkannya
+di node lain, dan itu hanya memulihkan state bila keduanya bisa membaca tempat yang sama.
 
 ## Klien
 

@@ -1,6 +1,12 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/ActorNet.Core/ActorNet.Core.csproj" />
+    <Project Path="src/ActorNet.Persistence.Relational/ActorNet.Persistence.Relational.csproj" />
+    <Project Path="src/ActorNet.Persistence.Sqlite/ActorNet.Persistence.Sqlite.csproj" />
+    <Project Path="src/ActorNet.Persistence.SqlServer/ActorNet.Persistence.SqlServer.csproj" />
+    <Project Path="src/ActorNet.Persistence.PostgreSql/ActorNet.Persistence.PostgreSql.csproj" />
+    <Project Path="src/ActorNet.Persistence.MySql/ActorNet.Persistence.MySql.csproj" />
+    <Project Path="src/ActorNet.Persistence.Redis/ActorNet.Persistence.Redis.csproj" />
     <Project Path="src/ActorNet.Demo/ActorNet.Demo.csproj" />
     <Project Path="src/ActorNet.Cli/ActorNet.Cli.csproj" />
     <Project Path="src/ActorNet.Dashboard/ActorNet.Dashboard.csproj" />

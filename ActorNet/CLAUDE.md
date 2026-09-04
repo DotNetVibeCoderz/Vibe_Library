@@ -16,7 +16,8 @@ namespaced (`ActorNet-v0.1.0`) because a bare `v*` tag is ambiguous across proje
 
 ```bash
 dotnet build ActorNet.slnx -c Release
-dotnet run --project tests/ActorNet.Tests -c Release                    # all 92 tests, ~3s
+dotnet run --project tests/ActorNet.Tests -c Release                    # 197 tests, ~4s
+dotnet run --project tests/ActorNet.Tests -c Release -- --filter-class '*ProviderTests*'  # persistence only
 dotnet run --project src/ActorNet.Cli -c Release -- demo banking        # a worked scenario
 dotnet run --project src/ActorNet.Cli -c Release -- bench -n 2000000    # throughput
 dotnet run --project src/ActorNet.Dashboard                             # the web console
@@ -37,7 +38,7 @@ the console or the samples are running. Kill them first (`taskkill //F //IM Acto
 
 ## Architecture
 
-Six projects. `ActorNet.Core` is the library and the only one that matters for most work.
+Twelve projects. `ActorNet.Core` is the library and the only one that matters for most work.
 
 ```
 src/ActorNet.Core/          the library (packs as "ActorNet")
@@ -50,11 +51,14 @@ src/ActorNet.Core/          the library (packs as "ActorNet")
   Network/                  FrameCodec (length-prefixed), TcpTransport (persistent connections)
   Serialization/            the type allow-list
   Streams/, Metrics/, Hosting/, Client/
+src/ActorNet.Persistence.Relational/   shared ADO.NET stores + ISqlDialect (no driver deps)
+src/ActorNet.Persistence.{Sqlite,SqlServer,PostgreSql,MySql}/   one dialect each
+src/ActorNet.Persistence.Redis/        non-relational; Lua scripts for the CAS operations
 src/ActorNet.Demo/          banking, telemetry, ordering domains, shared by all surfaces
 src/ActorNet.Cli/           Spectre.Console, packs as the "actornet" dotnet tool
 src/ActorNet.Dashboard/     Blazor Server console; is itself a node
 samples/…Avalonia/          four desktop scenarios over one shared node
-tests/ActorNet.Tests/       xunit.v3, 92 tests
+tests/ActorNet.Tests/       xunit.v3, 197 tests
 benchmarks/                 BenchmarkDotNet
 clients/{nodejs,python,go}/ SDKs speaking the same wire protocol
 ```
@@ -84,6 +88,33 @@ test against known vectors. `string.GetHashCode()` is randomised per process, so
 compute different rings and disagree about ownership — a bug that only appears in a real cluster.
 The finalizer is not optional either: raw FNV-1a gave one node 48% of the keyspace, because ring
 positions are short strings sharing a prefix.
+
+## Persistence providers
+
+One conformance suite (`PersistenceProviderConformance`) runs against all seven. Adding a provider
+means adding a subclass, not a test file - a per-provider suite drifts, and the drift is invisible
+until an actor moves between nodes and finds state that will not load.
+
+`ISqlDialect` is four members because every statement the relational stores issue is plain SQL all
+four databases accept unchanged. If a dialect ever needs to rewrite the DML, that is a sign the DML
+drifted somewhere non-portable - fix the DML, not the dialect.
+
+Two things carry more weight than they look:
+
+- **`IsUniqueViolation` is load-bearing.** Both stores rely on the primary key to make a concurrent
+  write fail rather than interleave. Misreporting a key clash as an ordinary error turns a
+  detectable conflict into a lost write.
+- **Actor keys cap at 400 characters** because the column is a primary key on four databases at
+  once. SQL Server allows 450 (900 bytes / 2 for NVARCHAR); MySQL InnoDB allows 768 (3072 bytes
+  with utf8mb4). Raising it past 450 breaks SQL Server at first use, not at configuration time.
+
+Server-backed providers self-skip via `Assert.Skip` unless `ACTORNET_TEST_{POSTGRES,SQLSERVER,MYSQL,REDIS}`
+is set - a skip rather than an early return, because a test that quietly returns is reported as
+passing. The CI `providers` job supplies those through service containers and **fails if any
+provider test was skipped**, so a container that did not come up cannot pass as a green run.
+
+There is no Docker on the machine this was developed on, so those four have never run locally.
+SQLite runs on every test run and is the best-exercised provider here.
 
 ## Things that have already been got wrong
 

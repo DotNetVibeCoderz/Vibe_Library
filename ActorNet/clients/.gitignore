@@ -1,0 +1,5 @@
+# Publishing artifacts. The registries hold the released versions; these are local build output.
+python/dist/
+python/build/
+python/*.egg-info/
+nodejs/*.tgz
