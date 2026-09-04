@@ -8,121 +8,137 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 alongside `RLNet`, `LVGL.Net`, `D3Net`, `ClassicML`, …). Keep all work inside `ActorNet/`; do not
 touch sibling projects.
 
-Monorepo conventions to follow when adding infrastructure: workflows live in the **root**
-`.github/workflows/`, are path-scoped (`paths: ['ActorNet/**', ...]`) and named after the single
-project they cover (`actornet-ci.yml`, `actornet-publish.yml`) — see `rlnet-ci.yml` for the shape.
-Release tags are namespaced (`ActorNet-v0.1.0`) because a bare `v*` tag is ambiguous across projects.
-There is no root `Directory.Build.props` or `global.json`; each project owns its own.
+Monorepo conventions: workflows live in the **root** `.github/workflows/`, are path-scoped and named
+after the single project they cover (`actornet-ci.yml`, `actornet-publish.yml`). Release tags are
+namespaced (`ActorNet-v0.1.0`) because a bare `v*` tag is ambiguous across projects.
 
 ## Commands
 
 ```bash
-dotnet build -c Release      # single project, no solution file
-dotnet run                   # interactive Spectre.Console menu (binds TCP :9000)
+dotnet build ActorNet.slnx -c Release
+dotnet run --project tests/ActorNet.Tests -c Release                    # all 92 tests, ~3s
+dotnet run --project src/ActorNet.Cli -c Release -- demo banking        # a worked scenario
+dotnet run --project src/ActorNet.Cli -c Release -- bench -n 2000000    # throughput
+dotnet run --project src/ActorNet.Dashboard                             # the web console
+dotnet run --project samples/ActorNet.Samples.Avalonia                  # desktop samples
+dotnet run -c Release --project benchmarks/ActorNet.Benchmarks -- --filter '*RoutingBenchmarks*'
+dotnet pack ActorNet.slnx -c Release -o artifacts
 ```
 
-There is no test project, no benchmark project and no lint step — `dotnet test` has nothing to run.
-The only "benchmark" is the *Run Benchmark (Throughput)* menu item in `Program.cs`; see the caveat
-under **Sharp edges** before quoting a number from it.
+**`dotnet test` does not work here.** The .NET 10 SDK dropped the VSTest bridge that xunit.v3's
+Microsoft.Testing.Platform runner needs, and it fails with MSB4025 before running anything. The test
+project is an executable — run it with `dotnet run`, which is what CI does. `dotnet.config` exists
+for this; do not delete it assuming it is unused.
 
-`dotnet run` is interactive and holds the terminal. It also opens port 9000 unconditionally in
-`Main`, so a second instance fails to listen.
+The suite is fast (~3s) and hermetic: networked tests bind port 0, so they never collide.
 
-## Current state vs. requirements.md
-
-`requirements.md` is an aspirational spec, not a description of the code. What exists today is a
-~500-line single-project demo: virtual-actor activation, channel mailboxes, one TCP hop, and a bank
-account sample. **Not implemented** despite being claimed in `requirements.md` and `README.md`:
-supervision trees, clustering, elastic scaling / load balancing, persistence and event sourcing,
-reactive streams, the Blazor dashboard, the Avalonia samples, the Go/Python/NodeJS SDKs, the `docs/`
-folder, the `Plan.md` roadmap/tracking checklist, CI, and the NuGet package.
-
-Treat gaps as work to do, not as bugs — but do not write docs or a README that assume any of it
-exists. Two conventions from `requirements.md` that the code has *not* yet adopted, and should when
-files are touched: every source file carries a `Dibuat oleh Gravicode Studios, dipimpin oleh Kang
-Fadhil` credit, and the README is bilingual (English + Bahasa Indonesia in one file — `README.md`
-already follows this; keep both halves in sync).
-
-If a NuGet package is added, check id availability first: the sibling project publishes as
-`Gravicode.RLNet` because the bare `RLNet` id was already taken by an unrelated library, and NuGet
-ids are case-insensitive.
+**Long-running processes lock their DLLs.** A `dotnet build` will fail with MSB3021 while a node,
+the console or the samples are running. Kill them first (`taskkill //F //IM ActorNet.Cli.exe`).
 
 ## Architecture
 
+Six projects. `ActorNet.Core` is the library and the only one that matters for most work.
+
 ```
-Program.cs                      Spectre.Console menu + the throughput benchmark
-Core/Interfaces.cs              IActor, IActorRef, IActorSystem, IActorContext, MessageEnvelope
-Core/ActorSystem.cs             type registry, actor table, DispatchMessageAsync
-Core/VirtualActor.cs            mailbox + processing loop; also holds ActorContext
-Core/LocalActorRef.cs           Tell (Ask throws)
-Core/Network/NodeListener.cs    TCP server
-Core/Client/ActorNetClient.cs   TCP client
-Core/Actors/BankAccountActor.cs sample actor + its message records
+src/ActorNet.Core/          the library (packs as "ActorNet")
+  ActorId.cs                Type/Key addressing; splits on the FIRST separator
+  ActorSystem.cs            the node: directory, routing, asks, shutdown, rebalancing
+  Runtime/ActorCell.cs      one activation: instance, mailbox, loop, supervision
+  Supervision/              directives, scope, restart budget
+  Persistence/              PersistentActor, EventSourcedActor, in-memory + file stores
+  Cluster/                  gossip membership, failure detection, HashRing
+  Network/                  FrameCodec (length-prefixed), TcpTransport (persistent connections)
+  Serialization/            the type allow-list
+  Streams/, Metrics/, Hosting/, Client/
+src/ActorNet.Demo/          banking, telemetry, ordering domains, shared by all surfaces
+src/ActorNet.Cli/           Spectre.Console, packs as the "actornet" dotnet tool
+src/ActorNet.Dashboard/     Blazor Server console; is itself a node
+samples/…Avalonia/          four desktop scenarios over one shared node
+tests/ActorNet.Tests/       xunit.v3, 92 tests
+benchmarks/                 BenchmarkDotNet
+clients/{nodejs,python,go}/ SDKs speaking the same wire protocol
 ```
 
-### The one thing to understand: every message is JSON, even locally
+### Five contracts that explain most of the design
 
-`VirtualActor.PushMessageAsync` serialises the message with Newtonsoft into a `MessageEnvelope`, and
-`ProcessMailboxAsync` deserialises it back before calling `ReceiveAsync`. There is no local fast path.
-Consequences that drive most design decisions here:
+**1. The local path does not serialize.** An in-process send puts the message object itself into the
+mailbox. Serialization exists for the wire and nowhere else. Measured: placement ~95 ns, serializing
+the same message ~630 ns and 288 B. Do not "unify" the paths.
 
-- `MessageType` is `Type.FullName + ", " + AssemblyName`. Resolution is `Type.GetType`, falling back
-  to a scan of every loaded assembly, falling back to a raw `JObject`. Message types must therefore
-  be reachable by name on the receiving side — with a single assembly this is free, but it is the
-  constraint that will bite when the framework is actually split across nodes.
-- Messages must be JSON round-trippable. The sample uses `record` types with positional parameters,
-  which Newtonsoft handles via the constructor; a message that loses data through serialise/
-  deserialise fails silently.
-- Serialisation cost dominates, so this is where any real performance work starts.
+**2. One actor, one thread of control — including its lifecycle.** Activation, every message,
+supervision decisions and deactivation all run on the actor's own mailbox loop. Restart and stop are
+posted as `SystemCommand`s into that same mailbox rather than applied from outside. This is what
+closes the activation race and why application actors need no locks. Anything that reaches into an
+`ActorCell` from another thread is a bug.
 
-### Addressing and activation
+**3. Message types resolve through an explicit allow-list, never by name.** `MessageTypeRegistry`
+maps a registered alias to a type. There is no `Type.GetType` fallback, by design — that is what
+stops a peer choosing which type this process constructs, and it is what makes the cross-language
+clients work.
 
-Actor IDs are `"{TypeName}/{key}"` — `DispatchMessageAsync` splits on `/` and looks `TypeName` up in
-`_actorTypeRegistry`. `ActorOf<T>()` registers the type as a side effect; `SendMessageAsync` with a
-hand-built string does not, so a message to an unregistered type is **dropped with a `Console.WriteLine`
-and no exception**. Same for a malformed ID. Register types up front in `Main`.
+**4. An unregistered actor type throws.** `ActorTypeNotRegisteredException`, not a dropped message
+and a log line. A silently discarded message just becomes a hang somewhere else.
 
-The remote path re-enters the same `DispatchMessageAsync`: `NodeListener` hands it the whole
-`MessageEnvelope`, and `PushMessageAsync` detects that case and unwraps it rather than double-encoding.
-Local and remote delivery converge on one code path — keep it that way.
+**5. The ring hash must be process-independent.** FNV-1a plus the MurmurHash3 finalizer, pinned in a
+test against known vectors. `string.GetHashCode()` is randomised per process, so two nodes would
+compute different rings and disagree about ownership — a bug that only appears in a real cluster.
+The finalizer is not optional either: raw FNV-1a gave one node 48% of the keyspace, because ring
+positions are short strings sharing a prefix.
 
-### Adding an actor
+## Things that have already been got wrong
 
-Derive from `VirtualActor`, override `ReceiveAsync` (and optionally `ActivateAsync`/`DeactivateAsync`),
-put the message `record`s next to it as `Core/Actors/XxxActor.cs` does, then
-`system.RegisterActorType<XxxActor>()` in `Program.cs`. `ReceiveAsync` runs one message at a time per
-actor, so actor fields need no locking. Exceptions inside it are caught, logged and swallowed by the
-mailbox loop — the actor keeps running with whatever state it had.
+Each of these is now covered by a test. Do not reintroduce them.
 
-## Sharp edges
+- **In-memory stores must deep-copy.** Holding a reference to state the actor keeps mutating made a
+  snapshot taken at sequence 20 read back as the state at sequence 25, and recovery double-applied
+  everything between. `StateCloning` exists for this.
+- **A merged ring segment covering the whole circle has `Start == End`.** Read as a subtraction that
+  is zero width, which made a single-node cluster report owning 0% of the keyspace. See
+  `RingSegment.IsFullCircle`.
+- **Dispatch is counted where a message is accepted for local handling**, not at the send. Counting
+  forwarded messages made `InFlight` climb forever on any node that routes remotely.
+- **The first node of a cluster has no seeds**, so it needs `Cluster.Enabled` set explicitly
+  (`--cluster` on the CLI). Without it, clustering stays off and it never gossips, and peers mark a
+  healthy seed node unreachable.
+- **Razor string component parameters need `@`.** `Value="actor.Id"` passes the literal text;
+  `Value="@actor.Id"` passes the value. Non-string parameters are expressions either way, which is
+  why this only broke some of them.
 
-These are real defects in the current code, not style opinions. Know them before touching adjacent code.
+## Benchmarking
 
-- **Actors are never deactivated.** `_activeActors` only grows; nothing evicts on idle, so the
-  "virtual actor" lifecycle is half-built. `DeactivateAsync` runs only from `ActorSystem.Stop`.
-- **Activation races the mailbox.** `Initialize` starts the processing loop, and `ActivateAsync` is
-  launched fire-and-forget via `Task.Run` inside the `GetOrAdd` factory. A message can be handled
-  before state loading finishes. Anything that makes activation do real work (persistence) has to fix
-  this first.
-- **The benchmark measures enqueue, not processing.** `SendMessageAsync` awaits a write to an
-  unbounded channel and returns; `Task.WhenAll` completes while the mailbox is still draining. The
-  reported "msg/sec" is dispatch throughput. Any published figure needs a real drain barrier.
-- **`Ask<TResponse>` throws `NotImplementedException`.** Only `Tell` works. `context.Reply` sends to
-  `SenderActorId`, which must itself be a routable `Type/key` — the demo's `"RemoteClient"` sender is
-  not, so replies to network clients go nowhere.
-- **No TCP framing.** `NodeListener` treats each `ReadAsync` into a 4096-byte buffer as exactly one
-  JSON envelope. Payloads over 4 KB, or two messages coalesced into one segment, corrupt the stream.
-  `ActorNetClient` opens a fresh `TcpClient` per message and never reads a response. Adding a
-  length-prefix is the prerequisite for any serious networking work.
-- **No auth or type whitelist on the wire** (the `NodeListener` comment flags it). Deserialisation is
-  driven by an attacker-supplied `MessageType`.
-- **Nullable is enabled but the code is not clean** — 22 `CS86xx` warnings on a fresh build. Do not
-  "fix all warnings" as a side quest, but leave new code warning-free.
+The CLI bench reports dispatch throughput *and* drained throughput, and the drained figure is the
+real one. A tell completes when the message is accepted into a mailbox, so timing a loop of tells
+measures how fast the process fills a channel. Every measured path ends with an ask barrier per
+actor, which is ordered behind everything already queued.
 
-`Interfaces.cs` declares `IActorSystem.Start(int port)` while `ActorSystem` also has a parameterless
-`Start()` that uses the constructor's port; `Program.cs` uses the latter. Pick one when refactoring.
+Run-to-run variance is 3.2–3.6M msg/s and 160–180 B/msg on the reference machine — larger than most
+micro-optimisations. Measure several runs before believing an improvement.
 
-## Design assets
+Any figure quoted in the docs was measured on an Intel i7-8650U, .NET 10.0.11, Windows 11. If you
+change something that moves a number, re-measure rather than adjusting the prose.
 
-`.claude/skills/frontend-design/` is vendored into this project — `requirements.md` calls for it when
-building the Blazor management dashboard and the Avalonia samples.
+## Documentation
+
+`docs/en/` and `docs/id/` are parallel — 12 files each, cross-linked in both directions. **Both must
+be updated together**, and the README is bilingual in one file. A script-free way to check the links
+still resolve is worth running after any rename.
+
+`docs/images/` holds real screen captures of the running console and samples, not mockups. They were
+taken by driving the apps and capturing the window; if a UI change makes one stale, retake it rather
+than describing something the picture does not show.
+
+`Plan.md` carries the roadmap and an honest checklist of what is *not* built. Keep it honest — a box
+is ticked only when something automated proves the feature works.
+
+## Package ids
+
+Published as `ActorNet` (the library) and `ActorNet.Cli` (the dotnet tool). Unlike the sibling RLNet
+project, the bare id was unclaimed. The CLI's assembly is `ActorNet.Cli`, not `actornet`: NuGet ids
+are case-insensitive, and a project named `actornet` is ambiguous with the `ActorNet` package this
+repository also produces. `ToolCommandName` gives the command its short name.
+
+## Attribution
+
+Every source file carries `// Dibuat oleh Gravicode Studios, dipimpin oleh Kang Fadhil.` and
+`Directory.Build.props` puts the same credit into assembly metadata and NuGet fields. Keep both when
+adding files.

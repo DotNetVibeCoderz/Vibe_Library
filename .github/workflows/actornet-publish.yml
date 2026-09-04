@@ -1,0 +1,108 @@
+# Packs ActorNet and ActorNet.Cli and pushes them to nuget.org.
+#
+# Unlike the sibling RLNet project, the bare "ActorNet" id was unclaimed, so the library ships
+# under its own name. ActorNet.Cli is a separate package because it is a dotnet tool, installed
+# with "dotnet tool install -g ActorNet.Cli".
+#
+# Trigger with a tag: ActorNet-v0.1.0 (namespaced because Vibe_Library holds several projects and
+# a bare v* tag would be ambiguous). A manual run without "push" ticked is a dry run: it builds,
+# tests and packs, uploads the packages as artifacts, and touches nothing public.
+#
+# Requires the repository secret NUGET_API_KEY.
+name: ActorNet Publish
+
+on:
+  push:
+    tags:
+      - 'ActorNet-v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Package version (blank = the version in Directory.Build.props)'
+        required: false
+        type: string
+      push:
+        description: 'Push to nuget.org (leave off for a dry run)'
+        required: false
+        default: false
+        type: boolean
+
+concurrency:
+  group: actornet-publish
+  cancel-in-progress: false
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  TESTINGPLATFORM_TELEMETRY_OPTOUT: true
+
+defaults:
+  run:
+    working-directory: ActorNet
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # SourceLink embeds commit information, and a shallow clone leaves it with nothing to
+          # point the debugger at.
+          fetch-depth: 0
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: ActorNet/global.json
+
+      # A tag is the version. Deriving it here rather than trusting Directory.Build.props means a
+      # tag can never disagree with what actually gets published.
+      - name: Resolve version
+        id: version
+        shell: bash
+        run: |
+          if [ -n "${{ inputs.version }}" ]; then
+            version="${{ inputs.version }}"
+          elif [[ "$GITHUB_REF" == refs/tags/ActorNet-v* ]]; then
+            version="${GITHUB_REF#refs/tags/ActorNet-v}"
+          else
+            version=""
+          fi
+          echo "value=$version" >> "$GITHUB_OUTPUT"
+          echo "Publishing version: ${version:-<from Directory.Build.props>}"
+
+      - name: Build
+        run: dotnet build ActorNet.slnx -c Release
+
+      # The full suite. Shipping a package whose cluster cannot converge or whose supervisor stops
+      # restarting is the failure that matters here, and none of it is visible to a compile.
+      - name: Test
+        run: dotnet run --project tests/ActorNet.Tests -c Release --no-build
+
+      - name: Pack
+        run: |
+          if [ -n "${{ steps.version.outputs.value }}" ]; then
+            dotnet pack ActorNet.slnx -c Release --no-build -o artifacts \
+              -p:Version=${{ steps.version.outputs.value }}
+          else
+            dotnet pack ActorNet.slnx -c Release --no-build -o artifacts
+          fi
+
+      - name: List packages
+        run: ls -lh artifacts
+
+      - name: Upload packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: actornet-nupkg
+          path: ActorNet/artifacts/*
+
+      # Guarded twice over: a tag push publishes, and a manual run publishes only when "push" was
+      # explicitly ticked. Everything else stops at the artifact upload above.
+      - name: Push to nuget.org
+        if: startsWith(github.ref, 'refs/tags/ActorNet-v') || inputs.push
+        run: |
+          dotnet nuget push "artifacts/*.nupkg" \
+            --api-key "${{ secrets.NUGET_API_KEY }}" \
+            --source https://api.nuget.org/v3/index.json \
+            --skip-duplicate
