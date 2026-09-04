@@ -40,6 +40,7 @@ public sealed record ActorSystemSnapshot(
     long RemoteReceived,
     long AsksIssued,
     long AsksTimedOut,
+    long DeadLetters,
     int ActiveActors,
     int MailboxDepth,
     double AverageProcessingMicroseconds,

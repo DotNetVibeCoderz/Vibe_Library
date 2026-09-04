@@ -123,6 +123,7 @@ the runtime does on every send.
 ```bash
 curl localhost:5170/api/metrics
 curl localhost:5170/api/cluster
+curl localhost:5170/api/deadletters
 ```
 
 Read-only, so the same numbers are available to a scrape or a script without screen-scraping.
@@ -163,6 +164,69 @@ dotnet run -c Release --project benchmarks/ActorNet.Benchmarks -- --filter '*Rou
 
 BenchmarkDotNet, with memory diagnostics. `MessagingBenchmarks` covers the message path;
 `RoutingBenchmarks` covers hashing, placement and serialization.
+
+## Dead letters
+
+An undeliverable message is recorded rather than logged and dropped. Logging alone makes it
+invisible to everything except a human reading logs.
+
+```csharp
+foreach (var letter in system.DeadLetters.Recent(20))
+    Console.WriteLine($"{letter.Target} {letter.MessageType}: {letter.Reason} - {letter.Detail}");
+
+system.DeadLetters.LetterRecorded += letter => alerting.Raise(letter);
+```
+
+| Reason | |
+| --- | --- |
+| `UnregisteredActorType` | The address named a type this node never registered |
+| `UndeliverableToActor` | The actor kept deactivating between lookup and delivery |
+| `NodeUnreachable` | The node owning the key could not be reached |
+| `UnknownMessageType` | A frame named an alias the allow-list refuses |
+| `UnroutableFrame` | A malformed address, or a frame with no payload |
+| `Shutdown` | The node was stopping |
+
+The message object is kept where it was materialized, so a letter can be re-driven once whatever was
+broken is fixed. It is deliberately **absent** for a frame refused before deserialization -
+materializing a payload the allow-list just refused would undo the refusal.
+
+The buffer is bounded and drops the oldest; `Count` is still the exact lifetime total. A node that is
+failing to deliver is usually failing a lot, and an unbounded record of that is a second outage on
+top of the first. Swap it with `options.DeadLetters`.
+
+## Exporting to OpenTelemetry
+
+The console reads the runtime's own counters, which is fine for one node and useless for anything
+that aggregates. The standard .NET primitives are exposed for that:
+
+```csharp
+builder.Services.AddOpenTelemetry()
+    .WithTracing(t => t.AddSource(ActorNetDiagnostics.ActivitySourceName))
+    .WithMetrics(m => m.AddMeter(ActorNetDiagnostics.MeterName));
+```
+
+ActorNet takes no dependency on OpenTelemetry to provide these - they are an `ActivitySource` and a
+`Meter`, so any collector picks them up.
+
+| Instrument | |
+| --- | --- |
+| `actornet.messages.processed` | Messages handled, by actor type |
+| `actornet.messages.failed` | Handlers that threw, by actor type and exception |
+| `actornet.actors.activated` / `.deactivated` / `.restarted` | Lifecycle, deactivations tagged with the reason |
+| `actornet.deadletters` | Undelivered, tagged with the reason |
+| `actornet.message.duration` | Time in the handler |
+| `actornet.message.queue_time` | Time waiting in a mailbox |
+
+Of the two histograms, **queue time is the one to watch**. Handler time says how expensive the work
+is; queue time says whether the node is keeping up with it.
+
+Each handled message also produces a span, `"<ActorType> receive"`, of kind `Consumer` - so a trace
+viewer draws it as the receiving half of a send. A handler that throws marks its span as an error and
+attaches the exception.
+
+None of this costs anything when nothing is listening: `StartActivity` returns null without a
+listener, and an instrument with no collector does not record. That is what makes tracing affordable
+on the per-message path.
 
 ## Next
 

@@ -100,6 +100,15 @@ public sealed class ActorSystemOptions
     /// </summary>
     public IStateStore StateStore { get; set; } = new InMemoryStateStore();
 
+    /// <summary>
+    /// Where undeliverable messages are recorded.
+    /// </summary>
+    /// <remarks>
+    /// Bounded and dropping the oldest by default. A node that is failing to deliver usually fails
+    /// a lot, and an unbounded record of that is a second outage on top of the first.
+    /// </remarks>
+    public Runtime.IDeadLetterQueue DeadLetters { get; set; } = new Runtime.DeadLetterQueue();
+
     /// <summary>Where <see cref="EventSourcedActor{TState}"/> appends events.</summary>
     public IEventJournal EventJournal { get; set; } = new InMemoryEventJournal();
 

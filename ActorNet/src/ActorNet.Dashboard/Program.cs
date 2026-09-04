@@ -60,6 +60,12 @@ app.MapRazorComponents<App>().AddInteractiveServerRenderMode();
 // A small read-only API alongside the UI, so the same numbers are available to a scrape or a
 // script without screen-scraping the console.
 app.MapGet("/api/metrics", (ActorSystem system) => Results.Ok(system.Metrics.Snapshot()));
+app.MapGet("/api/deadletters", (ActorSystem system) => Results.Ok(new
+{
+    Total = system.DeadLetters.Count,
+    Recent = system.DeadLetters.Recent(50),
+}));
+
 app.MapGet("/api/cluster", (ActorSystem system) => Results.Ok(new
 {
     system.NodeId,

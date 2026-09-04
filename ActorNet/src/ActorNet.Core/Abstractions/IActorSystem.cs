@@ -51,6 +51,16 @@ public interface IActorSystem : IAsyncDisposable
     /// <summary>Live counters for the CLI and the dashboard.</summary>
     IMetricsCollector Metrics { get; }
 
+    /// <summary>
+    /// Messages that could not be delivered.
+    /// </summary>
+    /// <remarks>
+    /// An undeliverable message used to be logged and dropped, which makes it invisible to anything
+    /// but a human reading logs. Here it is a record that can be counted, inspected, and re-driven
+    /// once whatever was broken is fixed.
+    /// </remarks>
+    Runtime.IDeadLetterQueue DeadLetters { get; }
+
     /// <summary>The cluster view. Present even in single-node mode, where it holds one member.</summary>
     IClusterView Cluster { get; }
 

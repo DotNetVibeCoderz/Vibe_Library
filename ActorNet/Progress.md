@@ -23,7 +23,7 @@ works and something automated proves it** — not when the code exists.
 - [x] `ReceiveActor` for type-dispatched handlers
 - [x] Constructor injection through `IServiceProvider`
 - [x] Synchronous fast path for the common send
-- [ ] Dead-letter queue for undeliverable messages
+- [x] Dead-letter queue for undeliverable messages, bounded, with a subscription
 - [ ] Message priority or a second mailbox lane
 
 ## Supervision
@@ -93,6 +93,14 @@ works and something automated proves it** — not when the code exists.
 - [x] Producer failures propagate through a buffer
 - [ ] Merge, split, and fan-in operators
 - [ ] Durable stream positions across a restart
+
+## Diagnostics
+
+- [x] Dead letters recorded at every drop point, with a reason and the message where it exists
+- [x] `ActivitySource` spans per handled message, marked as errors when the handler throws
+- [x] `Meter` counters and histograms - throughput, failures, lifecycle, handler and queue time
+- [x] Dead letters in the console and on the read-only API
+- [ ] Trace context propagated across a node hop
 
 ## Tooling and surfaces
 

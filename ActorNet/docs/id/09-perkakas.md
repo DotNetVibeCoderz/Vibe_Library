@@ -126,6 +126,7 @@ yang sama dengan yang dilakukan runtime pada setiap pengiriman.
 ```bash
 curl localhost:5170/api/metrics
 curl localhost:5170/api/cluster
+curl localhost:5170/api/deadletters
 ```
 
 Hanya-baca, supaya angka yang sama tersedia untuk scrape atau skrip tanpa perlu mengeruk layar.
@@ -167,6 +168,70 @@ dotnet run -c Release --project benchmarks/ActorNet.Benchmarks -- --filter '*Rou
 
 BenchmarkDotNet, dengan diagnostik memori. `MessagingBenchmarks` mencakup jalur pesan;
 `RoutingBenchmarks` mencakup hashing, penempatan, dan serialisasi.
+
+## Dead letter
+
+Pesan yang tidak bisa dikirim dicatat, bukan sekadar di-log lalu dibuang. Sekadar mencatatnya di log
+membuatnya tak terlihat oleh apa pun kecuali manusia yang membaca log.
+
+```csharp
+foreach (var letter in system.DeadLetters.Recent(20))
+    Console.WriteLine($"{letter.Target} {letter.MessageType}: {letter.Reason} - {letter.Detail}");
+
+system.DeadLetters.LetterRecorded += letter => alerting.Raise(letter);
+```
+
+| Alasan | |
+| --- | --- |
+| `UnregisteredActorType` | Alamatnya menyebut tipe yang tak pernah didaftarkan node ini |
+| `UndeliverableToActor` | Actor-nya terus dinonaktifkan di antara pencarian dan pengiriman |
+| `NodeUnreachable` | Node pemilik key tidak terjangkau |
+| `UnknownMessageType` | Sebuah frame menyebut alias yang ditolak allow-list |
+| `UnroutableFrame` | Alamat salah bentuk, atau frame tanpa payload |
+| `Shutdown` | Node sedang berhenti |
+
+Objek pesannya disimpan bila sudah sempat dimaterialisasi, sehingga sebuah letter bisa dikirim ulang
+setelah penyebabnya diperbaiki. Ia sengaja **tidak ada** untuk frame yang ditolak sebelum
+deserialisasi - mematerialisasi payload yang baru saja ditolak allow-list justru membatalkan
+penolakan itu.
+
+Buffer-nya berbatas dan membuang yang terlama; `Count` tetap total seumur hidup yang persis. Node yang
+gagal mengirim biasanya gagal banyak, dan catatan tak berbatas atas itu adalah gangguan kedua di atas
+yang pertama. Tukar lewat `options.DeadLetters`.
+
+## Mengekspor ke OpenTelemetry
+
+Konsol membaca penghitung milik runtime sendiri, yang cukup untuk satu node dan tidak berguna untuk
+apa pun yang mengagregasi. Primitif standar .NET disediakan untuk itu:
+
+```csharp
+builder.Services.AddOpenTelemetry()
+    .WithTracing(t => t.AddSource(ActorNetDiagnostics.ActivitySourceName))
+    .WithMetrics(m => m.AddMeter(ActorNetDiagnostics.MeterName));
+```
+
+ActorNet tidak mengambil dependensi ke OpenTelemetry untuk menyediakannya - keduanya hanya sebuah
+`ActivitySource` dan sebuah `Meter`, jadi collector mana pun bisa mengambilnya.
+
+| Instrumen | |
+| --- | --- |
+| `actornet.messages.processed` | Pesan yang ditangani, per tipe actor |
+| `actornet.messages.failed` | Handler yang melempar exception, per tipe actor dan exception |
+| `actornet.actors.activated` / `.deactivated` / `.restarted` | Siklus hidup, deaktivasi ditandai alasannya |
+| `actornet.deadletters` | Yang tak terkirim, ditandai alasannya |
+| `actornet.message.duration` | Waktu di dalam handler |
+| `actornet.message.queue_time` | Waktu menunggu di mailbox |
+
+Dari kedua histogram itu, **waktu antrean yang perlu diperhatikan**. Waktu handler menyatakan seberapa
+mahal pekerjaannya; waktu antrean menyatakan apakah node-nya sanggup mengejar.
+
+Setiap pesan yang ditangani juga menghasilkan span `"<TipeActor> receive"` berjenis `Consumer` -
+sehingga penampil trace menggambarnya sebagai paruh penerima dari sebuah pengiriman. Handler yang
+melempar exception menandai span-nya sebagai error dan melampirkan exception-nya.
+
+Semua ini tidak berongkos apa pun saat tidak ada yang mendengarkan: `StartActivity` mengembalikan null
+tanpa listener, dan instrumen tanpa collector tidak merekam. Itulah yang membuat tracing terjangkau di
+jalur per-pesan.
 
 ## Selanjutnya
 

@@ -216,6 +216,10 @@ internal sealed class ActorCell
         try
         {
             await _actor.OnActivateAsync(_context, token).ConfigureAwait(false);
+
+            ActorNetDiagnostics.Activations.Add(1,
+                new KeyValuePair<string, object?>("actor.type", _registration.TypeName));
+
             _logger.LogDebug("Activated {ActorId}.", Id);
             return true;
         }
@@ -236,11 +240,26 @@ internal sealed class ActorCell
         var queueLatency = Stopwatch.GetTimestamp() - envelope.EnqueuedTimestamp;
         var started = Stopwatch.GetTimestamp();
 
+        var messageType = envelope.Message.GetType().Name;
+
+        // Null unless something is listening, which is what makes a span affordable per message.
+        using var activity = ActorNetDiagnostics.StartReceive(Id, messageType);
+
         _context.BeginMessage(envelope);
         try
         {
             await _actor.ReceiveAsync(_context, envelope.Message, token).ConfigureAwait(false);
-            _system.MetricsCollector.RecordProcessed(_metrics!, queueLatency, Stopwatch.GetTimestamp() - started);
+
+            var elapsed = Stopwatch.GetTimestamp() - started;
+            _system.MetricsCollector.RecordProcessed(_metrics!, queueLatency, elapsed);
+
+            ActorNetDiagnostics.MessagesProcessed.Add(1,
+                new KeyValuePair<string, object?>("actor.type", _registration.TypeName));
+            ActorNetDiagnostics.ProcessingDuration.Record(Stopwatch.GetElapsedTime(started).TotalMilliseconds,
+                new KeyValuePair<string, object?>("actor.type", _registration.TypeName));
+            ActorNetDiagnostics.QueueLatency.Record(
+                Stopwatch.GetElapsedTime(envelope.EnqueuedTimestamp, started).TotalMilliseconds,
+                new KeyValuePair<string, object?>("actor.type", _registration.TypeName));
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested)
         {
@@ -249,7 +268,14 @@ internal sealed class ActorCell
         catch (Exception ex)
         {
             _system.MetricsCollector.RecordFailed(_metrics);
-            _logger.LogError(ex, "{ActorId} failed handling {MessageType}.", Id, envelope.Message.GetType().Name);
+
+            ActorNetDiagnostics.MessagesFailed.Add(1,
+                new KeyValuePair<string, object?>("actor.type", _registration.TypeName),
+                new KeyValuePair<string, object?>("exception.type", ex.GetType().Name));
+            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+            activity?.AddException(ex);
+
+            _logger.LogError(ex, "{ActorId} failed handling {MessageType}.", Id, messageType);
 
             // An ask that will never be answered is worse than one answered with the failure: the
             // caller would sit on a timeout it has no way to diagnose.
@@ -321,6 +347,10 @@ internal sealed class ActorCell
         Interlocked.Increment(ref _restartCount);
         _system.MetricsCollector.RecordRestart(_metrics);
 
+        ActorNetDiagnostics.Restarts.Add(1,
+            new KeyValuePair<string, object?>("actor.type", _registration.TypeName),
+            new KeyValuePair<string, object?>("exception.type", cause.GetType().Name));
+
         try
         {
             _actor = _system.CreateInstance(_registration.ClrType);
@@ -359,6 +389,10 @@ internal sealed class ActorCell
         _system.RemoveCell(Id, this);
 
         if (!Parent.IsEmpty) _system.DetachChild(Parent, Id);
+
+        ActorNetDiagnostics.Deactivations.Add(1,
+            new KeyValuePair<string, object?>("actor.type", _registration.TypeName),
+            new KeyValuePair<string, object?>("reason", reason.ToString()));
 
         Interlocked.Exchange(ref _state, StateStopped);
         _cts.Dispose();

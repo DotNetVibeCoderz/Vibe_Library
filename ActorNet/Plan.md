@@ -32,8 +32,6 @@ The things that stand between this and a production pilot.
 | Theme | Why it matters |
 | --- | --- |
 | Backpressure that reaches the sender | A bounded mailbox blocks the local sender today, but a remote sender only sees a full transport queue. |
-| Structured diagnostics (`ActivitySource`, `Meter`) | The console reads the runtime's own counters; nothing exports to OpenTelemetry yet. |
-| Dead letters | An undeliverable message is logged and dropped. It should be observable and re-drivable. |
 | Ask over a bounded transport queue | A slow peer currently makes an ask time out with no way to distinguish it from a slow actor. |
 
 ## 0.3 — clustering that survives a bad day

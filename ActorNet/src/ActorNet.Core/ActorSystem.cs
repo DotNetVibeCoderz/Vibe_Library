@@ -63,6 +63,9 @@ public sealed class ActorSystem : IActorSystem
     public IMetricsCollector Metrics => MetricsCollector;
 
     /// <inheritdoc />
+    public IDeadLetterQueue DeadLetters => Options.DeadLetters;
+
+    /// <inheritdoc />
     public IClusterView Cluster => _cluster;
 
     /// <inheritdoc />
@@ -312,6 +315,9 @@ public sealed class ActorSystem : IActorSystem
             RemoveCell(envelope.Target, cell);
         }
 
+        RecordDeadLetter(envelope.Target, envelope.Sender, envelope.Message, envelope.Message.GetType().Name,
+            DeadLetterReason.UndeliverableToActor, "The actor kept deactivating between lookup and delivery.");
+
         throw new ActorNetException($"Could not deliver to '{envelope.Target}': the actor kept deactivating between lookup and delivery.");
     }
 
@@ -319,9 +325,14 @@ public sealed class ActorSystem : IActorSystem
     {
         // Resolved before the Lazy so that an unregistered type throws at the call site instead of
         // being cached inside a Lazy that would then keep throwing after the type is registered.
-        var registration = _registrations.TryGetValue(id.Type, out var found)
-            ? found
-            : throw new ActorTypeNotRegisteredException(id.Type);
+        if (!_registrations.TryGetValue(id.Type, out var registration))
+        {
+            // Recorded as well as thrown. The caller of a local send learns immediately, but an
+            // inbound remote frame has no caller to tell - and both end up here.
+            RecordDeadLetter(id, ActorId.None, null, id.Type, DeadLetterReason.UnregisteredActorType,
+                $"Actor type '{id.Type}' is not registered on node {NodeId}.");
+            throw new ActorTypeNotRegisteredException(id.Type);
+        }
 
         while (true)
         {
@@ -565,17 +576,31 @@ public sealed class ActorSystem : IActorSystem
             {
                 if (!ActorId.TryParse(frame.Target, out var target))
                 {
-                    _logger.LogWarning("Dropping an inbound frame with an unusable target '{Target}'.", frame.Target);
+                    RecordDeadLetter(ActorId.None, ActorId.None, null, frame.MessageAlias ?? "<unknown>",
+                        DeadLetterReason.UnroutableFrame, $"Target '{frame.Target}' is not a routable actor address.");
                     return;
                 }
 
                 if (frame.MessageAlias is not { } alias || frame.Payload is not { } payload)
                 {
-                    _logger.LogWarning("Dropping an inbound frame for {Target} with no payload.", target);
+                    RecordDeadLetter(target, ActorId.None, null, frame.MessageAlias ?? "<unknown>",
+                        DeadLetterReason.UnroutableFrame, "The frame carried no message alias or no payload.");
                     return;
                 }
 
-                var message = Serializer.Deserialize(alias, payload);
+                object message;
+                try
+                {
+                    message = Serializer.Deserialize(alias, payload);
+                }
+                catch (UnknownMessageTypeException ex)
+                {
+                    // The allow-list did its job. The body is deliberately not kept: materializing
+                    // a payload this node just refused to construct would undo the refusal.
+                    RecordDeadLetter(target, ActorId.None, null, alias, DeadLetterReason.UnknownMessageType, ex.Message);
+                    return;
+                }
+
                 ActorId.TryParse(frame.Sender, out var sender);
 
                 // Delivered locally even if the ring has since moved this key elsewhere. The
@@ -587,6 +612,17 @@ public sealed class ActorSystem : IActorSystem
                 return;
             }
         }
+    }
+
+    /// <summary>Records an undeliverable message and logs it once.</summary>
+    internal void RecordDeadLetter(ActorId target, ActorId sender, object? message, string messageType, DeadLetterReason reason, string detail)
+    {
+        Options.DeadLetters.Record(new DeadLetter(target, sender, message, messageType, reason, detail, DateTimeOffset.UtcNow));
+        MetricsCollector.RecordDeadLetter();
+        ActorNetDiagnostics.DeadLetters.Add(1,
+            new KeyValuePair<string, object?>("reason", reason.ToString()),
+            new KeyValuePair<string, object?>("message.type", messageType));
+        _logger.LogWarning("Dead letter for {Target} ({MessageType}): {Reason} - {Detail}", target, messageType, reason, detail);
     }
 
     private async Task SweepLoopAsync(CancellationToken cancellationToken)

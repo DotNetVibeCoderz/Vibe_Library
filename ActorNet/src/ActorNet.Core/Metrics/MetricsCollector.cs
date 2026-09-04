@@ -33,6 +33,7 @@ public sealed class MetricsCollector : IMetricsCollector
     private long _remoteReceived;
     private long _asksIssued;
     private long _asksTimedOut;
+    private long _deadLetters;
     private long _processingTicks;
     private long _queueLatencyTicks;
 
@@ -81,6 +82,8 @@ public sealed class MetricsCollector : IMetricsCollector
     public void RecordAskIssued() => Interlocked.Increment(ref _asksIssued);
     public void RecordAskTimedOut() => Interlocked.Increment(ref _asksTimedOut);
 
+    public void RecordDeadLetter() => Interlocked.Increment(ref _deadLetters);
+
     /// <inheritdoc />
     public ActorSystemSnapshot Snapshot(bool includeActors = true)
     {
@@ -109,6 +112,7 @@ public sealed class MetricsCollector : IMetricsCollector
             RemoteReceived: Interlocked.Read(ref _remoteReceived),
             AsksIssued: Interlocked.Read(ref _asksIssued),
             AsksTimedOut: Interlocked.Read(ref _asksTimedOut),
+            DeadLetters: Interlocked.Read(ref _deadLetters),
             ActiveActors: _actors.Count,
             MailboxDepth: depth,
             AverageProcessingMicroseconds: processed == 0 ? 0 : processingTicks * TicksToMicroseconds / processed,

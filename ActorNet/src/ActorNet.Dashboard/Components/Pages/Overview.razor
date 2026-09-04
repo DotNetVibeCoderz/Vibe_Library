@@ -44,6 +44,10 @@
             <div class="vital__label">Restarts</div>
             <div class="vital__value">@N(_snapshot.Restarts)</div>
         </div>
+        <div class="vital @(_snapshot.DeadLetters > 0 ? "vital--rose" : string.Empty)">
+            <div class="vital__label">Dead letters</div>
+            <div class="vital__value">@N(_snapshot.DeadLetters)</div>
+        </div>
     </section>
 
     <div class="split">
@@ -125,11 +129,41 @@
                         <tr><td>Asks timed out</td><td class="num">@N(_snapshot.AsksTimedOut)</td></tr>
                         <tr><td>Frames sent to other nodes</td><td class="num">@N(_snapshot.RemoteSent)</td></tr>
                         <tr><td>Frames received</td><td class="num">@N(_snapshot.RemoteReceived)</td></tr>
+                        <tr><td>Undelivered messages</td><td class="num">@N(_snapshot.DeadLetters)</td></tr>
                     </tbody>
                 </table>
             </div>
         </section>
     </div>
+
+    @if (_deadLetters.Count > 0)
+    {
+        <section class="panel" style="margin-top: 20px">
+            <header class="panel__head">
+                <span class="panel__title">Dead letters</span>
+                <span class="panel__note">@N(_snapshot.DeadLetters) since start, newest first</span>
+            </header>
+            <div class="panel__body panel__body--flush">
+                <table class="table">
+                    <thead>
+                        <tr><th>When</th><th>Target</th><th>Message</th><th>Reason</th><th>Detail</th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var letter in _deadLetters)
+                        {
+                            <tr>
+                                <td class="num" style="color: var(--faint)">@letter.At.ToLocalTime().ToString("HH:mm:ss", CultureInfo.InvariantCulture)</td>
+                                <td>@(letter.Target.IsEmpty ? "-" : letter.Target.ToString())</td>
+                                <td class="address" style="color: var(--muted)">@letter.MessageType</td>
+                                <td style="color: var(--rose)">@letter.Reason</td>
+                                <td style="color: var(--faint)">@letter.Detail</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    }
 
     <p class="note">
         <strong>This page shows one node.</strong> Counters and the actor list are local to
@@ -146,15 +180,18 @@
     private static readonly TimeSpan RefreshInterval = TimeSpan.FromMilliseconds(750);
 
     private ActorSystemSnapshot _snapshot = default!;
+    private IReadOnlyList<ActorNet.Runtime.DeadLetter> _deadLetters = [];
     private Timer? _timer;
 
     protected override void OnInitialized()
     {
         _snapshot = System.Metrics.Snapshot();
+        _deadLetters = System.DeadLetters.Recent(15);
 
         _timer = new Timer(_ => _ = InvokeAsync(() =>
         {
             _snapshot = System.Metrics.Snapshot();
+            _deadLetters = System.DeadLetters.Recent(15);
             StateHasChanged();
         }), null, RefreshInterval, RefreshInterval);
     }
