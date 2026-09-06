@@ -13,7 +13,7 @@ import json
 import struct
 import uuid
 from dataclasses import dataclass
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Sequence
 
 HEADER_BYTES = 4
 
@@ -47,11 +47,12 @@ class Reply:
 
 
 class ActorNetClient:
-    """A connection to one ActorNet node.
+    """A connection to an ActorNet cluster, through whichever node answers.
 
     One persistent socket, not one per message. An ask needs somewhere for the reply to arrive,
     and the node addresses this client by the ``client_id`` stamped on every frame. Any node in a
-    cluster is a valid entry point: it forwards to whichever node owns the target actor.
+    cluster is a valid entry point: it forwards to whichever node owns the target actor - which is
+    also why a client given several endpoints can move between them without anything else changing.
 
     Use as an async context manager::
 
@@ -59,6 +60,11 @@ class ActorNetClient:
             await client.tell("BankAccountActor/alice", "bank.deposit", {"Amount": 100})
             reply = await client.ask("BankAccountActor/alice", "bank.get-statement", {})
             print(reply.payload["Balance"])
+
+    Give it more than one node and it survives losing the one it dialled::
+
+        async with ActorNetClient(endpoints=["10.0.1.5:9000", "10.0.1.6:9000"]) as client:
+            ...
     """
 
     def __init__(
@@ -67,17 +73,35 @@ class ActorNetClient:
         port: int = 9000,
         client_id: Optional[str] = None,
         ask_timeout: float = 10.0,
+        endpoints: Optional[Sequence[str]] = None,
     ) -> None:
-        self.host = host
-        self.port = port
+        configured = list(endpoints) if endpoints else [f"{host}:{port}"]
+        self.endpoints = [self._parse(endpoint) for endpoint in configured]
+
+        #: The endpoint currently in use as ``host:port``, or ``None`` when not connected.
+        self.connected_to: Optional[str] = None
+
         self.client_id = client_id or f"py-{uuid.uuid4().hex[:12]}"
         self.ask_timeout = ask_timeout
+
+        # Sticky: it only moves when an endpoint fails. Rotating on every connect would reconnect
+        # somewhere new after every blip, which is churn rather than balance - any node forwards by
+        # the ring, so moving gains nothing and costs a connection.
+        self._cursor = 0
 
         self._reader: Optional[asyncio.StreamReader] = None
         self._writer: Optional[asyncio.StreamWriter] = None
         self._pending: Dict[str, asyncio.Future] = {}
         self._read_task: Optional[asyncio.Task] = None
         self._write_lock = asyncio.Lock()
+
+    @staticmethod
+    def _parse(endpoint: str) -> tuple:
+        """Splits ``host:port``, refusing anything else here rather than at the first call."""
+        host, separator, port = endpoint.rpartition(":")
+        if not separator or not port.isdigit() or not host:
+            raise ActorNetError(f"Endpoint {endpoint!r} is not in 'host:port' form.")
+        return host, int(port)
 
     async def __aenter__(self) -> "ActorNetClient":
         await self.connect()
@@ -91,12 +115,37 @@ class ActorNetClient:
         return self._writer is not None and not self._writer.is_closing()
 
     async def connect(self) -> None:
-        """Opens the connection. Called automatically by tell and ask."""
+        """Opens a connection to whichever endpoint answers.
+
+        Called automatically by tell and ask. Endpoints are tried in rotation from the last one
+        that worked, so an ordinary reconnect goes back where it was and only a node that is
+        really gone costs a move.
+        """
         if self.is_connected:
             return
 
-        self._reader, self._writer = await asyncio.open_connection(self.host, self.port)
-        self._read_task = asyncio.create_task(self._read_loop())
+        last: Optional[BaseException] = None
+
+        for attempt in range(len(self.endpoints)):
+            index = (self._cursor + attempt) % len(self.endpoints)
+            host, port = self.endpoints[index]
+
+            try:
+                self._reader, self._writer = await asyncio.open_connection(host, port)
+            except OSError as error:
+                last = error
+                continue
+
+            self._read_task = asyncio.create_task(self._read_loop())
+            self._cursor = index
+            self.connected_to = f"{host}:{port}"
+            return
+
+        self.connected_to = None
+        tried = ", ".join(f"{host}:{port}" for host, port in self.endpoints)
+        raise ActorNetError(
+            f"None of the {len(self.endpoints)} configured node(s) accepted a connection: {tried}."
+        ) from last
 
     async def tell(self, target: str, alias: str, payload: Any) -> None:
         """Fire-and-forget.

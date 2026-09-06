@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"strings"
 	"sync"
 	"time"
 
@@ -67,24 +68,32 @@ func (r Reply) Into(v any) error {
 	return json.Unmarshal(r.Payload, v)
 }
 
-// Client is a connection to one ActorNet node.
+// Client is a connection to an ActorNet cluster, through whichever node answers.
 //
 // One persistent connection, not one per message: an Ask needs somewhere for the reply to arrive,
 // and the node addresses this client by the ClientID stamped on every frame. Any node in a cluster
-// is a valid entry point - it forwards to whichever node owns the target actor.
+// is a valid entry point - it forwards to whichever node owns the target actor - which is also why
+// a client given several addresses can move between them without anything else changing.
 //
 // A Client is safe for concurrent use.
 type Client struct {
-	addr        string
-	clientID    string
-	askTimeout  time.Duration
-	conn        net.Conn
-	writeMu     sync.Mutex
-	connectMu   sync.Mutex
-	pendingMu   sync.Mutex
-	pending     map[string]chan frame
-	closeOnce   sync.Once
-	closed      chan struct{}
+	addrs      []string
+	clientID   string
+	askTimeout time.Duration
+	conn       net.Conn
+
+	// cursor is which address to try first. Sticky: it only moves when one fails. Rotating on
+	// every connect would reconnect somewhere new after every blip, which is churn rather than
+	// balance - any node forwards by the ring, so moving gains nothing and costs a connection.
+	cursor      int
+	connectedTo string
+
+	writeMu   sync.Mutex
+	connectMu sync.Mutex
+	pendingMu sync.Mutex
+	pending   map[string]chan frame
+	closeOnce sync.Once
+	closed    chan struct{}
 }
 
 // Option configures a Client.
@@ -96,10 +105,23 @@ func WithClientID(id string) Option { return func(c *Client) { c.clientID = id }
 // WithAskTimeout sets the default timeout for Ask.
 func WithAskTimeout(d time.Duration) Option { return func(c *Client) { c.askTimeout = d } }
 
-// New creates a client. The connection is opened on first use.
+// New creates a client for one node. The connection is opened on first use.
 func New(addr string, options ...Option) *Client {
+	return NewCluster([]string{addr}, options...)
+}
+
+// NewCluster creates a client that will use whichever of these nodes answers.
+//
+// A client bound to one node goes down with it, which is a strange property for a client of a
+// cluster. Addresses are tried in rotation from the last one that worked, so an ordinary reconnect
+// goes back where it was and only a node that is really gone costs a move.
+//
+// Anything in flight when a connection drops still fails: delivery is at-most-once, and re-sending
+// a request whose reply was lost would quietly make it at-least-once. The caller knows whether its
+// operation is safe to repeat and this does not.
+func NewCluster(addrs []string, options ...Option) *Client {
 	c := &Client{
-		addr:       addr,
+		addrs:      append([]string(nil), addrs...),
 		clientID:   "go-" + randomHex(6),
 		askTimeout: 10 * time.Second,
 		pending:    make(map[string]chan frame),
@@ -113,10 +135,17 @@ func New(addr string, options ...Option) *Client {
 	return c
 }
 
+// ConnectedTo reports the address currently in use, or "" when the client is not connected.
+func (c *Client) ConnectedTo() string {
+	c.connectMu.Lock()
+	defer c.connectMu.Unlock()
+	return c.connectedTo
+}
+
 // ClientID returns how this client identifies itself to the node.
 func (c *Client) ClientID() string { return c.clientID }
 
-// Connect opens the connection. Tell and Ask call it automatically.
+// Connect opens a connection to whichever address answers. Tell and Ask call it automatically.
 func (c *Client) Connect(ctx context.Context) error {
 	c.connectMu.Lock()
 	defer c.connectMu.Unlock()
@@ -125,19 +154,52 @@ func (c *Client) Connect(ctx context.Context) error {
 		return nil
 	}
 
+	if len(c.addrs) == 0 {
+		return errors.New("actornet: the client has no addresses")
+	}
+
 	var dialer net.Dialer
-	conn, err := dialer.DialContext(ctx, "tcp", c.addr)
-	if err != nil {
-		return fmt.Errorf("actornet: dialling %s: %w", c.addr, err)
+	var last error
+
+	for attempt := 0; attempt < len(c.addrs); attempt++ {
+		index := (c.cursor + attempt) % len(c.addrs)
+		addr := c.addrs[index]
+
+		conn, err := dialer.DialContext(ctx, "tcp", addr)
+		if err != nil {
+			last = err
+			continue
+		}
+
+		if tcp, ok := conn.(*net.TCPConn); ok {
+			_ = tcp.SetNoDelay(true)
+		}
+
+		c.conn = conn
+		c.cursor = index
+		c.connectedTo = addr
+		go c.readLoop(conn)
+		return nil
 	}
 
-	if tcp, ok := conn.(*net.TCPConn); ok {
-		_ = tcp.SetNoDelay(true)
-	}
+	c.connectedTo = ""
+	return fmt.Errorf("actornet: none of the %d configured node(s) accepted a connection (%s): %w",
+		len(c.addrs), strings.Join(c.addrs, ", "), last)
+}
 
-	c.conn = conn
-	go c.readLoop(conn)
-	return nil
+// dropConnection forgets a connection that has ended, so the next Connect dials again.
+//
+// Without this the client kept a dead net.Conn and every later call wrote into it: Connect returns
+// early whenever conn is non-nil, so a node going away would take the client with it even though
+// there were other addresses to try.
+func (c *Client) dropConnection(conn net.Conn) {
+	c.connectMu.Lock()
+	defer c.connectMu.Unlock()
+
+	if c.conn == conn {
+		c.conn = nil
+		c.connectedTo = ""
+	}
 }
 
 // Tell sends a message and returns once the frame is written - not once the actor has handled it.
@@ -271,6 +333,8 @@ func (c *Client) write(f frame) error {
 }
 
 func (c *Client) readLoop(conn net.Conn) {
+	defer c.dropConnection(conn)
+
 	header := make([]byte, headerBytes)
 
 	for {

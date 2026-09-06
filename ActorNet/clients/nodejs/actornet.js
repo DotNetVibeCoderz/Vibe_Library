@@ -27,23 +27,37 @@ class ActorNetError extends Error {}
 class AskTimeoutError extends ActorNetError {}
 
 /**
- * A connection to one ActorNet node.
+ * A connection to an ActorNet cluster, through whichever node answers.
  *
  * One persistent socket, not one per message: asks need somewhere for the reply to arrive, and
  * the node addresses this client by the `clientId` stamped on every frame. Any node in a cluster
- * is a valid entry point - it forwards to whichever node owns the target actor.
+ * is a valid entry point - it forwards to whichever node owns the target actor - which is also why
+ * a client given several endpoints can move between them without anything else changing.
  */
 class ActorNetClient {
   /**
    * @param {object} options
-   * @param {string} [options.host='127.0.0.1']
-   * @param {number} [options.port=9000]
+   * @param {string} [options.host='127.0.0.1'] Ignored when `endpoints` is given.
+   * @param {number} [options.port=9000] Ignored when `endpoints` is given.
+   * @param {string[]} [options.endpoints] Nodes as "host:port". Any of them will do.
    * @param {string} [options.clientId] Unique among this node's clients. Generated if omitted.
    * @param {number} [options.askTimeoutMs=10000]
    */
-  constructor({ host = '127.0.0.1', port = 9000, clientId, askTimeoutMs = 10000 } = {}) {
-    this.host = host;
-    this.port = port;
+  constructor({ host = '127.0.0.1', port = 9000, endpoints, clientId, askTimeoutMs = 10000 } = {}) {
+    const configured = endpoints && endpoints.length ? endpoints : [`${host}:${port}`];
+    this.endpoints = configured.map((endpoint) => {
+      const colon = endpoint.lastIndexOf(':');
+      const parsed = Number.parseInt(endpoint.slice(colon + 1), 10);
+      if (colon <= 0 || Number.isNaN(parsed)) {
+        // Refused here rather than at the first call, which could be hours later.
+        throw new ActorNetError(`Endpoint '${endpoint}' is not in 'host:port' form.`);
+      }
+      return { host: endpoint.slice(0, colon), port: parsed };
+    });
+
+    /** The endpoint currently in use, or null when not connected. */
+    this.connectedTo = null;
+
     this.clientId = clientId || `node-${randomUUID().slice(0, 12)}`;
     this.askTimeoutMs = askTimeoutMs;
 
@@ -51,34 +65,77 @@ class ActorNetClient {
     this._buffer = Buffer.alloc(0);
     this._pending = new Map();
     this._connecting = null;
+
+    // Sticky: it only moves when an endpoint fails. Rotating on every connect would reconnect
+    // somewhere new after every blip, which is churn rather than balance - any node forwards by
+    // the ring, so moving gains nothing and costs a connection.
+    this._cursor = 0;
   }
 
-  /** Opens the connection. Called automatically by tell and ask. */
+  /** Opens a connection to whichever endpoint answers. Called automatically by tell and ask. */
   connect() {
     if (this._socket && !this._socket.destroyed) return Promise.resolve();
     if (this._connecting) return this._connecting;
 
-    this._connecting = new Promise((resolve, reject) => {
-      const socket = net.createConnection({ host: this.host, port: this.port }, () => {
-        this._connecting = null;
-        resolve();
-      });
-
-      socket.setNoDelay(true);
-      socket.on('data', (chunk) => this._onData(chunk));
-      socket.on('error', (err) => {
-        this._connecting = null;
-        this._failPending(err);
-        reject(err);
-      });
-      socket.on('close', () => {
-        this._failPending(new ActorNetError('The connection to the node closed before a reply arrived.'));
-      });
-
-      this._socket = socket;
+    this._connecting = this._connectAny().finally(() => {
+      this._connecting = null;
     });
 
     return this._connecting;
+  }
+
+  async _connectAny() {
+    let last = null;
+
+    for (let attempt = 0; attempt < this.endpoints.length; attempt++) {
+      const index = (this._cursor + attempt) % this.endpoints.length;
+      const { host, port } = this.endpoints[index];
+
+      try {
+        await this._dial(host, port);
+        this._cursor = index;
+        this.connectedTo = `${host}:${port}`;
+        return;
+      } catch (err) {
+        last = err;
+      }
+    }
+
+    this.connectedTo = null;
+    const tried = this.endpoints.map((e) => `${e.host}:${e.port}`).join(', ');
+    throw new ActorNetError(
+      `None of the ${this.endpoints.length} configured node(s) accepted a connection: ${tried}.`,
+      { cause: last },
+    );
+  }
+
+  /** One connection attempt. Rejects rather than throwing, so the caller can try the next one. */
+  _dial(host, port) {
+    return new Promise((resolve, reject) => {
+      const socket = net.createConnection({ host, port }, () => {
+        // Handed over: from here an error is a live-connection failure rather than a failed dial,
+        // and must fail whatever is waiting instead of rejecting a promise nobody is holding.
+        socket.removeListener('error', onDialError);
+        socket.on('error', (err) => this._failPending(err));
+        socket.on('close', () => {
+          this.connectedTo = null;
+          this._failPending(new ActorNetError('The connection to the node closed before a reply arrived.'));
+        });
+
+        resolve();
+      });
+
+      const onDialError = (err) => {
+        socket.destroy();
+        reject(err);
+      };
+
+      socket.setNoDelay(true);
+      socket.on('data', (chunk) => this._onData(chunk));
+      socket.once('error', onDialError);
+
+      this._socket = socket;
+    });
   }
 
   /**

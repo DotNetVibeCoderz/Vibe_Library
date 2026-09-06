@@ -15,8 +15,9 @@ Yang tidak didapat klien adalah pandangan keanggotaan miliknya sendiri. Ia tidak
 mana sebuah actor berada, dan ia tidak tahu node mana yang memiliki sebuah kunci — ia mengirim ke
 node mana pun yang sedang tersambung dan membiarkan ring mengurus sisanya.
 
-Bila diberi lebih dari satu endpoint, klien C# menyambung ulang ke node lain ketika node yang sedang
-dipakainya menghilang. Tiga klien lainnya menerima satu endpoint dan ikut berhenti bersamanya.
+Bila diberi lebih dari satu endpoint, sebuah klien menyambung ulang ke node lain ketika node yang
+sedang dipakainya menghilang. Keempatnya melakukannya dengan cara yang sama, dan masing-masing
+diperiksa di CI terhadap alamat mati yang ditaruh di depan alamat hidup.
 
 Karena klien tidak punya alamat yang bisa dihubungi cluster, **node menjawab lewat koneksi yang
 dibuka klien**. Itulah sebabnya setiap klien memelihara satu socket berumur panjang dan terus
@@ -99,7 +100,7 @@ tahu apakah operasinya aman diulang; klien tidak.
 ```javascript
 const { ActorNetClient } = require('./actornet');
 
-const client = new ActorNetClient({ host: '127.0.0.1', port: 9000, clientId: 'web-1' });
+const client = new ActorNetClient({ endpoints: ['10.0.1.5:9000', '10.0.1.6:9000'], clientId: 'web-1' });
 await client.connect();
 
 await client.tell('BankAccountActor/alice', 'bank.deposit', { Amount: 500, Reference: 'opening' });
@@ -115,7 +116,7 @@ client.close();
 ```python
 from actornet import ActorNetClient
 
-async with ActorNetClient(host="127.0.0.1", port=9000, client_id="ingest-1") as client:
+async with ActorNetClient(endpoints=["10.0.1.5:9000", "10.0.1.6:9000"], client_id="ingest-1") as client:
     await client.tell("DeviceActor/sensor-001", "iot.reading",
                       {"DeviceId": "sensor-001", "Celsius": 21.5, "At": now})
 
@@ -126,7 +127,7 @@ async with ActorNetClient(host="127.0.0.1", port=9000, client_id="ingest-1") as 
 ## Go
 
 ```go
-client := actornet.New("127.0.0.1:9000", actornet.WithClientID("worker-1"))
+client := actornet.NewCluster([]string{"10.0.1.5:9000", "10.0.1.6:9000"}, actornet.WithClientID("worker-1"))
 defer client.Close()
 
 if err := client.Tell(ctx, "InventoryActor/widget", "order.restock",
@@ -191,7 +192,6 @@ Masing-masing menghormati `ACTORNET_HOST` / `ACTORNET_PORT` (Go memakai `ACTORNE
 
 ## Belum dibangun
 
-- Sambung ulang dan failover pada klien Node.js, Python, dan Go; klien C# sudah punya
 - Perutean sadar-cluster, supaya klien mengirim langsung ke node pemilik kunci
 
 Lihat [roadmap](../../Plan.md).

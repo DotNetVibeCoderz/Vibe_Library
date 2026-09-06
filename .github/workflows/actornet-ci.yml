@@ -242,6 +242,21 @@ jobs:
         working-directory: ActorNet/clients/go
         run: go run ./examples/ordering
 
+      # Each client is given a dead address ahead of the live one. This is the only automated
+      # evidence that failover works in Go at all - there is no Go toolchain on the machine this
+      # was written on - and it keeps the other two from rotting.
+      - name: Node.js client steps over a dead endpoint
+        working-directory: ActorNet
+        run: node clients/nodejs/examples/failover.js
+
+      - name: Python client steps over a dead endpoint
+        working-directory: ActorNet
+        run: python clients/python/examples/failover.py
+
+      - name: Go client steps over a dead endpoint
+        working-directory: ActorNet/clients/go
+        run: go run ./examples/failover
+
   pack:
     name: pack
     runs-on: ubuntu-latest

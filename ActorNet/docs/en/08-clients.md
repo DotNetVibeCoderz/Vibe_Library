@@ -15,8 +15,9 @@ What a client does not get is a membership view of its own. It cannot tell you w
 lives, and it does not know which node owns a key - it sends to whichever node it is connected to
 and lets the ring do the rest.
 
-Given more than one endpoint, the C# client reconnects to another node when the one it is using
-goes away. The other three take one endpoint and stop when it does.
+Given more than one endpoint, a client reconnects to another node when the one it is using goes
+away. All four do this the same way, and each is checked in CI against a dead address placed ahead
+of a live one.
 
 Because a client has no address the cluster can dial, **the node answers on the connection the
 client opened**. That is why every client keeps one long-lived socket and keeps reading it even
@@ -98,7 +99,7 @@ operation is safe to repeat; the client does not.
 ```javascript
 const { ActorNetClient } = require('./actornet');
 
-const client = new ActorNetClient({ host: '127.0.0.1', port: 9000, clientId: 'web-1' });
+const client = new ActorNetClient({ endpoints: ['10.0.1.5:9000', '10.0.1.6:9000'], clientId: 'web-1' });
 await client.connect();
 
 await client.tell('BankAccountActor/alice', 'bank.deposit', { Amount: 500, Reference: 'opening' });
@@ -114,7 +115,7 @@ client.close();
 ```python
 from actornet import ActorNetClient
 
-async with ActorNetClient(host="127.0.0.1", port=9000, client_id="ingest-1") as client:
+async with ActorNetClient(endpoints=["10.0.1.5:9000", "10.0.1.6:9000"], client_id="ingest-1") as client:
     await client.tell("DeviceActor/sensor-001", "iot.reading",
                       {"DeviceId": "sensor-001", "Celsius": 21.5, "At": now})
 
@@ -125,7 +126,7 @@ async with ActorNetClient(host="127.0.0.1", port=9000, client_id="ingest-1") as 
 ## Go
 
 ```go
-client := actornet.New("127.0.0.1:9000", actornet.WithClientID("worker-1"))
+client := actornet.NewCluster([]string{"10.0.1.5:9000", "10.0.1.6:9000"}, actornet.WithClientID("worker-1"))
 defer client.Close()
 
 if err := client.Tell(ctx, "InventoryActor/widget", "order.restock",
@@ -190,7 +191,6 @@ Each honours `ACTORNET_HOST` / `ACTORNET_PORT` (Go uses `ACTORNET_ADDR`).
 
 ## Not built yet
 
-- Reconnect and failover in the Node.js, Python and Go clients; the C# one has it
 - Cluster-aware routing, so a client sends straight to the node that owns the key
 
 See the [roadmap](../../Plan.md).
