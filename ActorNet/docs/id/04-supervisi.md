@@ -84,6 +84,37 @@ Ini bukan sekadar kemewahan. Tanpa itu, satu pesan beracun yang duduk di kepala 
 instance baru selamanya sambil membakar satu core. Dengan itu, actor-nya pergi dan masalahnya menjadi
 terlihat sebagai sebuah alamat yang berhenti merespons.
 
+## Jeda antar restart
+
+Anggaran membatasi crash loop. Ia tidak memperlambatnya, dan sepuluh restart dalam satu milidetik
+berarti sepuluh percobaan koneksi ke basis data yang memang sedang megap-megap — yang biasanya justru
+sebab actor itu gagal sejak awal.
+
+```csharp
+new OneForOneStrategy(_ => Directive.Restart)
+{
+    MinBackoff = TimeSpan.FromMilliseconds(100),   // restart kedua menunggu selama ini
+    MaxBackoff = TimeSpan.FromSeconds(5),          // dan pelipatgandaannya berhenti di sini
+    BackoffJitter = 0.2,                           // disebar ke dua sisi, supaya kegagalan tak seirama
+}
+```
+
+**Restart pertama seketika.** Kegagalan yang lazim bersifat sekali lewat — timeout, payload cacat —
+dan membuat setiap actor membayar untuk crash loop yang jarang adalah pertukaran yang keliru.
+Kegagalan kedua dalam waktu dekatlah yang menandakan penyebabnya belum hilang.
+
+Sesudah itu jedanya berlipat: 100ms, 200ms, 400ms, sampai `MaxBackoff`. Plafonnya sengaja jauh di
+bawah `Window`; kalau jumlah jedanya melebihi jendela itu, jendelanya akan terus disetel ulang, dan
+actor yang rusak permanen akan restart selamanya alih-alih menyentuh `MaxRestarts` lalu berhenti.
+
+**Jitter lebih penting daripada tampaknya.** Basis data yang tumbang menggagalkan setiap actor yang
+menyentuhnya dalam milidetik yang sama. Tanpa jitter mereka semua kembali serentak dan menghantamnya
+bersama-sama — begitulah gangguan sesaat berubah menjadi gangguan panjang.
+
+Jedanya berlangsung di loop mailbox milik actor itu sendiri, jadi pesannya mengantre selama ia mati
+dan tak ada actor lain yang tertahan. Setel `MinBackoff` ke nol untuk perilaku lama, yaitu restart
+yang selalu seketika berapa pun jumlah restart sebelumnya.
+
 ## Cakupan: one-for-one dan all-for-one
 
 ```csharp

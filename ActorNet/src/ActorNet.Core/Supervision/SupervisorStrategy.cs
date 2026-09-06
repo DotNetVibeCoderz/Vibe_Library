@@ -59,6 +59,57 @@ public abstract class SupervisorStrategy
     /// <summary>The sliding window the restart budget is counted over.</summary>
     public TimeSpan Window { get; init; } = TimeSpan.FromMinutes(1);
 
+    /// <summary>
+    /// How long the second restart in a window waits, doubling for each one after it.
+    /// </summary>
+    /// <remarks>
+    /// The first restart is immediate, because the common failure is a one-off - a timeout, a bad
+    /// payload - and making every actor pay for the rare crash loop would be the wrong trade. It is
+    /// the second failure in quick succession that says the cause has not gone away, and restarting
+    /// into it as fast as the mailbox allows just moves the busy-loop from the actor to whatever it
+    /// depends on.
+    /// </remarks>
+    public TimeSpan MinBackoff { get; init; } = TimeSpan.FromMilliseconds(100);
+
+    /// <summary>A ceiling on the doubling.</summary>
+    /// <remarks>
+    /// Deliberately well short of <see cref="Window"/>: if the waits added up to more than the
+    /// window, it would keep resetting and a permanently broken actor would restart forever instead
+    /// of hitting <see cref="MaxRestarts"/> and stopping.
+    /// </remarks>
+    public TimeSpan MaxBackoff { get; init; } = TimeSpan.FromSeconds(5);
+
+    /// <summary>
+    /// How much to spread the wait, as a fraction either side of it. Zero is exact.
+    /// </summary>
+    /// <remarks>
+    /// A database going down fails every actor that touches it within the same millisecond. Without
+    /// jitter they would all come back in lockstep and hit it together, which is how a brief outage
+    /// becomes a long one.
+    /// </remarks>
+    public double BackoffJitter { get; init; } = 0.2;
+
+    /// <summary>
+    /// How long to wait before the <paramref name="restartsInWindow"/>-th restart of this window.
+    /// </summary>
+    public TimeSpan BackoffFor(int restartsInWindow)
+    {
+        if (restartsInWindow <= 1 || MinBackoff <= TimeSpan.Zero) return TimeSpan.Zero;
+
+        // Doubling from the second restart, computed in doubles so an exponent that runs away
+        // saturates rather than overflowing a long of ticks.
+        var doublings = Math.Min(restartsInWindow - 2, 32);
+        var millis = Math.Min(MinBackoff.TotalMilliseconds * Math.Pow(2, doublings), MaxBackoff.TotalMilliseconds);
+
+        if (BackoffJitter > 0)
+        {
+            var spread = millis * BackoffJitter;
+            millis += Random.Shared.NextDouble() * spread * 2 - spread;
+        }
+
+        return TimeSpan.FromMilliseconds(Math.Max(0, millis));
+    }
+
     /// <summary>Chooses what to do about <paramref name="exception"/>.</summary>
     public abstract Directive Decide(Exception exception);
 

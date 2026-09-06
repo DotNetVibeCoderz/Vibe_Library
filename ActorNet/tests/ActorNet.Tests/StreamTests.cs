@@ -65,13 +65,18 @@ public sealed class StreamTests
         await using var harness = new TestHarness();
         var system = await harness.LocalAsync();
 
+        // Each shard gets a different increment, so the totals only come out right if every item
+        // reached the one actor its key names. Sending the raw integers instead would give every
+        // shard a total of zero - which they also reach by failing on a message they have no
+        // handler for, restarting until the budget runs out, and coming back empty.
         await ActorStream.From(Enumerable.Range(0, 300))
-            .ToActorsAsync(system, i => ActorId.For<CounterActor>($"shard-{i % 3}"), CancellationToken.None);
+            .Select(i => new Add(i % 3))
+            .ToActorsAsync(system, add => ActorId.For<CounterActor>($"shard-{add.By}"), CancellationToken.None);
 
         for (var shard = 0; shard < 3; shard++)
         {
             var total = await system.AskAsync<Total>(ActorId.For<CounterActor>($"shard-{shard}"), new GetTotal(), TimeSpan.FromSeconds(10));
-            Assert.Equal(0, total.Value);
+            Assert.Equal(100 * shard, total.Value);
         }
     }
 

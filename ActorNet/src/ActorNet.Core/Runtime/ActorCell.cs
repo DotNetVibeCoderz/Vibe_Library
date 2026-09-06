@@ -335,6 +335,19 @@ internal sealed class ActorCell
     /// <summary>Replaces the actor instance in place. The address, mailbox and children survive.</summary>
     private async Task<bool> RestartAsync(Exception cause, CancellationToken token)
     {
+        // Waiting happens on this actor's own loop, so its mailbox keeps filling and nothing else
+        // on the node is held up. That is the intended shape: the actor is unavailable while it is
+        // restarting, and it was unavailable anyway.
+        var backoff = Strategy.BackoffFor(Volatile.Read(ref _restartsInWindow));
+        if (backoff > TimeSpan.Zero)
+        {
+            _logger.LogWarning("Waiting {Backoff} before restarting {ActorId}; it has failed {Count} times in this window.",
+                backoff, Id, Volatile.Read(ref _restartsInWindow));
+
+            try { await Task.Delay(backoff, token).ConfigureAwait(false); }
+            catch (OperationCanceledException) { return false; }
+        }
+
         try
         {
             await _actor.OnRestartAsync(_context, cause, token).ConfigureAwait(false);

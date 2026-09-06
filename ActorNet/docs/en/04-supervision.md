@@ -84,6 +84,37 @@ This is not a nicety. Without it, a poison message sitting at the head of a mail
 instance forever and burns a core doing it. With it, the actor goes away and the problem becomes
 visible as an address that stopped responding.
 
+## Backoff between restarts
+
+The budget bounds a crash loop. It does not slow one down, and ten restarts inside a millisecond is
+ten connection attempts at a database that is already struggling — which is usually why the actor
+failed in the first place.
+
+```csharp
+new OneForOneStrategy(_ => Directive.Restart)
+{
+    MinBackoff = TimeSpan.FromMilliseconds(100),   // the second restart waits this long
+    MaxBackoff = TimeSpan.FromSeconds(5),          // and the doubling stops here
+    BackoffJitter = 0.2,                           // spread either side, so failures do not sync up
+}
+```
+
+**The first restart is immediate.** The common failure is a one-off — a timeout, a malformed
+payload — and making every actor pay for the rare crash loop would be the wrong trade. It is the
+second failure in quick succession that says the cause has not gone away.
+
+From there the wait doubles: 100ms, 200ms, 400ms, up to `MaxBackoff`. The ceiling is deliberately
+well short of `Window`; if the waits added up to more than the window it would keep resetting, and a
+permanently broken actor would restart forever instead of hitting `MaxRestarts` and stopping.
+
+**Jitter matters more than it looks.** A database going down fails every actor that touches it
+inside the same millisecond. Without jitter they all come back in lockstep and hit it together,
+which is how a brief outage becomes a long one.
+
+The wait happens on the actor's own mailbox loop, so its messages queue while it is down and no
+other actor is held up. Set `MinBackoff` to zero to get the old behaviour, where a restart is
+immediate however many have come before it.
+
 ## Scope: one-for-one and all-for-one
 
 ```csharp

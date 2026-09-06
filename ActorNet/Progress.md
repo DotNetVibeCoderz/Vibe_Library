@@ -38,7 +38,7 @@ works and something automated proves it** — not when the code exists.
 - [x] Supervision trees via `SpawnChild`; children stop with their parent
 - [x] Escalation to the root guardian
 - [x] A supervision stop does not flush half-updated persistent state
-- [ ] Backoff between restarts (they are currently immediate)
+- [x] Exponential backoff with jitter between restarts, the first one still immediate
 - [ ] Watch/`Terminated` notifications between actors
 
 ## Clustering
