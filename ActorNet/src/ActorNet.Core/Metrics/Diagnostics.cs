@@ -93,10 +93,24 @@ public static class ActorNetDiagnostics
     /// <see cref="ActivityKind.Consumer"/> because handling a message is consuming from a queue,
     /// which is what makes a trace viewer draw it as the receiving half of a send.
     /// </remarks>
-    public static Activity? StartReceive(ActorId actor, string messageType)
+    /// <param name="traceParent">
+    /// W3C <c>traceparent</c> from the sending node, for a message that crossed the wire. Without
+    /// it the receiving span starts a trace of its own, and one operation spanning three machines
+    /// reads as three unrelated traces.
+    /// </param>
+    /// <param name="traceState">W3C <c>tracestate</c>, passed on unchanged.</param>
+    public static Activity? StartReceive(ActorId actor, string messageType, string? traceParent = null, string? traceState = null)
     {
-        var activity = Source.StartActivity($"{actor.Type} receive", ActivityKind.Consumer);
+        // The parent is only named explicitly for a remote message. On a local send Activity.Current
+        // is already the caller's span, and passing its id here would be the same answer by a
+        // longer route.
+        var activity = traceParent is { Length: > 0 }
+            ? Source.StartActivity($"{actor.Type} receive", ActivityKind.Consumer, traceParent, links: null, tags: null)
+            : Source.StartActivity($"{actor.Type} receive", ActivityKind.Consumer);
+
         if (activity is null) return null;
+
+        if (traceState is { Length: > 0 }) activity.TraceStateString = traceState;
 
         activity.SetTag("actornet.actor.type", actor.Type);
         activity.SetTag("actornet.actor.key", actor.Key);

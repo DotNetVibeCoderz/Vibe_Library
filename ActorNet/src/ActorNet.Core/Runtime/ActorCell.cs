@@ -243,7 +243,7 @@ internal sealed class ActorCell
         var messageType = envelope.Message.GetType().Name;
 
         // Null unless something is listening, which is what makes a span affordable per message.
-        using var activity = ActorNetDiagnostics.StartReceive(Id, messageType);
+        using var activity = ActorNetDiagnostics.StartReceive(Id, messageType, envelope.TraceParent, envelope.TraceState);
 
         _context.BeginMessage(envelope);
         try

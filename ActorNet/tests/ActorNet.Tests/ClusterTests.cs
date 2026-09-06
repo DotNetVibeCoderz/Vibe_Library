@@ -40,8 +40,20 @@ public sealed class ClusterTests
         foreach (var i in Enumerable.Range(0, 200))
         {
             var id = ActorId.For<CounterActor>($"agree-{i}");
-            Assert.Equal(first.Cluster.OwnerOf(id), second.Cluster.OwnerOf(id));
+            var here = first.Cluster.OwnerOf(id);
+            var there = second.Cluster.OwnerOf(id);
+
+            // Both tables are printed on failure. Disagreement is either the hash differing between
+            // processes or one node not having the other on its ring yet, and the statuses say
+            // which - a distinction that is impossible to make from two node names alone.
+            Assert.True(here == there,
+                $"{id} is owned by {here} here and {there} there. " +
+                $"first sees [{Describe(first)}], second sees [{Describe(second)}].");
         }
+
+        static string Describe(ActorSystem system) =>
+            string.Join(", ", system.Cluster.Members.Select(m => $"{m.NodeId}:{m.Status}")) +
+            $" ring=[{string.Join(",", system.Cluster.Ring.Nodes)}]";
     }
 
     [Fact]

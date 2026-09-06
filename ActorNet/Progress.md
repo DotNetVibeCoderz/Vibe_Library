@@ -112,7 +112,7 @@ works and something automated proves it** — not when the code exists.
 - [x] `ActivitySource` spans per handled message, marked as errors when the handler throws
 - [x] `Meter` counters and histograms - throughput, failures, lifecycle, handler and queue time
 - [x] Dead letters in the console and on the read-only API
-- [ ] Trace context propagated across a node hop
+- [x] Trace context propagated across a node hop, W3C `traceparent` on every frame
 
 ## Tooling and surfaces
 

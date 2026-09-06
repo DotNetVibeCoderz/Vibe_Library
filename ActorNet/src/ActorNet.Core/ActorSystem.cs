@@ -552,6 +552,15 @@ public sealed class ActorSystem : IActorSystem
             frame.Payload = element;
         }
 
+        // Stamped here rather than at each call site, so every frame that leaves this node carries
+        // the trace - including the replies and failures, which is the half that shows how long the
+        // caller actually waited. Null when nothing is tracing, which costs one null check.
+        if (System.Diagnostics.Activity.Current is { } current)
+        {
+            frame.TraceParent ??= current.Id;
+            frame.TraceState ??= current.TraceStateString;
+        }
+
         await _transport.SendAsync(nodeId, frame, cancellationToken).ConfigureAwait(false);
         MetricsCollector.RecordRemoteSent();
     }
@@ -628,7 +637,7 @@ public sealed class ActorSystem : IActorSystem
                 // sender routed with the view it had, and bouncing the message onward risks a
                 // loop between two nodes that disagree during a rebalance.
                 await DeliverInboundAsync(
-                    Envelope.Create(target, message, sender, frame.CorrelationId, frame.ReplyToNode))
+                    Envelope.Create(target, message, sender, frame.CorrelationId, frame.ReplyToNode, frame.TraceParent, frame.TraceState))
                     .ConfigureAwait(false);
                 return;
             }

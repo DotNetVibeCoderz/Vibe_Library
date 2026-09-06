@@ -240,6 +240,19 @@ Setiap pesan yang ditangani juga menghasilkan span `"<TipeActor> receive"` berje
 sehingga penampil trace menggambarnya sebagai paruh penerima dari sebuah pengiriman. Handler yang
 melempar exception menandai span-nya sebagai error dan melampirkan exception-nya.
 
+**Span mengikuti pesan menyeberangi batas node.** Setiap frame yang keluar dari sebuah node membawa
+`traceparent` dan `tracestate` W3C milik span yang sedang aktif saat ia dikirim, dan node penerima
+memulai span-nya di bawah induk itu. Sebuah `ask` yang dijawab tiga mesin jauhnya menjadi satu trace
+dengan lompatan-lompatannya bersarang di dalamnya, bukan tiga trace yang sesudahnya tak bisa
+dibedakan.
+
+Balasan dan kegagalan ditandai dengan cara yang sama, dan justru bagian itulah yang menunjukkan
+berapa lama pemanggilnya benar-benar menunggu, bukan berapa lama handler-nya bekerja.
+
+Nama field-nya baku, `tp` dan `tw` di kabel, sehingga klien Go, Python, dan Node bisa mengisinya dari
+tracing mereka sendiri tanpa perlu tahu apa pun tentang runtime ini. Pesan yang datang tanpa keduanya
+- denyut timer, klien yang tidak melakukan tracing - cukup memulai trace-nya sendiri.
+
 Semua ini tidak berongkos apa pun saat tidak ada yang mendengarkan: `StartActivity` mengembalikan null
 tanpa listener, dan instrumen tanpa collector tidak merekam. Itulah yang membuat tracing terjangkau di
 jalur per-pesan.

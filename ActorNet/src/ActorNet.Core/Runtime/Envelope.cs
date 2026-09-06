@@ -36,15 +36,28 @@ public readonly record struct Envelope
     /// </summary>
     public long EnqueuedTimestamp { get; init; }
 
+    /// <summary>
+    /// W3C <c>traceparent</c> of the span on the sending node, for a message that came off the
+    /// wire. Null for a local send, where <see cref="System.Diagnostics.Activity.Current"/> is
+    /// still the caller's and needs no help.
+    /// </summary>
+    public string? TraceParent { get; init; }
+
+    /// <summary>W3C <c>tracestate</c> that arrived with the frame.</summary>
+    public string? TraceState { get; init; }
+
     /// <summary>Creates an envelope stamped with the current timestamp.</summary>
     public static Envelope Create(ActorId target, object message, ActorId sender = default,
-        string? correlationId = null, string? replyToNode = null) => new()
+        string? correlationId = null, string? replyToNode = null,
+        string? traceParent = null, string? traceState = null) => new()
         {
             Target = target,
             Sender = sender,
             Message = message,
             CorrelationId = correlationId,
             ReplyToNode = replyToNode,
+            TraceParent = traceParent,
+            TraceState = traceState,
             EnqueuedTimestamp = System.Diagnostics.Stopwatch.GetTimestamp(),
         };
 }

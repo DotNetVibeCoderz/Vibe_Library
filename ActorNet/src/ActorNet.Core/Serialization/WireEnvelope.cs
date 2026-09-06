@@ -86,6 +86,21 @@ public sealed class WireEnvelope
     /// <summary>Member table, for the membership frames.</summary>
     [JsonPropertyName("m")]
     public List<WireMember>? Members { get; set; }
+
+    /// <summary>
+    /// W3C <c>traceparent</c> of the span that sent this frame, when one was active.
+    /// </summary>
+    /// <remarks>
+    /// The standard format rather than an ActorNet-shaped one, so a span this node starts joins the
+    /// caller's trace in any viewer, and so the Go, Python and Node clients can fill it in from
+    /// their own tracing without knowing anything about this runtime.
+    /// </remarks>
+    [JsonPropertyName("tp")]
+    public string? TraceParent { get; set; }
+
+    /// <summary>W3C <c>tracestate</c>, carried through untouched.</summary>
+    [JsonPropertyName("tw")]
+    public string? TraceState { get; set; }
 }
 
 /// <summary>One cluster member as gossiped.</summary>

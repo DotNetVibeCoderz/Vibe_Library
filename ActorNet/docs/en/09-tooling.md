@@ -235,6 +235,19 @@ Each handled message also produces a span, `"<ActorType> receive"`, of kind `Con
 viewer draws it as the receiving half of a send. A handler that throws marks its span as an error and
 attaches the exception.
 
+**Spans follow a message across a node boundary.** Every frame that leaves a node carries the W3C
+`traceparent` and `tracestate` of whatever span was current when it was sent, and the receiving node
+starts its span under that parent. An ask answered three machines away is one trace with the hops
+nested inside it, rather than three traces that cannot be told apart afterwards.
+
+Replies and failures are stamped the same way, which is the half that shows how long the caller
+actually waited rather than how long the handler took.
+
+The fields are the standard ones, `tp` and `tw` on the wire, so the Go, Python and Node clients can
+fill them in from their own tracing without knowing anything about this runtime. A message that
+arrives without them - a timer tick, a client that does not trace - simply starts a trace of its
+own.
+
 None of this costs anything when nothing is listening: `StartActivity` returns null without a
 listener, and an instrument with no collector does not record. That is what makes tracing affordable
 on the per-message path.
