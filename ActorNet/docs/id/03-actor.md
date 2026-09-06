@@ -184,6 +184,75 @@ _timer = Context.ScheduleTell(TimeSpan.FromSeconds(30), new Sweep(), repeatEvery
 Mengembalikan `IDisposable`; buang untuk membatalkan. Timer **tidak** selamat dari deaktivasi atau
 restart node — ini untuk urusan dalam satu aktivasi, bukan penjadwalan yang tahan lama.
 
+## Memanggil actor lewat interface
+
+`AskAsync<Balance>(id, new GetBalance())` adalah tiga hal yang harus cocok — tipe permintaan, tipe
+jawaban, dan handler di seberang sana — dan tidak ada yang memeriksa bahwa ketiganya cocok. Salah
+satu saja keliru, kegagalannya berupa `AskTimeoutException` pada hari sial ketika jalur kode itu
+pertama kali dijalankan.
+
+Deklarasikan protokolnya sekali, dan kompiler yang memeriksanya:
+
+```csharp
+[ActorInterface]
+public interface IBankAccount
+{
+    Task DepositAsync(decimal amount, string reference);
+    Task<decimal> GetBalanceAsync(CancellationToken cancellationToken = default);
+}
+```
+
+Sebuah source generator mengubahnya menjadi satu record permintaan per method, satu record jawaban
+untuk method yang mengembalikan nilai, sebuah proxy, dan sebuah base class untuk actor-nya:
+
+```csharp
+public sealed class BankAccountActor : BankAccountActorBase   // dihasilkan generator
+{
+    private decimal _balance;
+
+    public override Task DepositAsync(decimal amount, string reference)
+    {
+        _balance += amount;
+        return Task.CompletedTask;
+    }
+
+    public override Task<decimal> GetBalanceAsync(CancellationToken cancellationToken = default) =>
+        Task.FromResult(_balance);
+}
+
+BankAccountProtocol.Register<BankAccountActor>(system);        // dihasilkan generator
+
+var account = BankAccountProxy.Of<BankAccountActor>(system, "acct-001");
+await account.DepositAsync(250m, "opening");
+var balance = await account.GetBalanceAsync();
+```
+
+Tidak ada yang aneh yang dihasilkan. Record-nya membawa alias `[ActorMessage]` yang sama seperti
+pesan tulis tangan, dan proxy-nya memanggil `TellAsync` dan `AskAsync` yang sama, jadi panggilan
+proxy melintasi batas node menghasilkan lalu lintas yang sama persis dengan versi manualnya. Yang
+berubah: ketidakcocokan antara pemanggil dan handler kini menjadi error kompilasi.
+
+Empat aturan yang ditegakkan generator, masing-masing dengan pesan yang menjelaskan sebabnya:
+
+| | |
+| --- | --- |
+| Method mengembalikan `Task`, `Task<T>`, `ValueTask`, atau `ValueTask<T>` | Sebuah panggilan adalah pesan dan balasan, jadi harus bisa di-`await` |
+| Tanpa parameter `ref`, `out`, atau `in` | Parameter menjadi field pesan yang mungkin menyeberangi proses |
+| Tanpa method generik | Tipe pesannya harus terdaftar sebelum tipe itu ada |
+| Tanpa property atau event | Property terbaca sebagai akses sinkron ke state di thread lain |
+
+**Method yang mengembalikan `Task` adalah `tell`**, dan selesai ketika pesannya diterima — bukan
+ketika handler-nya rampung. Method yang mengembalikan `Task<T>` adalah `ask` dan menunggu balasan.
+Itu perbedaan yang memang sudah ada, kini terlihat pada tanda tangannya.
+
+**Tipe pelaksananya disebut di tempat pemanggilan**, karena alamat sebuah actor adalah nama tipenya
+plus kuncinya, dan sebuah interface tidak tahu actor mana yang mengimplementasikannya. Batasan
+generiknya itulah yang mencegah proxy diarahkan ke actor yang tidak berbicara protokol ini.
+
+**Node yang hanya memanggil actor itu memakai `Register(system)`** tanpa argumen tipe: ia butuh
+pesannya ada di allow-list, tapi tidak boleh mendaftarkan tipe actor yang tak akan pernah ia
+tampung, karena ring akan mengira ia bisa memiliki kunci-kunci itu.
+
 ## Mengawasi actor lain
 
 ```csharp

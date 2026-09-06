@@ -210,6 +210,46 @@ Buffer-nya berbatas dan membuang yang terlama; `Count` tetap total seumur hidup 
 gagal mengirim biasanya gagal banyak, dan catatan tak berbatas atas itu adalah gangguan kedua di atas
 yang pertama. Tukar lewat `options.DeadLetters`.
 
+## Di dalam aplikasi ASP.NET Core
+
+`ActorNet.AspNetCore` adalah integrasi untuk bentuk penerapan yang paling mungkin dipakai: sebuah
+node yang hidup di dalam aplikasi web, tempat orchestrator memutuskan apakah ia layak dikirimi lalu
+lintas.
+
+```csharp
+builder.Services.AddActorNet(actors => { /* ... */ });
+builder.Services.AddHealthChecks().AddActorNetCheck();
+
+var app = builder.Build();
+
+app.MapHealthChecks("/ready", new() { Predicate = r => r.Tags.Contains("ready") });
+app.MapActorNetDiagnostics().RequireAuthorization();
+app.MapGet("/orders/{id}", …).RequireActorNetReady();
+```
+
+**Health check-nya melaporkan apa yang bisa dilihat node itu, bukan sekadar bahwa prosesnya hidup.**
+Node yang kehilangan cluster dan menjawab untuk kunci yang bukan lagi miliknya tampak sehat-sehat
+saja bagi liveness probe biasa. Tiga hasilnya:
+
+| | Kapan |
+| --- | --- |
+| Healthy | Semua anggota yang ia kenal terjangkau |
+| Degraded | Ada peer yang tak terjangkau — ia masih melayani kuncinya sendiri dengan benar |
+| Unhealthy | Node ini keluar dari ring: kalah partisi, atau sedang pamit |
+
+Peer yang tak terjangkau sengaja dinilai degraded, bukan unhealthy. Tak terjangkau berarti "meleset
+beberapa denyut, masih di ring", dan me-restart node karena itu mengubah gangguan sesaat menjadi
+rebalance.
+
+**`MapActorNetDiagnostics` membuka dua endpoint baca-saja** — `/actornet/cluster` untuk keanggotaan
+dan porsi keyspace tiap anggota, `/actornet/metrics` untuk pencacahnya. Isinya sama dengan yang
+ditampilkan konsol, untuk penerapan yang tidak punya konsol. Tidak ada otorisasi bawaan dan ia
+memaparkan alamat node serta kunci actor, jadi grup yang dikembalikannya menerima
+`RequireAuthorization()` seperti grup mana pun.
+
+**`RequireActorNetReady()` menjawab 503 dengan `Retry-After`** selama node berada di luar ring, untuk
+jeda antara node memutuskan ia sudah selesai dan load balancer menyadarinya.
+
 ## Mengekspor ke OpenTelemetry
 
 Konsol membaca penghitung milik runtime sendiri, yang cukup untuk satu node dan tidak berguna untuk

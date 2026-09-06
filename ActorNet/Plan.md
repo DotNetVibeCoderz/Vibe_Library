@@ -42,13 +42,25 @@ peer's own heartbeat history rather than one deadline chosen for the worst link.
 | Replica placement | `PreferenceList` exists and nothing uses it. Standby replicas would make a node loss invisible. |
 | Rolling upgrade | A node now flushes before it announces its leave, so a rolling restart is safe. What is left is the warm half: handing the actors to the next owner rather than making it load them on the first message. |
 
-## 0.4 — ecosystem
+## 0.4 — ecosystem — **done**
+
+Three things that make the framework easier to live with rather than more capable: an
+`[ActorInterface]` the compiler checks calls against, `ActorNet.AspNetCore` for the deployment a
+node is most likely to be in, and a binary envelope for the traffic between nodes. See
+[Progress.md](Progress.md) for what each turned into, and what each stopped short of.
+
+## 0.5 — the shape of the remaining gaps
+
+Nothing here is a feature so much as an admission. Each is something already built that works in
+one place and not another.
 
 | Theme | Why it matters |
 | --- | --- |
-| Source-generated actor proxies | `AskAsync<Balance>(id, new GetBalance())` could be `account.GetBalanceAsync()`, checked at compile time. |
-| ASP.NET Core integration package | Endpoint filters and health checks that know about actors. |
-| A binary wire format | JSON is the right default and the wrong choice for a hot inter-node path. |
+| A console that sees the whole cluster | Counters and the actor list are per node. The ring is cluster-wide; nothing else is. |
+| Client reconnect and failover | An SDK client is bound to the node it dialled. That node going down takes the client with it. |
+| Replica placement | `PreferenceList` exists and nothing uses it. Standby replicas would make a node loss invisible. |
+| A warm handoff | A leaving node flushes before it announces, so a rolling restart is safe. The next owner still loads each actor on the first message. |
+| A binary payload | The envelope is binary; the message body is still JSON, and it is the larger half for anything but the smallest message. |
 
 ## Deliberately not planned
 

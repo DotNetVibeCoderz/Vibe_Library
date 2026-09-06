@@ -180,6 +180,74 @@ _timer = Context.ScheduleTell(TimeSpan.FromSeconds(30), new Sweep(), repeatEvery
 Returns an `IDisposable`; dispose it to cancel. Timers do **not** survive deactivation or a node
 restart — this is for in-activation concerns, not durable scheduling.
 
+## Calling an actor through an interface
+
+`AskAsync<Balance>(id, new GetBalance())` is three things that have to agree — the request type,
+the response type and the handler on the other side — and nothing that checks they do. Get one
+wrong and the failure is an `AskTimeoutException` on the unlucky day that code path first runs.
+
+Declare the protocol once and the compiler checks it:
+
+```csharp
+[ActorInterface]
+public interface IBankAccount
+{
+    Task DepositAsync(decimal amount, string reference);
+    Task<decimal> GetBalanceAsync(CancellationToken cancellationToken = default);
+}
+```
+
+A source generator turns that into a request record per method, a reply record per method that
+returns something, a proxy, and a base class for the actor:
+
+```csharp
+public sealed class BankAccountActor : BankAccountActorBase   // generated
+{
+    private decimal _balance;
+
+    public override Task DepositAsync(decimal amount, string reference)
+    {
+        _balance += amount;
+        return Task.CompletedTask;
+    }
+
+    public override Task<decimal> GetBalanceAsync(CancellationToken cancellationToken = default) =>
+        Task.FromResult(_balance);
+}
+
+BankAccountProtocol.Register<BankAccountActor>(system);        // generated
+
+var account = BankAccountProxy.Of<BankAccountActor>(system, "acct-001");
+await account.DepositAsync(250m, "opening");
+var balance = await account.GetBalanceAsync();
+```
+
+Nothing exotic is generated. The records carry the same `[ActorMessage]` alias a hand-written
+message would and the proxy calls the same `TellAsync` and `AskAsync`, so a proxy call across a
+node boundary is the traffic the manual version produced. What changes is that a mismatch between
+caller and handler is a compile error.
+
+Four rules the generator enforces, each with a message saying why:
+
+| | |
+| --- | --- |
+| Methods return `Task`, `Task<T>`, `ValueTask` or `ValueTask<T>` | A call is a message and a reply, so it has to be awaitable |
+| No `ref`, `out` or `in` parameters | Parameters become fields of a message that may cross a process |
+| No generic methods | The message type would have to be registered before it exists |
+| No properties or events | A property reads as synchronous access to state on another thread |
+
+**A method returning `Task` is a tell**, and completes when the message is accepted — not when the
+handler is done. A method returning `Task<T>` is an ask and waits for the reply. That is the
+existing distinction, made visible in the signature.
+
+**The implementing type is named at the call site** because an actor's address is its type name and
+its key, and an interface does not know which actor implements it. The generic constraint is what
+stops a proxy being pointed at an actor that does not speak the protocol.
+
+**A node that only calls the actor uses `Register(system)`**, without the type argument: it needs
+the messages on its allow-list but must not register an actor type it will never host, or the ring
+would believe it can own those keys.
+
 ## Watching another actor
 
 ```csharp

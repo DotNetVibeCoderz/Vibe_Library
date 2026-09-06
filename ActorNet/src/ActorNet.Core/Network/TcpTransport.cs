@@ -56,6 +56,7 @@ public sealed class TcpTransport : ITransport
     private readonly int _requestedPort;
     private readonly ClusterSecurityOptions _security;
     private readonly TimeSpan _sendTimeout;
+    private readonly WireFormat _format;
     private readonly int _outboundQueueCapacity;
     private readonly Func<WireEnvelope, Task> _onFrame;
     private readonly Func<string, (string Host, int Port)?> _resolveNode;
@@ -89,12 +90,14 @@ public sealed class TcpTransport : ITransport
         ILogger logger,
         ClusterSecurityOptions? security = null,
         TimeSpan? sendTimeout = null,
-        int outboundQueueCapacity = 8192)
+        int outboundQueueCapacity = 8192,
+        WireFormat format = WireFormat.Json)
     {
         _host = host;
         _requestedPort = port;
         _security = security ?? new ClusterSecurityOptions();
         _sendTimeout = sendTimeout ?? TimeSpan.FromSeconds(30);
+        _format = format;
         _outboundQueueCapacity = outboundQueueCapacity > 0
             ? outboundQueueCapacity
             : throw new ArgumentOutOfRangeException(nameof(outboundQueueCapacity), outboundQueueCapacity, "Capacity must be positive.");
@@ -151,9 +154,9 @@ public sealed class TcpTransport : ITransport
         }
 
         var peer = _peers.GetOrAdd(nodeId, static (id, state) =>
-            new PeerConnection(id, state.Address.Host, state.Address.Port, state.Logger, state.OnFrame, state.Security, state.SendTimeout, state.Capacity, state.Token),
+            new PeerConnection(id, state.Address.Host, state.Address.Port, state.Logger, state.OnFrame, state.Security, state.SendTimeout, state.Capacity, state.Format, state.Token),
             (Address: address.Value, Logger: _logger, OnFrame: _onFrame, Security: _security,
-             SendTimeout: _sendTimeout, Capacity: _outboundQueueCapacity, Token: _shutdown.Token));
+             SendTimeout: _sendTimeout, Capacity: _outboundQueueCapacity, Format: _format, Token: _shutdown.Token));
 
         return peer.SendAsync(frame, cancellationToken);
     }
@@ -168,7 +171,7 @@ public sealed class TcpTransport : ITransport
         using var client = new TcpClient();
         await client.ConnectAsync(host, port, cancellationToken).ConfigureAwait(false);
         await using var stream = await SecureChannel.ConnectAsync(client, host, _security, cancellationToken).ConfigureAwait(false);
-        await FrameCodec.WriteAsync(stream, frame, cancellationToken).ConfigureAwait(false);
+        await FrameCodec.WriteAsync(stream, frame, _format, cancellationToken).ConfigureAwait(false);
     }
 
     private async Task AcceptLoopAsync(CancellationToken cancellationToken)
@@ -207,8 +210,13 @@ public sealed class TcpTransport : ITransport
 
             while (!cancellationToken.IsCancellationRequested)
             {
-                var frame = await FrameCodec.ReadAsync(stream, cancellationToken).ConfigureAwait(false);
+                var (frame, format) = await FrameCodec.ReadFramedAsync(stream, cancellationToken).ConfigureAwait(false);
                 if (frame is null) return;
+
+                // Replies go back in the encoding the request arrived in. That is what lets one
+                // listener serve binary peers and JSON clients at the same time, with nothing
+                // negotiated and nothing configured on either side.
+                connection.Format = format;
 
                 // Learned from the first frame. A peer that never names itself simply cannot be
                 // replied to, which is the correct outcome rather than an error.
@@ -288,6 +296,14 @@ public sealed class TcpTransport : ITransport
         private readonly SemaphoreSlim _writeGate = new(1, 1);
         private volatile bool _closed;
 
+        /// <summary>The encoding the last frame on this connection arrived in.</summary>
+        /// <remarks>
+        /// Written by the reader and read by the writer. A plain volatile field is enough: it is
+        /// one enum, and the worst an unlucky interleaving does is answer one frame in the encoding
+        /// of the frame before it - which the peer accepts anyway, because both are self-describing.
+        /// </remarks>
+        public volatile WireFormat Format = WireFormat.Json;
+
         public bool IsConnected => !_closed && client.Connected;
 
         public void MarkClosed() => _closed = true;
@@ -297,7 +313,7 @@ public sealed class TcpTransport : ITransport
             await _writeGate.WaitAsync(cancellationToken).ConfigureAwait(false);
             try
             {
-                await FrameCodec.WriteAsync(stream, frame, cancellationToken).ConfigureAwait(false);
+                await FrameCodec.WriteAsync(stream, frame, Format, cancellationToken).ConfigureAwait(false);
             }
             finally
             {
@@ -321,6 +337,7 @@ public sealed class TcpTransport : ITransport
         private readonly Func<WireEnvelope, Task> _onFrame;
         private readonly ClusterSecurityOptions _security;
         private readonly TimeSpan _sendTimeout;
+        private readonly WireFormat _format;
         private readonly Channel<WireEnvelope> _outbound;
 
         /// <summary>Whether the socket is currently up, which is what separates busy from gone.</summary>
@@ -331,8 +348,9 @@ public sealed class TcpTransport : ITransport
         public PeerConnection(
             string nodeId, string host, int port, ILogger logger,
             Func<WireEnvelope, Task> onFrame, ClusterSecurityOptions security, TimeSpan sendTimeout,
-            int queueCapacity, CancellationToken shutdown)
+            int queueCapacity, WireFormat format, CancellationToken shutdown)
         {
+            _format = format;
             _nodeId = nodeId;
             _security = security;
             _sendTimeout = sendTimeout;
@@ -415,7 +433,7 @@ public sealed class TcpTransport : ITransport
                     while (await _outbound.Reader.WaitToReadAsync(cancellationToken).ConfigureAwait(false))
                     {
                         while (_outbound.Reader.TryRead(out var frame))
-                            await FrameCodec.WriteAsync(stream, frame, cancellationToken).ConfigureAwait(false);
+                            await FrameCodec.WriteAsync(stream, frame, _format, cancellationToken).ConfigureAwait(false);
                     }
 
                     await reader.ConfigureAwait(false);

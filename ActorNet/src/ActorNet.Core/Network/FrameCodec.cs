@@ -32,9 +32,15 @@ public static class FrameCodec
     public const int MaxFrameBytes = 32 * 1024 * 1024;
 
     /// <summary>Writes one frame.</summary>
-    public static async ValueTask WriteAsync(Stream stream, WireEnvelope envelope, CancellationToken cancellationToken)
+    public static ValueTask WriteAsync(Stream stream, WireEnvelope envelope, CancellationToken cancellationToken) =>
+        WriteAsync(stream, envelope, WireFormat.Json, cancellationToken);
+
+    /// <summary>Writes one frame in <paramref name="format"/>.</summary>
+    public static async ValueTask WriteAsync(Stream stream, WireEnvelope envelope, WireFormat format, CancellationToken cancellationToken)
     {
-        var payload = JsonSerializer.SerializeToUtf8Bytes(envelope, typeof(WireEnvelope), WireJsonContext.Default);
+        var payload = format == WireFormat.Binary
+            ? BinaryWireFormat.Write(envelope)
+            : JsonSerializer.SerializeToUtf8Bytes(envelope, typeof(WireEnvelope), WireJsonContext.Default);
         if (payload.Length > MaxFrameBytes)
             throw new ActorNetException($"Frame of {payload.Length:N0} bytes exceeds the {MaxFrameBytes:N0} byte limit.");
 
@@ -58,8 +64,23 @@ public static class FrameCodec
     /// </summary>
     public static async ValueTask<WireEnvelope?> ReadAsync(Stream stream, CancellationToken cancellationToken)
     {
+        var (envelope, _) = await ReadFramedAsync(stream, cancellationToken).ConfigureAwait(false);
+        return envelope;
+    }
+
+    /// <summary>
+    /// Reads one frame and says which encoding it was in.
+    /// </summary>
+    /// <remarks>
+    /// A frame is self-describing - JSON starts with <c>{</c>, binary with
+    /// <see cref="BinaryWireFormat.Magic"/> - so nothing has to be negotiated, and a connection can
+    /// answer in the encoding it was addressed in. That is what lets a node speak binary to its
+    /// peers and JSON to a client that only knows JSON, on the same listener.
+    /// </remarks>
+    public static async ValueTask<(WireEnvelope? Envelope, WireFormat Format)> ReadFramedAsync(Stream stream, CancellationToken cancellationToken)
+    {
         var header = new byte[HeaderBytes];
-        if (!await ReadExactlyOrEofAsync(stream, header, cancellationToken).ConfigureAwait(false)) return null;
+        if (!await ReadExactlyOrEofAsync(stream, header, cancellationToken).ConfigureAwait(false)) return (null, WireFormat.Json);
 
         var length = BinaryPrimitives.ReadInt32BigEndian(header);
         if (length is <= 0 or > MaxFrameBytes)
@@ -71,7 +92,11 @@ public static class FrameCodec
             if (!await ReadExactlyOrEofAsync(stream, buffer.AsMemory(0, length), cancellationToken).ConfigureAwait(false))
                 throw new EndOfStreamException($"Connection closed {length:N0} bytes into a frame.");
 
-            return JsonSerializer.Deserialize(buffer.AsSpan(0, length), typeof(WireEnvelope), WireJsonContext.Default) as WireEnvelope;
+            if (buffer[0] == BinaryWireFormat.Magic)
+                return (BinaryWireFormat.Read(buffer.AsSpan(0, length)), WireFormat.Binary);
+
+            return (JsonSerializer.Deserialize(buffer.AsSpan(0, length), typeof(WireEnvelope), WireJsonContext.Default) as WireEnvelope,
+                    WireFormat.Json);
         }
         finally
         {

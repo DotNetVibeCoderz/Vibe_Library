@@ -21,6 +21,27 @@
 
   <ItemGroup>
     <!--
+      The source generator, referenced as an analyzer rather than as a library: it runs inside the
+      compiler and must not become a runtime dependency of anything that uses ActorNet.
+    -->
+    <ProjectReference Include="../ActorNet.Generators/ActorNet.Generators.csproj"
+                     OutputItemType="Analyzer" ReferenceOutputAssembly="false" PrivateAssets="all" />
+  </ItemGroup>
+
+  <!--
+    And into the package under analyzers/dotnet/cs, which is where NuGet looks for one. Without
+    this the generator would work for anyone building from source and for nobody who installs the
+    package - the worst of both, because it would look like it worked.
+  -->
+  <Target Name="PackTheGenerator" BeforeTargets="_GetPackageFiles">
+    <ItemGroup>
+      <None Include="$(MSBuildThisFileDirectory)../ActorNet.Generators/bin/$(Configuration)/netstandard2.0/ActorNet.Generators.dll"
+            Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
+    </ItemGroup>
+  </Target>
+
+  <ItemGroup>
+    <!--
       So the suite can test internals that should not be public API - the challenge-response
       answer, for one. Exposing it publicly to make it testable would put an implementation detail
       in the package's surface forever.

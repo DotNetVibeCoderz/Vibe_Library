@@ -420,6 +420,45 @@ then being marked `Unreachable` while perfectly healthy.
 A port of `0` is fine: the real port is only known once the listener is up, and that is what gets
 advertised.
 
+## A binary wire format
+
+JSON is the right default - it is readable on a packet capture, and it is what the Go, Python and
+Node clients speak - and the wrong choice for the traffic between nodes, which nobody reads and
+which is mostly short repeated strings: a target address, a sending node, a message alias, a
+correlation id. In JSON each of them carries a quoted key, quotes and a comma.
+
+```csharp
+options.WireFormat = WireFormat.Binary;   // default is Json
+```
+
+Measured on this machine, envelope only:
+
+| Frame | JSON | Binary | |
+| --- | --- | --- | --- |
+| A tell with a small payload | 179 B | 94 B | 47% smaller |
+| An ask with a correlation id | 202 B | 125 B | 38% smaller |
+| The same ask carrying a trace | 255 B | 182 B | 29% smaller |
+| A gossip beat, five members | 364 B | 115 B | 68% smaller |
+
+Gossip gains most, which is the one that matters least per frame and most in aggregate: it is the
+traffic that never stops.
+
+**The payload is still JSON.** What this encodes is the envelope around it. Making the message body
+binary as well would mean a per-type codec for every registered message - a much larger thing, and
+one no cross-language client could follow. Saying "binary wire format" and meaning the envelope is
+worth stating plainly.
+
+**Nothing is negotiated.** A frame says which encoding it is in - JSON starts with `{`, binary with
+`0xAC` - and a connection is answered in the encoding it was addressed in. So:
+
+- a cluster can be rolled from one setting to the other **a node at a time**, with the two halves
+  talking to each other throughout;
+- the SDK clients are unaffected however this is set, because they address a node in JSON and are
+  answered in JSON.
+
+The setting only decides what a node writes when it opens a connection. There is no binary client
+in any of the four SDKs.
+
 ## Securing a cluster
 
 Both encryption and authentication are off by default, which is why the deployment notes say to keep

@@ -126,6 +126,23 @@ public sealed class ActorSystemOptions
     /// <summary>Supervision policy for actors that were not registered with one of their own.</summary>
     public SupervisorStrategy DefaultSupervisorStrategy { get; set; } = SupervisorStrategy.Default;
 
+    /// <summary>
+    /// The encoding this node writes when it opens a connection to a peer.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Reading is always both: a frame says which encoding it is in, and a connection is answered
+    /// in the encoding it was addressed in. So this only decides what this node sends first, and a
+    /// cluster can be rolled from one to the other a node at a time without a flag day.
+    /// </para>
+    /// <para>
+    /// The Go, Python and Node clients speak JSON only. They are unaffected - they address a node
+    /// in JSON and are answered in JSON however this is set - but a client written against the
+    /// binary format does not exist.
+    /// </para>
+    /// </remarks>
+    public Network.WireFormat WireFormat { get; set; } = Network.WireFormat.Json;
+
     /// <summary>Cluster membership and placement settings.</summary>
     public ClusterOptions Cluster { get; set; } = new();
 

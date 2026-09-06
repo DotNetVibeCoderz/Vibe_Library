@@ -205,6 +205,44 @@ The buffer is bounded and drops the oldest; `Count` is still the exact lifetime 
 failing to deliver is usually failing a lot, and an unbounded record of that is a second outage on
 top of the first. Swap it with `options.DeadLetters`.
 
+## Inside an ASP.NET Core application
+
+`ActorNet.AspNetCore` is the integration for the deployment this is most likely to be in: a node
+living inside a web application, where an orchestrator decides whether to send it traffic.
+
+```csharp
+builder.Services.AddActorNet(actors => { /* ... */ });
+builder.Services.AddHealthChecks().AddActorNetCheck();
+
+var app = builder.Build();
+
+app.MapHealthChecks("/ready", new() { Predicate = r => r.Tags.Contains("ready") });
+app.MapActorNetDiagnostics().RequireAuthorization();
+app.MapGet("/orders/{id}", …).RequireActorNetReady();
+```
+
+**The health check reports what the node can see, not that the process is up.** A node that has
+lost the cluster and is answering for keys it no longer owns looks perfectly alive to a plain
+liveness probe. Three outcomes:
+
+| | When |
+| --- | --- |
+| Healthy | Every member it knows about is reachable |
+| Degraded | Some peer is unreachable - it is still serving its own keys correctly |
+| Unhealthy | This node is off the ring: it lost a partition, or it is leaving |
+
+Unreachable peers are degraded rather than unhealthy on purpose. Unreachable means "missed a few
+beats, still on the ring", and restarting a node over that turns a blip into a rebalance.
+
+**`MapActorNetDiagnostics` exposes two read-only endpoints** — `/actornet/cluster` for the
+membership and each member's share of the keyspace, `/actornet/metrics` for the counters. It is what
+the console shows, for a deployment that has no console. Nothing is authorized by default and it
+exposes node addresses and actor keys, so the returned group takes `RequireAuthorization()` like any
+other.
+
+**`RequireActorNetReady()` answers 503 with a `Retry-After`** while the node is off the ring, for
+the window between it deciding it is done and the load balancer noticing.
+
 ## Exporting to OpenTelemetry
 
 The console reads the runtime's own counters, which is fine for one node and useless for anything

@@ -426,6 +426,45 @@ jalan, ditemukan sekali, lalu ditandai `Unreachable` padahal sehat.
 Port `0` tidak masalah: port sesungguhnya baru diketahui setelah listener naik, dan itulah yang
 diiklankan.
 
+## Format kabel biner
+
+JSON adalah bawaan yang tepat — bisa dibaca langsung pada tangkapan paket, dan itulah yang dipahami
+klien Go, Python, dan Node — sekaligus pilihan yang keliru untuk lalu lintas antar node, yang tak
+dibaca siapa pun dan isinya kebanyakan string pendek yang berulang: alamat tujuan, node pengirim,
+alias pesan, id korelasi. Dalam JSON masing-masing membawa kunci berkutip, tanda kutip, dan koma.
+
+```csharp
+options.WireFormat = WireFormat.Binary;   // bawaannya Json
+```
+
+Diukur di mesin ini, hanya amplopnya:
+
+| Frame | JSON | Biner | |
+| --- | --- | --- | --- |
+| `tell` dengan payload kecil | 179 B | 94 B | 47% lebih kecil |
+| `ask` dengan id korelasi | 202 B | 125 B | 38% lebih kecil |
+| `ask` yang sama membawa trace | 255 B | 182 B | 29% lebih kecil |
+| Satu denyut gossip, lima anggota | 364 B | 115 B | 68% lebih kecil |
+
+Gossip paling banyak untungnya, dan itu justru yang paling kecil artinya per frame dan paling besar
+artinya secara total: ia lalu lintas yang tidak pernah berhenti.
+
+**Payload-nya tetap JSON.** Yang disandikan di sini adalah amplop di sekelilingnya. Membuat badan
+pesannya ikut biner berarti satu codec per tipe untuk setiap pesan terdaftar — perkara yang jauh
+lebih besar, dan tak satu pun klien lintas bahasa bisa mengikutinya. Mengatakan "format kabel biner"
+padahal yang dimaksud amplopnya perlu disebutkan terus terang.
+
+**Tidak ada yang dinegosiasikan.** Sebuah frame menyatakan sendiri sandinya — JSON diawali `{`, biner
+diawali `0xAC` — dan sebuah koneksi dijawab dengan sandi yang dipakai menyapanya. Jadi:
+
+- sebuah cluster bisa dipindahkan dari satu setelan ke setelan lain **satu node sekali jalan**,
+  dengan kedua belahannya tetap saling bicara sepanjang proses;
+- klien SDK tidak terpengaruh bagaimanapun ini disetel, karena mereka menyapa node dengan JSON dan
+  dijawab dengan JSON.
+
+Setelan ini hanya menentukan apa yang ditulis sebuah node ketika ia membuka koneksi. Tidak ada klien
+biner di keempat SDK itu.
+
 ## Mengamankan cluster
 
 Enkripsi dan autentikasi keduanya mati secara bawaan — itulah sebabnya catatan penerapan menyarankan

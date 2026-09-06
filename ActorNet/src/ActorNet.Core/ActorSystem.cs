@@ -165,7 +165,7 @@ public sealed class ActorSystem : IActorSystem
             _transport = new TcpTransport(
                 Options.Host, Options.Port, OnFrameAsync, _cluster.Resolve,
                 LoggerFactory.CreateLogger<TcpTransport>(), Options.Security, Options.SendTimeout,
-                Options.OutboundQueueCapacity);
+                Options.OutboundQueueCapacity, Options.WireFormat);
             await _transport.StartAsync(cancellationToken).ConfigureAwait(false);
             // The bound port unless one was pinned - a published container port is not the port
             // the listener actually opened.

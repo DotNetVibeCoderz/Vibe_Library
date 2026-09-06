@@ -27,6 +27,8 @@ works and something automated proves it** — not when the code exists.
 - [x] Congestion, outage, refusal and ask timeout are four distinct, diagnosable failures
 - [x] `SendTimeout` and `OutboundQueueCapacity` for the per-peer send queue
 - [x] Dead-letter queue for undeliverable messages, bounded, with a subscription
+- [x] `[ActorInterface]`: request and reply records, a proxy and an actor base, generated and
+      checked at compile time
 - [ ] Message priority or a second mailbox lane
 
 ## Supervision
@@ -98,7 +100,8 @@ works and something automated proves it** — not when the code exists.
 - [x] Replies to non-member clients over their inbound connection
 - [x] TLS between nodes (1.2/1.3), with thumbprint pinning and optional mutual TLS
 - [x] Authentication between nodes - HMAC challenge-response, the secret never sent
-- [ ] Binary serialization option
+- [x] A binary envelope encoding, chosen per node and detected per frame
+- [ ] A binary payload; the message body is still JSON inside a binary envelope
 
 ## Streams
 
@@ -125,6 +128,8 @@ works and something automated proves it** — not when the code exists.
 - [x] Read-only HTTP API (`/api/metrics`, `/api/cluster`)
 - [x] Avalonia desktop samples — banking, telemetry, ordering, supervision
 - [x] BenchmarkDotNet suite for messaging and routing
+- [x] `ActorNet.AspNetCore`: a cluster-aware health check, read-only diagnostics endpoints, and a
+      readiness filter
 - [ ] Cross-node metrics aggregation in the console (it shows one node)
 - [ ] Actor inspector — read an actor's state without writing a query message
 
@@ -179,6 +184,8 @@ Ticking a box means it works, not that it is finished. These are the caveats wor
 
 - **The console shows one node.** Counters and the actor list are local. The ring and membership
   are cluster-wide, but there is no aggregation across nodes.
+- **The generated proxies have no benchmark.** They emit the same calls a hand-written ask makes,
+  so there is no reason to expect a difference, and "no reason to expect" is not a measurement.
 - **The gossip fanout has only been reasoned about, not measured.** A rotation of four peers per
   beat converges in about log(members) rounds on paper; the largest cluster ever run here is four
   nodes, which is below the fanout and therefore still a full mesh.

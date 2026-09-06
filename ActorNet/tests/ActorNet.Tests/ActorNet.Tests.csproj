@@ -35,7 +35,18 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- The ASP.NET Core integration is tested by standing a real app up on a loopback port. -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="../../src/ActorNet.Core/ActorNet.Core.csproj" />
+
+    <!-- An analyzer reference is not transitive through a project reference, so the generator has
+         to be named again here or the suite would compile without ever running it. -->
+    <ProjectReference Include="../../src/ActorNet.Generators/ActorNet.Generators.csproj"
+                     OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="../../src/ActorNet.AspNetCore/ActorNet.AspNetCore.csproj" />
 
     <!--
       Every persistence provider, so one conformance suite can run against all of them. SQLite and
