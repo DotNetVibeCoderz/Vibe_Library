@@ -254,6 +254,30 @@ MySQL or Redis; see [Persistence](05-persistence.md).
 **In-memory-only state does not survive a rebalance.** Migrating live state would mean a
 distributed handover protocol; the store already solves the problem.
 
+### Taking a node out on purpose
+
+Stopping a node is not the same event as losing one, and it gets the one thing a failure cannot
+offer: the chance to put its actors' state where the next owner will look **before** telling anyone
+it is going.
+
+`StopAsync` therefore runs in this order:
+
+1. Deactivate every live actor and wait for them, which flushes their state.
+2. Announce the leave, so peers take this node off the ring.
+3. Drain once more, for anything that activated while step 1 was running — this node still owned
+   those keys and was right to serve them.
+4. Close the transport.
+
+The order is the whole point. Announcing first means a peer rebuilds its ring and the first message
+to a key that moved reactivates that actor from a store this node has not written to yet: the new
+activation starts from a stale version, and the flush still to come lands on top of whatever it went
+on to do. On an in-memory store that window is microseconds and you will never see it; on a database
+across a network it is however long a write takes.
+
+This makes a rolling restart safe — take one node out, wait for the ring to settle, bring it back —
+but it is not yet a rolling *upgrade*. The next owner still activates on demand rather than being
+handed the actors in advance, so the first message to each moved key pays a load from the store.
+
 ## Sending across nodes
 
 Nothing in your code changes:

@@ -170,22 +170,20 @@ public sealed class ActorSystem : IActorSystem
 
         _logger.LogInformation("Node {NodeId} stopping; deactivating {Count} actor(s).", NodeId, _cells.Count);
 
+        // Flush before announcing, not after. A peer that hears the leave rebuilds its ring at once
+        // and the first message to a key that moved reactivates that actor from the store - so if
+        // this node's state has not landed yet, the new activation starts from a stale version and
+        // the flush still to come overwrites whatever it went on to do.
+        await DrainAsync().ConfigureAwait(false);
+
         await _cluster.LeaveAsync(cancellationToken).ConfigureAwait(false);
+
+        // Traffic that arrived during the first drain was handled here, because this node still
+        // owned those keys, and can have activated an actor the first pass had already been past.
+        // One more pass: after the announce nothing new is routed here.
+        await DrainAsync().ConfigureAwait(false);
+
         await _shutdown.CancelAsync().ConfigureAwait(false);
-
-        // Deactivation runs on each actor's own loop, so stop them all and then wait once, rather
-        // than serializing a node with thousands of actors through one shutdown at a time.
-        // Only cells that were actually built: touching a Lazy that has not run yet would
-        // activate an actor purely in order to deactivate it.
-        var cells = _cells.Values.Where(l => l.IsValueCreated).Select(l => l.Value).ToArray();
-        foreach (var cell in cells) cell.RequestStop(DeactivationReason.Shutdown);
-
-        var drained = Task.WhenAll(cells.Select(c => c.Stopped));
-        if (await Task.WhenAny(drained, Task.Delay(TimeSpan.FromSeconds(15), CancellationToken.None)).ConfigureAwait(false) != drained)
-        {
-            _logger.LogWarning("Some actors did not deactivate within 15s; aborting their loops.");
-            foreach (var cell in cells) cell.Abort();
-        }
 
         foreach (var pending in _pendingAsks.Values) pending.Fail(new ActorNetException("The node stopped before a reply arrived."));
         _pendingAsks.Clear();
@@ -194,6 +192,27 @@ public sealed class ActorSystem : IActorSystem
         if (_transport is not null) await _transport.DisposeAsync().ConfigureAwait(false);
 
         _logger.LogInformation("Node {NodeId} stopped.", NodeId);
+    }
+
+    /// <summary>Deactivates every live actor and waits for them to finish.</summary>
+    /// <remarks>
+    /// Deactivation runs on each actor's own loop, so they are all asked to stop and then waited on
+    /// once, rather than serializing a node with thousands of actors through one shutdown at a
+    /// time. Only cells that were actually built: touching a <see cref="Lazy{T}"/> that has not run
+    /// yet would activate an actor purely in order to deactivate it.
+    /// </remarks>
+    private async Task DrainAsync()
+    {
+        var cells = _cells.Values.Where(l => l.IsValueCreated).Select(l => l.Value).ToArray();
+        if (cells.Length == 0) return;
+
+        foreach (var cell in cells) cell.RequestStop(DeactivationReason.Shutdown);
+
+        var drained = Task.WhenAll(cells.Select(c => c.Stopped));
+        if (await Task.WhenAny(drained, Task.Delay(TimeSpan.FromSeconds(15), CancellationToken.None)).ConfigureAwait(false) == drained) return;
+
+        _logger.LogWarning("Some actors did not deactivate within 15s; aborting their loops.");
+        foreach (var cell in cells) cell.Abort();
     }
 
     /// <inheritdoc />

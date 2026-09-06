@@ -40,7 +40,7 @@ peer's own heartbeat history rather than one deadline chosen for the worst link.
 | Theme | Why it matters |
 | --- | --- |
 | Replica placement | `PreferenceList` exists and nothing uses it. Standby replicas would make a node loss invisible. |
-| Rolling upgrade | Handing off a node's actors before it stops, rather than deactivating them and waiting for traffic. |
+| Rolling upgrade | A node now flushes before it announces its leave, so a rolling restart is safe. What is left is the warm half: handing the actors to the next owner rather than making it load them on the first message. |
 
 ## 0.4 — ecosystem
 
