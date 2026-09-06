@@ -53,6 +53,17 @@ Menggambar ulang tata letak tetap di tempat alih-alih menggulir — monitor yang
 terbaca jauh di bawah kecepatan runtime ini. `--load` menghasilkan lalu lintas sintetis supaya ada
 yang bisa dilihat.
 
+Node yang ber-cluster juga mendapat tabel anggota di samping daftar aktor tersibuk, dan itu adalah
+pandangan node ini sendiri, bukan kebenaran bersama:
+
+![Monitor terminal mengawasi cluster tiga node](../images/monitor-3nodes.png)
+
+```bash
+actornet monitor --host 0.0.0.0 --advertised-host 10.0.1.5 --port 9000 --cluster --load
+```
+
+Pada node berdiri sendiri tabelnya ditiadakan — isinya cuma satu hal yang sudah disebut header.
+
 ### Bench
 
 ```bash

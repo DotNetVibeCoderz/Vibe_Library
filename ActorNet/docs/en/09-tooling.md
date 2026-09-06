@@ -51,6 +51,17 @@ actornet monitor --load --refresh 250 --top 20
 Redraws a fixed layout in place rather than scrolling — a scrolling monitor is unreadable well
 below what this runtime does. `--load` generates synthetic traffic so there is something to watch.
 
+A clustered node also gets a member table beside the busiest actors, which is this node's own view
+of the membership rather than a shared truth:
+
+![The terminal monitor watching a three-node cluster](../images/monitor-3nodes.png)
+
+```bash
+actornet monitor --host 0.0.0.0 --advertised-host 10.0.1.5 --port 9000 --cluster --load
+```
+
+On a standalone node the table is omitted — it would say one thing the header already says.
+
 ### Bench
 
 ```bash

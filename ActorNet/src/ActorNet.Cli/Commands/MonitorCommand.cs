@@ -1,5 +1,6 @@
 // Dibuat oleh Gravicode Studios, dipimpin oleh Kang Fadhil.
 
+using ActorNet.Cluster;
 using ActorNet.Metrics;
 using Spectre.Console;
 using Spectre.Console.Cli;
@@ -50,10 +51,18 @@ public sealed class MonitorCommand : AsyncCommand<MonitorSettings>
         AnsiConsole.MarkupLine($"[{Theme.Muted}]Press Ctrl+C to stop.[/]");
         AnsiConsole.WriteLine();
 
+        // The member table only earns its width when there is a cluster to show. On a standalone
+        // node it would be one row saying what the header already says.
+        var clustered = system.Options.Cluster.Enabled;
+
+        var body = new Layout("body");
+        if (clustered)
+            body.SplitColumns(new Layout("actors"), new Layout("members").Size(66));
+        else
+            body.SplitColumns(new Layout("actors"));
+
         var layout = new Layout("root")
-            .SplitRows(
-                new Layout("summary").Size(9),
-                new Layout("actors"));
+            .SplitRows(new Layout("summary").Size(9), body);
 
         try
         {
@@ -66,6 +75,7 @@ public sealed class MonitorCommand : AsyncCommand<MonitorSettings>
                         var snapshot = system.Metrics.Snapshot();
                         layout["summary"].Update(SummaryPanel(system, snapshot));
                         layout["actors"].Update(ActorsPanel(snapshot, settings.Top));
+                        if (clustered) layout["members"].Update(MembersPanel(system));
                         live.Refresh();
 
                         try { await Task.Delay(Math.Max(100, settings.RefreshMilliseconds), stopping.Token); }
@@ -108,16 +118,55 @@ public sealed class MonitorCommand : AsyncCommand<MonitorSettings>
         columns.AddRow(left, middle, right);
 
         var members = system.Cluster.Members.Count;
+
+        // Only the node id is escaped: the rest of the header is markup this method wrote, and
+        // escaping the whole string printed the colour tags instead of applying them.
+        var name = system.NodeId.Safe();
         var header = system.Options.Cluster.Enabled
-            ? $"{system.NodeId} [{Theme.Muted}]|[/] {members} member(s)"
-            : $"{system.NodeId} [{Theme.Muted}]| standalone[/]";
+            ? $"{name} [{Theme.Muted}]|[/] {members} member(s)"
+            : $"{name} [{Theme.Muted}]| standalone[/]";
 
         return new Panel(columns)
-            .Header($"[{Theme.Accent}]{header.Safe()}[/]")
+            .Header($"[{Theme.Accent}]{header}[/]")
             .Border(BoxBorder.Rounded)
             .BorderColor(Color.FromHex(Theme.Muted))
             .Expand();
     }
+
+    /// <summary>
+    /// This node's view of the membership.
+    /// </summary>
+    /// <remarks>
+    /// Every node keeps its own table, so what is shown here is one opinion rather than the truth -
+    /// a peer that reads Unreachable here may be perfectly healthy from somewhere else.
+    /// </remarks>
+    private static Panel MembersPanel(ActorSystem system)
+    {
+        var table = Theme.Grid("Node", "Address", "Status");
+
+        foreach (var member in system.Cluster.Members.OrderBy(m => m.NodeId, StringComparer.Ordinal))
+        {
+            var self = member.NodeId == system.NodeId ? $" [{Theme.Muted}](this node)[/]" : string.Empty;
+            table.AddRow(
+                $"[{Theme.Text}]{member.NodeId.Safe()}[/]{self}",
+                $"[{Theme.Muted}]{member.Address.Safe()}[/]",
+                Status(member.Status));
+        }
+
+        return new Panel(table)
+            .Header($"[{Theme.Accent}]Cluster[/]")
+            .Border(BoxBorder.Rounded)
+            .BorderColor(Color.FromHex(Theme.Muted))
+            .Expand();
+    }
+
+    private static string Status(MemberStatus status) => status switch
+    {
+        MemberStatus.Up => $"[{Theme.Good}]Up[/]",
+        MemberStatus.Unreachable => $"[{Theme.Warn}]Unreachable[/]",
+        MemberStatus.Down => $"[{Theme.Bad}]Down[/]",
+        _ => $"[{Theme.Muted}]{status}[/]",
+    };
 
     private static string Emphasise(long value, long warnAbove) =>
         value > warnAbove ? $"[{Theme.Warn}]{value:N0}[/]" : $"[{Theme.Muted}]{value:N0}[/]";

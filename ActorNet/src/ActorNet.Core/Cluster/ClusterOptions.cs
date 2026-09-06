@@ -22,6 +22,17 @@ public sealed class ClusterOptions
     public TimeSpan HeartbeatInterval { get; set; } = TimeSpan.FromSeconds(2);
 
     /// <summary>
+    /// How long the startup handshake may spend on its seeds before the node comes up anyway.
+    /// </summary>
+    /// <remarks>
+    /// A seed behind a firewall that drops packets rather than refusing them is not refused: the
+    /// connect sits there until the OS gives up, which is a minute or more. Without a deadline that
+    /// is a minute of a node not starting. Coming up alone is safe, because the handshake is
+    /// retried on every beat until a peer answers.
+    /// </remarks>
+    public TimeSpan JoinTimeout { get; set; } = TimeSpan.FromSeconds(5);
+
+    /// <summary>
     /// Silence after which a peer is marked <see cref="MemberStatus.Unreachable"/>. Unreachable
     /// members still own their slice of the ring - the assumption is a blip, not a departure.
     /// </summary>
@@ -57,6 +68,8 @@ public sealed class ClusterOptions
             throw new ArgumentException(
                 $"DownAfter ({DownAfter}) must be longer than UnreachableAfter ({UnreachableAfter}); otherwise a short pause evicts a healthy node and triggers a needless rebalance.",
                 nameof(DownAfter));
+        if (JoinTimeout <= TimeSpan.Zero)
+            throw new ArgumentOutOfRangeException(nameof(JoinTimeout), JoinTimeout, "The startup handshake needs some time to run.");
         if (HeartbeatInterval >= UnreachableAfter)
             throw new ArgumentException(
                 $"HeartbeatInterval ({HeartbeatInterval}) must be shorter than UnreachableAfter ({UnreachableAfter}), or a node is declared unreachable before its next beat is due.",

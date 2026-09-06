@@ -114,7 +114,17 @@ public sealed class ClusterMembership : IClusterView, IAsyncDisposable
             return;
         }
 
-        await JoinSeedsAsync(cancellationToken).ConfigureAwait(false);
+        // Starting is not allowed to wait on a silent seed. Coming up alone is a working state -
+        // the handshake is retried on every beat - whereas a node that has not finished starting
+        // cannot even serve the actors it already owns.
+        // A seed that runs out of time is reported the same way as one that refused: the handshake
+        // counts how many answered, and "Join sent to 0 of 2 seeds" is the line either way.
+        using (var joining = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken))
+        {
+            joining.CancelAfter(_options.JoinTimeout);
+            await JoinSeedsAsync(joining.Token).ConfigureAwait(false);
+        }
+
         _heartbeatLoop = Task.Run(() => HeartbeatLoopAsync(_cts.Token), CancellationToken.None);
     }
 
@@ -131,7 +141,41 @@ public sealed class ClusterMembership : IClusterView, IAsyncDisposable
         }
     }
 
-    private async Task JoinSeedsAsync(CancellationToken cancellationToken)
+    /// <summary>
+    /// Runs the seed handshake again while this node knows no routable peer.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The handshake used to be attempted exactly once, at startup. A node whose seeds were not
+    /// reachable in that instant stayed alone forever, even after they came up seconds later - and
+    /// "not reachable in that instant" is the normal case, not the exceptional one: nodes start in
+    /// arbitrary order, and a single dropped packet on a wireless link is enough.
+    /// </para>
+    /// <para>
+    /// Found by running two nodes on two machines. Every test until then started the seed first,
+    /// on loopback, where a connect does not transiently fail - so the suite could not have caught
+    /// it.
+    /// </para>
+    /// <para>
+    /// This also covers recovery: a node whose only peers have all gone <see cref="MemberStatus.Down"/>
+    /// starts seeking them out again rather than waiting for someone else to make the first move.
+    /// </para>
+    /// </remarks>
+    private async Task RejoinIfAloneAsync(CancellationToken cancellationToken)
+    {
+        if (_options.Seeds.Count == 0) return;
+
+        // A peer that is merely unreachable still counts - it is on the ring and expected back, and
+        // re-seeding on a blip would be churn rather than recovery.
+        foreach (var (nodeId, member) in _members)
+        {
+            if (nodeId != SelfNodeId && member.IsRoutable) return;
+        }
+
+        await JoinSeedsAsync(cancellationToken, isRetry: true).ConfigureAwait(false);
+    }
+
+    private async Task JoinSeedsAsync(CancellationToken cancellationToken, bool isRetry = false)
     {
         var self = _members[SelfNodeId];
         var frame = new WireEnvelope
@@ -141,25 +185,47 @@ public sealed class ClusterMembership : IClusterView, IAsyncDisposable
             Members = [ToWire(self)],
         };
 
-        var reached = 0;
+        // Seeds are contacted at once rather than in turn. They are independent messages, and one
+        // seed behind a firewall that drops instead of refusing takes the OS a minute to give up
+        // on - long enough, in turn, to starve every seed listed after it. Listing a second seed
+        // is meant to make a join more likely, not to make it hostage to the order.
+        var attempts = new List<Task<bool>>(_options.Seeds.Count);
         foreach (var seed in _options.Seeds)
         {
             if (!ClusterOptions.TryParseSeed(seed, out var host, out var port)) continue;
             if (port == self.Port && IsSelfHost(host)) continue;
 
-            try
-            {
-                await _transport!.SendToAddressAsync(host, port, frame, cancellationToken).ConfigureAwait(false);
-                reached++;
-            }
-            catch (Exception ex)
-            {
-                // A seed that is down is normal - the first node to start has none reachable.
-                _logger.LogDebug(ex, "Seed {Seed} did not answer the join.", seed);
-            }
+            attempts.Add(SendJoinAsync(seed, host, port, frame, cancellationToken));
         }
 
-        _logger.LogInformation("Join sent to {Reached} of {Total} seeds.", reached, _options.Seeds.Count);
+        var reached = 0;
+        foreach (var answered in await Task.WhenAll(attempts).ConfigureAwait(false))
+        {
+            if (answered) reached++;
+        }
+
+        // Retries run on every heartbeat while the node is alone, so logging each one at
+        // Information would bury everything else. The first attempt still says what happened.
+        if (isRetry)
+            _logger.LogDebug("Still alone; reached {Reached} of {Total} seeds.", reached, _options.Seeds.Count);
+        else
+            _logger.LogInformation("Join sent to {Reached} of {Total} seeds.", reached, _options.Seeds.Count);
+    }
+
+    /// <summary>Sends one join frame. Never throws: a seed that is down is an ordinary outcome.</summary>
+    private async Task<bool> SendJoinAsync(string seed, string host, int port, WireEnvelope frame, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await _transport!.SendToAddressAsync(host, port, frame, cancellationToken).ConfigureAwait(false);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            // A seed that is down is normal - the first node to start has none reachable.
+            _logger.LogDebug(ex, "Seed {Seed} did not answer the join.", seed);
+            return false;
+        }
     }
 
     private bool IsSelfHost(string host) =>
@@ -174,10 +240,22 @@ public sealed class ClusterMembership : IClusterView, IAsyncDisposable
         using var timer = new PeriodicTimer(_options.HeartbeatInterval);
         while (await SafeWaitAsync(timer, cancellationToken).ConfigureAwait(false))
         {
+            // A peer whose packets are silently dropped - a firewall that discards rather than
+            // refuses is the common case - takes the OS a minute or more to give up on. Awaiting
+            // that here would hold up failure detection and every other peer's beat behind one
+            // black hole, so a round gets one interval and then moves on.
+            using var round = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            round.CancelAfter(_options.HeartbeatInterval);
+
             try
             {
                 DetectFailures();
-                await GossipAsync(cancellationToken).ConfigureAwait(false);
+                await RejoinIfAloneAsync(round.Token).ConfigureAwait(false);
+                await GossipAsync(round.Token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (round.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+            {
+                _logger.LogDebug("Heartbeat round ran out of time; the next one starts on schedule.");
             }
             catch (Exception ex)
             {

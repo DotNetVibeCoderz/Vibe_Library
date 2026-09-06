@@ -76,6 +76,24 @@ Protokolnya kecil:
 Itu konvergen, dan biayanya O(member²) denyut per interval — tidak berarti pada puluhan node, dan
 membutuhkan batas fanout di atas itu. Ini ada di roadmap, dan ini adalah plafon nyata hari ini.
 
+### Node boleh dinyalakan dalam urutan apa pun
+
+Langkah 1 diulang. Node yang punya seed tetapi sama sekali tidak melihat peer akan mengirim `Join`
+lagi pada setiap heartbeat, sehingga node yang seed-nya belum hidup langsung bergabung begitu salah
+satu seed itu ada:
+
+```
+Join sent to 0 of 1 seeds.        # belum ada yang mendengarkan di port seed
+Still alone; reached 0 of 1 seeds. # sekali tiap heartbeat, di level debug
+cluster: mac-c:Up, win-a:Up        # seed-nya hidup dan join-nya mendarat
+```
+
+Pengulangan berhenti begitu ada peer di ring, dan peer `Unreachable` pun dihitung — ia memang
+ditunggu kembali, jadi menyemai ulang karena gangguan sesaat justru menimbulkan keriuhan, bukan
+pemulihan. Ini baru terasa di luar loopback: koneksi lokal ke port tertutup ditolak seketika dan
+handshake sekali-di-awal biasanya menang balapan, sedangkan di jaringan sungguhan connect yang sama
+gagal dengan cara yang membuat satu percobaan itu untung-untungan.
+
 ### Status
 
 | Status | Di ring? | Arti |
@@ -94,11 +112,17 @@ ulang. Menunggu lebih murah daripada salah menduga.
 options.Cluster.HeartbeatInterval = TimeSpan.FromSeconds(2);
 options.Cluster.UnreachableAfter  = TimeSpan.FromSeconds(10);   // dicurigai, masih dirutekan
 options.Cluster.DownAfter         = TimeSpan.FromSeconds(30);   // dikeluarkan dari ring
+options.Cluster.JoinTimeout       = TimeSpan.FromSeconds(5);    // lama start menunggu seed
 ```
 
 `Validate()` menolak `DownAfter <= UnreachableAfter` (jeda singkat akan mengeluarkan node sehat) dan
 `HeartbeatInterval >= UnreachableAfter` (sebuah node akan dinyatakan tidak terjangkau sebelum denyut
 berikutnya jatuh tempo).
+
+`JoinTimeout` hanya membatasi proses start. Seed dihubungi serentak, bukan bergiliran, sehingga satu
+seed di balik firewall yang membuang paket tidak bisa menelantarkan seed lain; dan ketika tenggatnya
+lewat, node itu naik sendirian lalu terus mencoba lagi. Node yang belum selesai start tidak bisa
+melayani aktor yang sudah menjadi miliknya, dan itu lebih buruk daripada sebentar sendirian.
 
 ### Nomor inkarnasi
 
@@ -185,8 +209,25 @@ actornet run --node-id a --host 10.0.1.5 --port 9000 --cluster
 actornet run --node-id b --host 10.0.1.6 --port 9000 --seed 10.0.1.5:9000
 ```
 
-Sudah diuji pada antarmuka jaringan sungguhan, bukan loopback: dua node yang terikat ke alamat LAN
-konvergen dan masing-masing melihat yang lain `Up`.
+![Satu cluster di tiga mesin, dilihat dari konsol](../images/console-cluster-3nodes.png)
+
+Sudah diuji lintas tiga mesin, bukan loopback: Windows di x64, macOS 15 di Intel, dan macOS 13 di
+Apple Silicon bergabung dalam satu cluster lewat LAN nirkabel, sepakat pada tabel tiga anggota yang
+sama, dan saling menjawab `ask`. Hash ring-nya tidak bergantung arsitektur maupun proses, dan itulah
+yang membuat node arm64 dan node x64 sepakat siapa pemilik sebuah kunci.
+
+**macOS 15 menyaring akses jaringan lokal per biner.** Build self-contained yang dijalankan lewat
+SSH mendapat `SocketException (65): No route to host` saat menghubungi peer di LAN, padahal `nc`
+dari shell yang sama tersambung - alamatnya benar, aplikasinya yang ditolak. Tandatangani binernya
+sebelum peluncuran pertama:
+
+```bash
+codesign -s - --force ./ActorNet.Cli
+```
+
+Itu cukup untuk uji coba. Node yang benar-benar diterapkan sebaiknya ditandatangani dengan identitas
+sungguhan dan diberi izin Local Network sekali di System Settings, kalau tidak macOS akan terus
+membuat jaringan yang sehat tampak seperti kegagalan routing.
 
 ### Docker atau Kubernetes
 

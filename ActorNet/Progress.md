@@ -51,7 +51,11 @@ works and something automated proves it** — not when the code exists.
 - [x] Automatic rebalancing on membership change
 - [x] Graceful leave
 - [x] `--cluster` for the first node, which has no seeds of its own
-- [x] Nodes across machines, bound to a routable address - verified on a real network interface
+- [x] Nodes across machines, bound to a routable address - three machines, two operating systems
+      and two processor architectures in one cluster
+- [x] The seed join is retried while a node is alone, so nodes may start in any order
+- [x] Seeds contacted concurrently and bounded by `JoinTimeout`, so a black-holed seed neither
+      starves the others nor holds up startup
 - [x] Hostname advertising for containers - binds all interfaces, advertises the name
 - [x] `AdvertisedHost` / `AdvertisedPort` separate from the bind address, with startup validation
 - [ ] Phi-accrual failure detection
@@ -175,9 +179,10 @@ Ticking a box means it works, not that it is finished. These are the caveats wor
   but increment. It measures the runtime's floor, not an application's throughput.
 - **Rebalancing deactivates rather than migrates.** An actor whose key moves is flushed and
   reactivated from the store on its new owner, so an actor with no persistent state loses it.
-- **A cluster has only ever run on one machine here.** Two nodes were verified over a real network
-  interface and two over a hostname, which exercises the advertise-then-dial path - but not across
-  separate hosts, a firewall, or real containers.
+- **A cluster has now run across three machines, but never in containers.** Windows x64, macOS 15
+  on Intel and macOS 13 on Apple Silicon joined one cluster over a wireless LAN, agreed on the same
+  three-member table, and routed tells and asks between them. Docker and Kubernetes remain
+  unexercised, and nothing has been run across a WAN or a NAT boundary.
 - **Four of the seven persistence providers have never run on a developer machine here** - there is
   no Docker on it. PostgreSQL, SQL Server, MySQL and Redis are exercised by the CI job against
   service containers, and that job fails if any of their tests were skipped. SQLite and the two

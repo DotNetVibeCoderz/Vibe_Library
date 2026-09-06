@@ -73,6 +73,23 @@ A small protocol:
 That converges, and it costs O(members²) beats per interval — nothing at tens of nodes, and in need
 of a fanout limit beyond that. It is on the roadmap, and it is a real ceiling today.
 
+### Nodes may start in any order
+
+Step 1 is retried. A node with seeds configured that can see no peer at all sends `Join` again on
+every heartbeat, so a node whose seeds were not up yet joins as soon as one of them is:
+
+```
+Join sent to 0 of 1 seeds.        # nothing is listening on the seed's port yet
+Still alone; reached 0 of 1 seeds. # once per heartbeat, at debug level
+cluster: mac-c:Up, win-a:Up        # the seed came up and the join landed
+```
+
+Retrying stops the moment any peer is on the ring, and an `Unreachable` peer counts — it is expected
+back, so re-seeding on a blip would be churn rather than recovery. This only matters off the
+loopback: a local connection to a closed port is refused instantly and the old startup-only
+handshake usually won the race, while over a real network the same connect fails in ways that make
+the one attempt a coin toss.
+
 ### Statuses
 
 | Status | On the ring? | Meaning |
@@ -91,11 +108,17 @@ than being wrong.
 options.Cluster.HeartbeatInterval = TimeSpan.FromSeconds(2);
 options.Cluster.UnreachableAfter  = TimeSpan.FromSeconds(10);   // suspicious, still routed to
 options.Cluster.DownAfter         = TimeSpan.FromSeconds(30);   // off the ring
+options.Cluster.JoinTimeout       = TimeSpan.FromSeconds(5);    // how long starting waits on seeds
 ```
 
 `Validate()` refuses `DownAfter <= UnreachableAfter` (a short pause would evict a healthy node) and
 `HeartbeatInterval >= UnreachableAfter` (a node would be declared unreachable before its next beat
 was due).
+
+`JoinTimeout` bounds startup only. Seeds are contacted at once rather than in turn, so one seed
+behind a firewall that drops packets cannot starve the others, and when the deadline passes the
+node comes up alone and keeps retrying. A node that has not finished starting cannot serve the
+actors it already owns, which is worse than being briefly alone.
 
 ### Incarnation numbers
 
@@ -183,8 +206,24 @@ actornet run --node-id a --host 10.0.1.5 --port 9000 --cluster
 actornet run --node-id b --host 10.0.1.6 --port 9000 --seed 10.0.1.5:9000
 ```
 
-Verified on a real network interface rather than loopback: two nodes bound to a LAN address
-converged and each saw the other `Up`.
+![One cluster across three machines, seen from the console](../images/console-cluster-3nodes.png)
+
+Verified across three machines rather than loopback: Windows on x64, macOS 15 on Intel and
+macOS 13 on Apple Silicon joined one cluster over a wireless LAN, agreed on the same three-member
+table, and answered each other's asks. The ring hash is architecture-independent as well as
+process-independent, which is what lets an arm64 node and an x64 node agree on who owns a key.
+
+**macOS 15 gates local network access per binary.** A self-contained build launched over SSH gets
+`SocketException (65): No route to host` when it dials a LAN peer, while `nc` from the same shell
+connects - the address is fine and the app is being denied. Sign the binary before the first launch:
+
+```bash
+codesign -s - --force ./ActorNet.Cli
+```
+
+That is enough for a test run. A deployed node should be signed with a real identity and granted
+Local Network access once in System Settings, or macOS will keep making a working network look like
+a routing failure.
 
 ### Docker or Kubernetes
 
