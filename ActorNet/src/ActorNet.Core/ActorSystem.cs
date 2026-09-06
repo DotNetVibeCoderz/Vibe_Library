@@ -107,6 +107,7 @@ public sealed class ActorSystem : IActorSystem
             Options.Cluster,
             LoggerFactory.CreateLogger<ClusterMembership>());
         _cluster.MembershipChanged += OnMembershipChanged;
+        _cluster.SelfDowned += OnSelfDowned;
     }
 
     /// <inheritdoc />
@@ -709,6 +710,25 @@ public sealed class ActorSystem : IActorSystem
     /// new owner from the store - so scaling out migrates roughly 1/N of the actors and nothing
     /// else moves.
     /// </remarks>
+    /// <summary>
+    /// Stops the node once the cluster has decided it is on the losing side of a partition.
+    /// </summary>
+    /// <remarks>
+    /// Continuing would mean serving actors this node no longer owns, while the winning side serves
+    /// its own copies - which is the divergence the strategy exists to prevent. Stopping is not a
+    /// failure to handle here; it is the handling.
+    /// </remarks>
+    private void OnSelfDowned(string because)
+    {
+        _logger.LogCritical("Node {NodeId} is stopping: {Because}.", NodeId, because);
+
+        _ = Task.Run(async () =>
+        {
+            try { await StopAsync().ConfigureAwait(false); }
+            catch (Exception ex) { _logger.LogError(ex, "Stopping after a split brain threw."); }
+        });
+    }
+
     private void OnMembershipChanged(IReadOnlyList<ClusterMember> members)
     {
         if (!Options.Cluster.RebalanceOnMembershipChange || _shutdown.IsCancellationRequested) return;

@@ -2,6 +2,42 @@
 
 namespace ActorNet.Cluster;
 
+/// <summary>What a node does when it can only see part of the cluster.</summary>
+public enum SplitBrainStrategy
+{
+    /// <summary>
+    /// Nothing. Both sides of a partition keep serving, which means two activations of the same
+    /// actor and two divergent versions of its state.
+    /// </summary>
+    /// <remarks>
+    /// The default, because the alternative is a node shutting itself down on its own judgement,
+    /// and whether availability or consistency is the thing to protect is not a framework's call.
+    /// </remarks>
+    None,
+
+    /// <summary>
+    /// The side that can still see more than half of the last agreed membership survives; the
+    /// other side takes itself down.
+    /// </summary>
+    /// <remarks>
+    /// An even split is settled by the lowest node id, so a two-node cluster does not lose both
+    /// halves. Membership counts against the last state everyone agreed on, not against what each
+    /// side can currently see - otherwise each side would count itself a majority of itself.
+    /// </remarks>
+    KeepMajority,
+
+    /// <summary>
+    /// A side survives only if it can see at least <see cref="ClusterOptions.StaticQuorumSize"/>
+    /// members.
+    /// </summary>
+    /// <remarks>
+    /// The right choice when the cluster size is fixed and known, and safer than a majority when
+    /// nodes are added and removed often: a majority of a membership that has itself drifted is
+    /// not the guarantee it looks like.
+    /// </remarks>
+    StaticQuorum,
+}
+
 /// <summary>How a peer's silence is turned into a verdict.</summary>
 public enum FailureDetection
 {
@@ -34,6 +70,33 @@ public sealed class ClusterOptions
 
     /// <summary>How often this node gossips its member table to a peer.</summary>
     public TimeSpan HeartbeatInterval { get; set; } = TimeSpan.FromSeconds(2);
+
+    /// <summary>
+    /// What this node does when it can only see part of the cluster.
+    /// </summary>
+    /// <remarks>
+    /// Off by default. Turning it on means a node may shut itself down without being asked, which
+    /// is the correct answer when divergent state would be worse than lost capacity - and the wrong
+    /// one when it would not.
+    /// </remarks>
+    public SplitBrainStrategy SplitBrainStrategy { get; set; } = SplitBrainStrategy.None;
+
+    /// <summary>Members a side must be able to see to survive, under <see cref="SplitBrainStrategy.StaticQuorum"/>.</summary>
+    /// <remarks>
+    /// Set it above half the intended cluster size, or two sides can both reach it and the strategy
+    /// protects nothing.
+    /// </remarks>
+    public int StaticQuorumSize { get; set; }
+
+    /// <summary>
+    /// How long the set of reachable members must hold still before a partition is acted on.
+    /// </summary>
+    /// <remarks>
+    /// A partition is rarely a clean cut: nodes drop out over several seconds, and deciding on the
+    /// first observation would mean deciding against a membership that is still moving. Waiting
+    /// costs the availability of the losing side for this long, and buys deciding once.
+    /// </remarks>
+    public TimeSpan SplitBrainStabilityWindow { get; set; } = TimeSpan.FromSeconds(7);
 
     /// <summary>
     /// How many peers this node gossips to per beat. Zero means every peer.
@@ -154,6 +217,10 @@ public sealed class ClusterOptions
             throw new ArgumentOutOfRangeException(nameof(MinimumStandardDeviation), MinimumStandardDeviation, "A spread of zero makes phi jump from nothing to enormous within a millisecond.");
         if (HeartbeatSampleSize < 2)
             throw new ArgumentOutOfRangeException(nameof(HeartbeatSampleSize), HeartbeatSampleSize, "Two samples are the fewest that have a spread at all.");
+        if (SplitBrainStrategy == SplitBrainStrategy.StaticQuorum && StaticQuorumSize < 1)
+            throw new ArgumentOutOfRangeException(nameof(StaticQuorumSize), StaticQuorumSize, "A static quorum needs a size; without one every side survives and the strategy protects nothing.");
+        if (SplitBrainStabilityWindow <= TimeSpan.Zero)
+            throw new ArgumentOutOfRangeException(nameof(SplitBrainStabilityWindow), SplitBrainStabilityWindow, "Deciding with no settling time decides against a membership that is still moving.");
         if (GossipFanout < 0)
             throw new ArgumentOutOfRangeException(nameof(GossipFanout), GossipFanout, "Use zero for every peer, not a negative number.");
         if (JoinTimeout <= TimeSpan.Zero)

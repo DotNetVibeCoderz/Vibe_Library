@@ -42,6 +42,11 @@ public sealed class ClusterMembership : IClusterView, IAsyncDisposable
     private readonly PhiAccrualFailureDetector _detector;
 
     private int _gossipCursor;
+    private readonly HashSet<string> _departed = new(StringComparer.Ordinal);
+    private string[] _lastAgreedMembership = [];
+    private string _partitionSignature = string.Empty;
+    private DateTimeOffset _partitionSince;
+    private bool _selfDowned;
 
     private ITransport? _transport;
     private Task? _heartbeatLoop;
@@ -53,6 +58,16 @@ public sealed class ClusterMembership : IClusterView, IAsyncDisposable
 
     /// <inheritdoc />
     public event Action<IReadOnlyList<ClusterMember>>? MembershipChanged;
+
+    /// <summary>
+    /// Raised when this node has decided it is on the losing side of a partition.
+    /// </summary>
+    /// <remarks>
+    /// The node has already taken itself off the ring by the time this fires. The host is expected
+    /// to stop: a node that keeps serving actors it no longer owns is the thing the whole strategy
+    /// exists to prevent. Rejoining means starting again.
+    /// </remarks>
+    public event Action<string>? SelfDowned;
 
     /// <param name="advertisedHost">
     /// What peers are told to dial - not necessarily what the listener binds to. A node binding
@@ -290,6 +305,8 @@ public sealed class ClusterMembership : IClusterView, IAsyncDisposable
             Members = _members.Values.Select(ToWire).ToList(),
         };
 
+        if (_selfDowned) return;
+
         foreach (var member in NextGossipTargets())
         {
             try
@@ -402,6 +419,118 @@ public sealed class ClusterMembership : IClusterView, IAsyncDisposable
         }
 
         if (changed) RebuildRing();
+
+        EvaluatePartition(now);
+    }
+
+    /// <summary>
+    /// Decides whether this node is on the side of a partition that should keep serving.
+    /// </summary>
+    /// <remarks>
+    /// Runs after failure detection, so it judges statuses this beat has already settled. It acts
+    /// only once the reachable set has held still for
+    /// <see cref="ClusterOptions.SplitBrainStabilityWindow"/>: a partition is rarely a clean cut,
+    /// and deciding on the first observation means deciding against a membership still in motion.
+    /// </remarks>
+    private void EvaluatePartition(DateTimeOffset now)
+    {
+        if (_options.SplitBrainStrategy == SplitBrainStrategy.None || _selfDowned) return;
+
+        var considered = _members.Values.Where(m => !_departed.Contains(m.NodeId)).ToArray();
+
+        var reachable = considered
+            .Where(m => m.Status == MemberStatus.Up)
+            .Select(m => m.NodeId)
+            .OrderBy(id => id, StringComparer.Ordinal)
+            .ToArray();
+
+        // Down counts, not just Unreachable. A peer that has been silent long enough to be taken
+        // off the ring is the clearest evidence of a partition there is, and treating only the
+        // in-between state as evidence would mean the window expiring before the decision.
+        if (reachable.Length == considered.Length)
+        {
+            // Everything in sight is healthy, so this is the membership to measure a future
+            // partition against. Measuring against what a side can currently see would let each
+            // side call itself a majority of itself.
+            _lastAgreedMembership = reachable;
+            _partitionSignature = string.Empty;
+            return;
+        }
+
+        var signature = string.Join(",", reachable);
+        if (signature != _partitionSignature)
+        {
+            _partitionSignature = signature;
+            _partitionSince = now;
+            return;
+        }
+
+        if (now - _partitionSince < _options.SplitBrainStabilityWindow) return;
+
+        var survives = _options.SplitBrainStrategy switch
+        {
+            SplitBrainStrategy.KeepMajority => SurvivesMajority(_lastAgreedMembership, reachable),
+            SplitBrainStrategy.StaticQuorum => reachable.Length >= _options.StaticQuorumSize,
+            _ => true,
+        };
+
+        if (survives)
+        {
+            // Said once per partition, not once per beat: the signature only changes when the
+            // reachable set does.
+            _partitionSignature = signature + "|decided";
+            _logger.LogWarning(
+                "Partitioned: {Reachable} of {Total} members reachable. This side keeps serving.",
+                reachable.Length, _lastAgreedMembership.Length);
+            return;
+        }
+
+        DownSelf($"{reachable.Length} of {_lastAgreedMembership.Length} members reachable under {_options.SplitBrainStrategy}");
+    }
+
+    /// <summary>
+    /// Whether a side holding <paramref name="reachable"/> outvotes the membership everyone last
+    /// agreed on.
+    /// </summary>
+    /// <remarks>
+    /// An exact half survives only if it holds the lowest node id. Without that tiebreak a two-node
+    /// cluster would lose both halves to a single broken link, which is a worse outcome than the
+    /// split brain being guarded against.
+    /// </remarks>
+    internal static bool SurvivesMajority(IReadOnlyCollection<string> agreed, IReadOnlyCollection<string> reachable)
+    {
+        if (agreed.Count == 0) return true;
+
+        // Members that joined after the split do not get a vote on it. Counting them would let a
+        // side manufacture a majority by starting nodes.
+        var side = reachable.Where(id => agreed.Contains(id, StringComparer.Ordinal)).ToArray();
+
+        if (side.Length * 2 > agreed.Count) return true;
+        if (side.Length * 2 < agreed.Count) return false;
+
+        var lowest = agreed.Min(StringComparer.Ordinal)!;
+        return side.Contains(lowest, StringComparer.Ordinal);
+    }
+
+    /// <summary>Takes this node off the ring and tells the host, which is expected to stop.</summary>
+    private void DownSelf(string because)
+    {
+        _selfDowned = true;
+        _members[SelfNodeId] = _members[SelfNodeId] with { Status = MemberStatus.Down };
+
+        _logger.LogCritical("Split brain: {Because}. Taking this node down; restart it to rejoin.", because);
+        RebuildRing();
+
+        var handler = SelfDowned;
+        if (handler is null) return;
+
+        // Off the heartbeat thread: the handler is expected to stop the node, and stopping waits on
+        // actors that are still draining.
+        _ = Task.Run(() =>
+        {
+            try { handler(because); }
+            catch (Exception ex) { _logger.LogError(ex, "A split-brain subscriber threw."); }
+        });
     }
 
     /// <summary>Handles a membership frame. Returns a reply frame when the protocol calls for one.</summary>
@@ -428,6 +557,11 @@ public sealed class ClusterMembership : IClusterView, IAsyncDisposable
             case WireKind.Leave:
                 if (frame.FromNode is { Length: > 0 } leaving && _members.TryGetValue(leaving, out var member))
                 {
+                    // Remembered as a departure rather than a failure. Split-brain resolution counts
+                    // members that stopped answering; one that said goodbye is not a missing half of
+                    // the cluster, and counting it as one would leave this node permanently
+                    // convinced it was partitioned.
+                    _departed.Add(leaving);
                     _members[leaving] = member with { Status = MemberStatus.Down, Incarnation = member.Incarnation + 1 };
                     _logger.LogInformation("Member {NodeId} left gracefully.", leaving);
                     RebuildRing();
