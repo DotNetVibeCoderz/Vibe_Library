@@ -159,9 +159,12 @@ jobs:
         run: |
           trx=$(find tests/ActorNet.Tests/bin/Release/net10.0/TestResults -name 'actornet-providers.trx' | head -1)
           if [ -z "$trx" ]; then echo "no test results found"; exit 1; fi
-          skipped=$(grep -o 'outcome="NotExecuted"' "$trx" | wc -l)
-          if [ "$skipped" -gt 0 ]; then
-            echo "$skipped provider test(s) were skipped - a service container did not come up."
+
+          # grep inside an "if" rather than in a pipeline: a step runs under -eo pipefail, and grep
+          # exits 1 when it finds nothing - so counting matches in a pipeline failed the step
+          # precisely when nothing had been skipped, which is the case this guard exists to allow.
+          if grep -q 'outcome="NotExecuted"' "$trx"; then
+            echo "$(grep -c 'outcome="NotExecuted"' "$trx") provider test(s) were skipped - a service container did not come up."
             exit 1
           fi
           echo "every provider ran against a real server"
