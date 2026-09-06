@@ -108,16 +108,51 @@ gagal dengan cara yang membuat satu percobaan itu untung-untungan.
 jaringan sesaat, dan memindahkan key sebuah node berongkos satu gelombang deaktivasi dan aktivasi
 ulang. Menunggu lebih murah daripada salah menduga.
 
+### Bagaimana kesunyian dinilai
+
+Ada dua detektor, dan bawaannya yang adaptif.
+
 ```csharp
+options.Cluster.FailureDetection = FailureDetection.PhiAccrual;   // bawaan
+options.Cluster.PhiUnreachableThreshold = 8;                      // dicurigai, masih dirutekan
+options.Cluster.PhiDownThreshold        = 12;                     // dikeluarkan dari ring
+options.Cluster.AcceptableHeartbeatPause = TimeSpan.FromSeconds(3);
+options.Cluster.MinimumStandardDeviation = TimeSpan.FromMilliseconds(100);
+options.Cluster.HeartbeatSampleSize      = 200;
+```
+
+Phi adalah ukuran keheranan, bukan stopwatch: kira-kira berapa "sembilan" keyakinan node ini bahwa
+peer sesunyi itu sudah berhenti, dinilai terhadap berapa lama denyut peer tersebut biasanya makan
+waktu. Phi 8 berarti "salah sekitar sekali dalam 10^8, menurut riwayat peer itu sendiri".
+
+Gunanya mengukur adalah satu ambang jadi berarti berbeda di tautan yang berbeda. Peer di seberang
+hop nirkabel yang denyutnya meleset setengah detik diberi kelonggaran itu; peer di switch yang sama
+yang berdenyut tiap 200ms dicurigai jauh lebih cepat, karena bagi *dia* diam dua detik memang tidak
+wajar. Tenggat tetap harus disetel untuk tautan terburuk di cluster dan karenanya terlalu lambat di
+semua tautan lain — pada uji tiga mesin yang melatarbelakangi ini, node yang sehat melewati tenggat
+tetap sepuluh detik yang tak akan dilewati sepasang node satu ruangan dalam semenit.
+
+`AcceptableHeartbeatPause` adalah kelonggaran stop-the-world, ditambahkan ke rata-rata sebelum
+kecurigaan dimulai. Tanpa itu, peer yang denyutnya metronomik nyaris tak punya sebaran terukur, dan
+jeda GC sepersekian detik melewati intervalnya sudah terbaca sebagai kegagalan.
+`MinimumStandardDeviation` adalah pertahanan yang sama dari sisi lain: lantai bagi sebaran, supaya
+phi tidak melompat dari nol ke raksasa dalam satu milidetik.
+
+Tenggat tetap tetap tersedia, untuk saat angka datar yang tersurat lebih berharga daripada akurasi —
+terutama tes yang ingin sebuah node mati pada detik yang diketahui:
+
+```csharp
+options.Cluster.FailureDetection  = FailureDetection.Deadline;
 options.Cluster.HeartbeatInterval = TimeSpan.FromSeconds(2);
 options.Cluster.UnreachableAfter  = TimeSpan.FromSeconds(10);   // dicurigai, masih dirutekan
 options.Cluster.DownAfter         = TimeSpan.FromSeconds(30);   // dikeluarkan dari ring
 options.Cluster.JoinTimeout       = TimeSpan.FromSeconds(5);    // lama start menunggu seed
 ```
 
-`Validate()` menolak `DownAfter <= UnreachableAfter` (jeda singkat akan mengeluarkan node sehat) dan
+`Validate()` menolak `DownAfter <= UnreachableAfter` (jeda singkat akan mengeluarkan node sehat),
 `HeartbeatInterval >= UnreachableAfter` (sebuah node akan dinyatakan tidak terjangkau sebelum denyut
-berikutnya jatuh tempo).
+berikutnya jatuh tempo), dan `PhiDownThreshold <= PhiUnreachableThreshold` (peer akan dikeluarkan
+dari ring tanpa pernah diberi keraguan yang menguntungkan).
 
 `JoinTimeout` hanya membatasi proses start. Seed dihubungi serentak, bukan bergiliran, sehingga satu
 seed di balik firewall yang membuang paket tidak bisa menelantarkan seed lain; dan ketika tenggatnya
@@ -389,9 +424,10 @@ berarti cluster-nya membawa lebih banyak daripada yang sanggup diterima sebuah p
 - **Split brain belum tertangani.** Dua belahan dari sebuah partisi masing-masing meyakini memiliki
   seluruh ring, yang berarti dua aktivasi untuk actor yang sama.
 - **Keanggotaan bersifat kuadratik** terhadap jumlah member per ronde heartbeat.
-- **Deteksi kegagalan berupa tenggat tetap**, bukan phi-accrual. Ia akan menyebut jeda GC panjang
-  sebagai kegagalan; `UnreachableAfter` yang mempertahankan node semacam itu di ring adalah
-  mitigasinya.
+- **Kecurigaan bersifat per-node, dan tidak ada yang mendamaikan dua node yang berbeda pendapat.**
+  Phi diukur terhadap riwayat masing-masing peer, jadi satu node bisa menyebut sebuah peer tidak
+  terjangkau sementara node lain tidak. Itu jujur — keterjangkauan memang tidak simetris — tapi
+  belum ada protokol untuk menyelesaikannya.
 - **`PreferenceList` ada dan tidak dipakai apa pun.** Penempatan replika belum diimplementasikan.
 
 Keempatnya ada di [roadmap](../../Plan.md).

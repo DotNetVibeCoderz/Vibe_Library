@@ -2,6 +2,20 @@
 
 namespace ActorNet.Cluster;
 
+/// <summary>How a peer's silence is turned into a verdict.</summary>
+public enum FailureDetection
+{
+    /// <summary>
+    /// Adaptive: suspicion grows against how long this peer's beats have actually been taking.
+    /// </summary>
+    PhiAccrual,
+
+    /// <summary>
+    /// A flat deadline on last contact. Predictable, and necessarily set for the worst link.
+    /// </summary>
+    Deadline,
+}
+
 /// <summary>Membership, failure detection and placement settings.</summary>
 public sealed class ClusterOptions
 {
@@ -33,9 +47,53 @@ public sealed class ClusterOptions
     public TimeSpan JoinTimeout { get; set; } = TimeSpan.FromSeconds(5);
 
     /// <summary>
+    /// How a peer's silence is judged.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="FailureDetection.PhiAccrual"/> is the default because a fixed deadline has to be
+    /// set for the worst link in the cluster and is then too slow on all the others.
+    /// <see cref="FailureDetection.Deadline"/> remains for the case where a flat, stated number is
+    /// worth more than accuracy - a test that wants a node down at a known second, most of all.
+    /// </remarks>
+    public FailureDetection FailureDetection { get; set; } = FailureDetection.PhiAccrual;
+
+    /// <summary>
+    /// Suspicion at which a peer is marked <see cref="MemberStatus.Unreachable"/>, in phi.
+    /// </summary>
+    /// <remarks>
+    /// Phi is a logarithm: 8 means the detector expects to be wrong about once in 10^8 given how
+    /// this peer normally behaves. Lowering it notices failures sooner and cries wolf more often.
+    /// </remarks>
+    public double PhiUnreachableThreshold { get; set; } = 8.0;
+
+    /// <summary>Suspicion at which a peer is taken off the ring, in phi. Must exceed the other one.</summary>
+    public double PhiDownThreshold { get; set; } = 12.0;
+
+    /// <summary>
+    /// Slack added to a peer's average interval before suspicion begins.
+    /// </summary>
+    /// <remarks>
+    /// This is the stop-the-world allowance. On a link whose beats are metronomic the measured
+    /// spread is tiny, and without slack a GC pause a fraction of a second past the usual interval
+    /// would read as a failure.
+    /// </remarks>
+    public TimeSpan AcceptableHeartbeatPause { get; set; } = TimeSpan.FromSeconds(3);
+
+    /// <summary>A floor on the measured spread of a peer's heartbeat intervals.</summary>
+    /// <remarks>
+    /// Without a floor, a peer that has been perfectly regular gets a standard deviation near zero,
+    /// and phi jumps from nothing to enormous a millisecond past its usual interval.
+    /// </remarks>
+    public TimeSpan MinimumStandardDeviation { get; set; } = TimeSpan.FromMilliseconds(100);
+
+    /// <summary>How many heartbeat intervals the detector remembers per peer.</summary>
+    public int HeartbeatSampleSize { get; set; } = 200;
+
+    /// <summary>
     /// Silence after which a peer is marked <see cref="MemberStatus.Unreachable"/>. Unreachable
     /// members still own their slice of the ring - the assumption is a blip, not a departure.
     /// </summary>
+    /// <remarks>Used when <see cref="FailureDetection"/> is <see cref="FailureDetection.Deadline"/>.</remarks>
     public TimeSpan UnreachableAfter { get; set; } = TimeSpan.FromSeconds(10);
 
     /// <summary>
@@ -68,6 +126,16 @@ public sealed class ClusterOptions
             throw new ArgumentException(
                 $"DownAfter ({DownAfter}) must be longer than UnreachableAfter ({UnreachableAfter}); otherwise a short pause evicts a healthy node and triggers a needless rebalance.",
                 nameof(DownAfter));
+        if (PhiUnreachableThreshold <= 0)
+            throw new ArgumentOutOfRangeException(nameof(PhiUnreachableThreshold), PhiUnreachableThreshold, "A threshold of zero suspects every peer immediately.");
+        if (PhiDownThreshold <= PhiUnreachableThreshold)
+            throw new ArgumentException(
+                $"PhiDownThreshold ({PhiDownThreshold}) must exceed PhiUnreachableThreshold ({PhiUnreachableThreshold}); otherwise a peer is taken off the ring without ever being given the benefit of the doubt.",
+                nameof(PhiDownThreshold));
+        if (MinimumStandardDeviation <= TimeSpan.Zero)
+            throw new ArgumentOutOfRangeException(nameof(MinimumStandardDeviation), MinimumStandardDeviation, "A spread of zero makes phi jump from nothing to enormous within a millisecond.");
+        if (HeartbeatSampleSize < 2)
+            throw new ArgumentOutOfRangeException(nameof(HeartbeatSampleSize), HeartbeatSampleSize, "Two samples are the fewest that have a spread at all.");
         if (JoinTimeout <= TimeSpan.Zero)
             throw new ArgumentOutOfRangeException(nameof(JoinTimeout), JoinTimeout, "The startup handshake needs some time to run.");
         if (HeartbeatInterval >= UnreachableAfter)

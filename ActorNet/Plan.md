@@ -34,10 +34,11 @@ OpenTelemetry, and flow control that a remote sender can see. See
 ## 0.3 — clustering that survives a bad day
 
 The membership layer is deliberately simple, and simple has limits worth being explicit about.
+Adaptive failure detection is the first of these to land: suspicion is now measured against each
+peer's own heartbeat history rather than one deadline chosen for the worst link.
 
 | Theme | Why it matters |
 | --- | --- |
-| Phi-accrual failure detection | A fixed deadline calls a GC pause a failure. An adaptive detector does not. |
 | Gossip fanout limits | Every node gossips to every node: fine at tens, quadratic past that. |
 | Split-brain resolution | Two halves of a partitioned cluster each believe they own the whole ring. Today nothing arbitrates. |
 | Replica placement | `PreferenceList` exists and nothing uses it. Standby replicas would make a node loss invisible. |

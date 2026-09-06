@@ -19,10 +19,11 @@ namespace ActorNet.Cluster;
 /// targets and would need a fanout limit beyond it.
 /// </para>
 /// <para>
-/// Failure detection is a plain deadline on last contact, not a phi-accrual detector. It is
-/// honest about what it can do: it will call a node unreachable during a long GC pause, which is
-/// why <see cref="ClusterOptions.UnreachableAfter"/> keeps such a node <em>on</em> the ring and
-/// only <see cref="ClusterOptions.DownAfter"/> takes it off.
+/// Failure detection is phi-accrual by default: suspicion is measured against how long a peer's
+/// beats have actually been taking, so the same threshold is patient with a slow link and quick
+/// with a fast one. Either way a suspected peer is only <see cref="MemberStatus.Unreachable"/> and
+/// stays <em>on</em> the ring; it takes the higher threshold to take it off, because the usual
+/// cause of silence is a pause rather than a departure.
 /// </para>
 /// <para>
 /// A node's own entry is never overwritten by what a peer thinks of it. If a peer reports us
@@ -37,6 +38,8 @@ public sealed class ClusterMembership : IClusterView, IAsyncDisposable
     private readonly ConcurrentDictionary<string, ClusterMember> _members = new(StringComparer.Ordinal);
     private readonly CancellationTokenSource _cts = new();
     private readonly Lock _ringGate = new();
+
+    private readonly PhiAccrualFailureDetector _detector;
 
     private ITransport? _transport;
     private Task? _heartbeatLoop;
@@ -63,6 +66,11 @@ public sealed class ClusterMembership : IClusterView, IAsyncDisposable
         _options = options;
         _logger = logger;
         _members[nodeId] = new ClusterMember(nodeId, advertisedHost, advertisedPort, MemberStatus.Up, DateTimeOffset.UtcNow, _incarnation);
+        _detector = new PhiAccrualFailureDetector(
+            options.HeartbeatInterval,
+            options.AcceptableHeartbeatPause,
+            options.MinimumStandardDeviation,
+            options.HeartbeatSampleSize);
         _ring = BuildRing();
     }
 
@@ -293,6 +301,36 @@ public sealed class ClusterMembership : IClusterView, IAsyncDisposable
         }
     }
 
+    /// <summary>What this node now believes about a peer, given how long it has been quiet.</summary>
+    private MemberStatus Judge(string nodeId, ClusterMember member, DateTimeOffset now)
+    {
+        // A member that has gone down stays down until it makes contact - which revives it in
+        // RecordContact. Re-judging it here would only ever confirm what is already true, and a
+        // forgotten history would make its phi zero and quietly resurrect it.
+        if (member.Status == MemberStatus.Down) return MemberStatus.Down;
+
+        var (suspect, condemn) = _options.FailureDetection == FailureDetection.PhiAccrual
+            ? Phi(nodeId, now)
+            : Deadline(member, now);
+
+        return condemn ? MemberStatus.Down
+            : suspect ? MemberStatus.Unreachable
+            : member.Status == MemberStatus.Unreachable ? MemberStatus.Up
+            : member.Status;
+
+        (bool Suspect, bool Condemn) Phi(string id, DateTimeOffset at)
+        {
+            var phi = _detector.Phi(id, at);
+            return (phi >= _options.PhiUnreachableThreshold, phi >= _options.PhiDownThreshold);
+        }
+
+        (bool Suspect, bool Condemn) Deadline(ClusterMember peer, DateTimeOffset at)
+        {
+            var silence = at - peer.LastSeen;
+            return (silence > _options.UnreachableAfter, silence > _options.DownAfter);
+        }
+    }
+
     private void DetectFailures()
     {
         var now = DateTimeOffset.UtcNow;
@@ -303,12 +341,14 @@ public sealed class ClusterMembership : IClusterView, IAsyncDisposable
             if (id == SelfNodeId) continue;
 
             var silence = now - member.LastSeen;
-            var status = silence > _options.DownAfter ? MemberStatus.Down
-                : silence > _options.UnreachableAfter ? MemberStatus.Unreachable
-                : member.Status == MemberStatus.Unreachable ? MemberStatus.Up
-                : member.Status;
+            var status = Judge(id, member, now);
 
             if (status == member.Status) continue;
+
+            // A node coming back off the ring starts from a clean estimate. Keeping its history
+            // would fold the whole outage into the window as one enormous interval, and the peer
+            // would then be trusted through silences it ought to be suspected for.
+            if (status == MemberStatus.Down) _detector.Forget(id);
 
             _members[id] = member with { Status = status };
             changed = true;
@@ -361,8 +401,11 @@ public sealed class ClusterMembership : IClusterView, IAsyncDisposable
 
         if (_members.TryGetValue(nodeId, out var member))
         {
+            var now = DateTimeOffset.UtcNow;
+            _detector.Heartbeat(nodeId, now);
+
             var revived = member.Status is MemberStatus.Unreachable or MemberStatus.Down;
-            _members[nodeId] = member with { LastSeen = DateTimeOffset.UtcNow, Status = revived ? MemberStatus.Up : member.Status };
+            _members[nodeId] = member with { LastSeen = now, Status = revived ? MemberStatus.Up : member.Status };
             if (revived)
             {
                 _logger.LogInformation("Member {NodeId} is reachable again.", nodeId);
@@ -415,6 +458,10 @@ public sealed class ClusterMembership : IClusterView, IAsyncDisposable
             else
             {
                 _members[wire.NodeId] = new ClusterMember(wire.NodeId, wire.Host, wire.Port, (MemberStatus)wire.Status, now, wire.Incarnation);
+
+                // Start the clock on a member this node has only been told about. Without this its
+                // phi would stay at zero - never heard from, therefore never suspected.
+                _detector.Heartbeat(wire.NodeId, now);
                 _logger.LogInformation("Discovered member {NodeId} at {Host}:{Port}.", wire.NodeId, wire.Host, wire.Port);
                 changed = true;
             }

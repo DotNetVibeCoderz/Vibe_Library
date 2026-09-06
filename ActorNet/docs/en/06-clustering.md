@@ -104,16 +104,51 @@ the one attempt a coin toss.
 blip, and moving a node's keys costs a wave of deactivations and reactivations. Waiting is cheaper
 than being wrong.
 
+### How silence is judged
+
+Two detectors, and the default is the adaptive one.
+
 ```csharp
+options.Cluster.FailureDetection = FailureDetection.PhiAccrual;   // the default
+options.Cluster.PhiUnreachableThreshold = 8;                      // suspicious, still routed to
+options.Cluster.PhiDownThreshold        = 12;                     // off the ring
+options.Cluster.AcceptableHeartbeatPause = TimeSpan.FromSeconds(3);
+options.Cluster.MinimumStandardDeviation = TimeSpan.FromMilliseconds(100);
+options.Cluster.HeartbeatSampleSize      = 200;
+```
+
+Phi is a measure of surprise, not a stopwatch: it is roughly how many nines of confidence this
+node has that a peer this quiet has stopped, judged against how long that peer's beats have
+actually been taking. Phi 8 means "wrong about one time in 10^8, given this peer's own history".
+
+The point of measuring is that one threshold then means different things on different links. A peer
+across a wireless hop whose beats vary by half a second is given that slack; a peer on the same
+switch beating every 200ms is suspected far sooner, because for *it* a two-second silence is
+genuinely abnormal. A fixed deadline has to be set for the worst link in the cluster and is
+therefore too slow everywhere else — on the three-machine test that motivated this, healthy nodes
+crossed a fixed ten-second deadline that a co-located pair would not have crossed in a minute.
+
+`AcceptableHeartbeatPause` is the stop-the-world allowance, added to the mean before suspicion
+begins. Without it, a peer whose beats are metronomic has almost no measured spread, and a GC pause
+a fraction of a second past its usual interval reads as a failure. `MinimumStandardDeviation` is the
+same defence from the other side: a floor on the spread, so phi cannot leap from nothing to enormous
+within a millisecond.
+
+The fixed deadlines remain, for when a flat stated number is worth more than accuracy — a test that
+wants a node down at a known second, most of all:
+
+```csharp
+options.Cluster.FailureDetection  = FailureDetection.Deadline;
 options.Cluster.HeartbeatInterval = TimeSpan.FromSeconds(2);
 options.Cluster.UnreachableAfter  = TimeSpan.FromSeconds(10);   // suspicious, still routed to
 options.Cluster.DownAfter         = TimeSpan.FromSeconds(30);   // off the ring
 options.Cluster.JoinTimeout       = TimeSpan.FromSeconds(5);    // how long starting waits on seeds
 ```
 
-`Validate()` refuses `DownAfter <= UnreachableAfter` (a short pause would evict a healthy node) and
+`Validate()` refuses `DownAfter <= UnreachableAfter` (a short pause would evict a healthy node),
 `HeartbeatInterval >= UnreachableAfter` (a node would be declared unreachable before its next beat
-was due).
+was due), and `PhiDownThreshold <= PhiUnreachableThreshold` (a peer would be taken off the ring
+without ever being given the benefit of the doubt).
 
 `JoinTimeout` bounds startup only. Seeds are contacted at once rather than in turn, so one seed
 behind a firewall that drops packets cannot starve the others, and when the deadline passes the
@@ -381,8 +416,9 @@ cluster is carrying more than a peer can take.
 - **Split brain is unresolved.** Two halves of a partition each believe they own the whole ring,
   which means two activations of the same actor.
 - **Membership is quadratic** in the number of members per heartbeat round.
-- **Failure detection is a fixed deadline**, not phi-accrual. It will call a long GC pause a
-  failure; `UnreachableAfter` keeping such a node on the ring is the mitigation.
+- **Suspicion is per-node, and nothing reconciles two nodes that disagree.** Phi is measured
+  against each peer's own history, so one node may call a peer unreachable while another does not.
+  That is honest — reachability is not symmetric — but there is no protocol for settling it.
 - **`PreferenceList` exists and nothing uses it.** Replica placement is not implemented.
 
 All four are in the [roadmap](../../Plan.md).

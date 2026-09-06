@@ -1,5 +1,6 @@
 // Dibuat oleh Gravicode Studios, dipimpin oleh Kang Fadhil.
 
+using ActorNet.Cluster;
 using ActorNet.Persistence;
 
 namespace ActorNet.Tests;
@@ -53,6 +54,12 @@ public sealed class TestHarness : IAsyncDisposable
             options.Cluster.Enabled = true;
             options.Cluster.Seeds = seeds.ToList();
             options.Cluster.HeartbeatInterval = TimeSpan.FromMilliseconds(200);
+
+            // Deadlines rather than the phi-accrual default. A test asserting on membership wants
+            // a node down at a known second; phi answers "how surprising is this silence", which is
+            // the right question in production and the wrong one for a fixture. Phi is covered on
+            // its own, and by PhiAccrualClusterTests against a running cluster.
+            options.Cluster.FailureDetection = FailureDetection.Deadline;
             options.Cluster.UnreachableAfter = TimeSpan.FromSeconds(2);
             options.Cluster.DownAfter = TimeSpan.FromSeconds(5);
         }

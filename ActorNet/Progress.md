@@ -45,7 +45,7 @@ works and something automated proves it** — not when the code exists.
 
 - [x] Seed-based join handshake
 - [x] Gossip membership with incarnation numbers
-- [x] Deadline failure detection, unreachable distinct from down
+- [x] Failure detection with unreachable distinct from down
 - [x] Consistent hashing with virtual nodes
 - [x] Process-independent hash, verified against pinned vectors
 - [x] Automatic rebalancing on membership change
@@ -58,7 +58,8 @@ works and something automated proves it** — not when the code exists.
       starves the others nor holds up startup
 - [x] Hostname advertising for containers - binds all interfaces, advertises the name
 - [x] `AdvertisedHost` / `AdvertisedPort` separate from the bind address, with startup validation
-- [ ] Phi-accrual failure detection
+- [x] Phi-accrual failure detection, adaptive per peer and the default
+- [x] Fixed deadlines kept as an option, for when a stated number beats an accurate one
 - [ ] Split-brain resolution
 - [ ] Replica placement using `PreferenceList`
 - [ ] Non-static seed discovery (DNS, Kubernetes)
