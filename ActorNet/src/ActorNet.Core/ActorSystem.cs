@@ -167,7 +167,7 @@ public sealed class ActorSystem : IActorSystem
             _transport = new TcpTransport(
                 Options.Host, Options.Port, OnFrameAsync, _cluster.Resolve,
                 LoggerFactory.CreateLogger<TcpTransport>(), Options.Security, Options.SendTimeout,
-                Options.OutboundQueueCapacity, Options.WireFormat);
+                Options.OutboundQueueCapacity, Options.WireFormat, Serializer);
             await _transport.StartAsync(cancellationToken).ConfigureAwait(false);
             // The bound port unless one was pinned - a published container port is not the port
             // the listener actually opened.
@@ -729,9 +729,11 @@ public sealed class ActorSystem : IActorSystem
 
         if (payload is not null)
         {
-            var (alias, element) = Serializer.Serialize(payload);
-            frame.MessageAlias = alias;
-            frame.Payload = element;
+            // The alias only. The body itself is encoded by whichever format the connection turns
+            // out to write, so serializing it here would produce JSON that a binary frame throws
+            // away - which is exactly the cost the binary format exists to remove.
+            frame.MessageAlias = Serializer.Types.AliasOf(payload.GetType());
+            frame.Body = payload;
         }
 
         // Stamped here rather than at each call site, so every frame that leaves this node carries
@@ -792,8 +794,17 @@ public sealed class ActorSystem : IActorSystem
 
             case WireKind.AskReply:
             {
-                if (frame.CorrelationId is { } id && frame.MessageAlias is { } alias && frame.Payload is { } payload)
+                if (frame.CorrelationId is not { } id) return;
+
+                if (frame.Body is { } decoded)
+                {
+                    CompleteAsk(id, decoded);
+                    return;
+                }
+
+                if (frame.MessageAlias is { } alias && frame.Payload is { } payload)
                     CompleteAsk(id, Serializer.Deserialize(alias, payload));
+
                 return;
             }
 
@@ -814,17 +825,22 @@ public sealed class ActorSystem : IActorSystem
                     return;
                 }
 
-                if (frame.MessageAlias is not { } alias || frame.Payload is not { } payload)
+                // A binary frame carries a decoded body and no JSON payload; a JSON one carries the
+                // payload and no body. Requiring the payload rejected every binary message here,
+                // before the line below could use what the frame had actually brought.
+                if (frame.MessageAlias is not { } alias || (frame.Body is null && frame.Payload is null))
                 {
                     RecordDeadLetter(target, ActorId.None, null, frame.MessageAlias ?? "<unknown>",
-                        DeadLetterReason.UnroutableFrame, "The frame carried no message alias or no payload.");
+                        DeadLetterReason.UnroutableFrame, "The frame carried no message alias and no body.");
                     return;
                 }
 
                 object message;
                 try
                 {
-                    message = Serializer.Deserialize(alias, payload);
+                    // A binary frame decoded its body while it was being read, next to the type
+                    // allow-list that says which type the alias means. A JSON one still parses here.
+                    message = frame.Body ?? Serializer.Deserialize(alias, frame.Payload!.Value);
                 }
                 catch (UnknownMessageTypeException ex)
                 {

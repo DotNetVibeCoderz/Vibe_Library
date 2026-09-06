@@ -110,6 +110,18 @@ public sealed class WireEnvelope
     /// <summary>W3C <c>tracestate</c>, carried through untouched.</summary>
     [JsonPropertyName("tw")]
     public string? TraceState { get; set; }
+
+    /// <summary>
+    /// The message itself, before it was serialized - or after it was read back.
+    /// </summary>
+    /// <remarks>
+    /// Never on the wire, which is what <see cref="JsonIgnoreAttribute"/> says here. It exists so
+    /// the binary writer can encode the body itself rather than copying the JSON somebody already
+    /// made of it, and so the binary reader can hand back an object instead of JSON for the
+    /// receiving side to parse a second time. On the JSON path it is ignored entirely.
+    /// </remarks>
+    [JsonIgnore]
+    public object? Body { get; set; }
 }
 
 /// <summary>One cluster member as gossiped.</summary>

@@ -472,22 +472,34 @@ correlation id. In JSON each of them carries a quoted key, quotes and a comma.
 options.WireFormat = WireFormat.Binary;   // default is Json
 ```
 
-Measured on this machine, envelope only:
+```bash
+actornet run --port 9000 --cluster --wire-format binary
+```
+
+Both the envelope and the message body are encoded. Measured on this machine, against the same
+frame as JSON:
 
 | Frame | JSON | Binary | |
 | --- | --- | --- | --- |
-| A tell with a small payload | 179 B | 94 B | 47% smaller |
-| An ask with a correlation id | 202 B | 125 B | 38% smaller |
-| The same ask carrying a trace | 255 B | 182 B | 29% smaller |
+| A deposit | 179 B | 83 B | 54% smaller |
+| An ask for a statement | 198 B | 106 B | 46% smaller |
+| The statement coming back | 338 B | 204 B | 40% smaller |
+| A telemetry reading | 225 B | 87 B | 61% smaller |
 | A gossip beat, five members | 364 B | 115 B | 68% smaller |
 
 Gossip gains most, which is the one that matters least per frame and most in aggregate: it is the
 traffic that never stops.
 
-**The payload is still JSON.** What this encodes is the envelope around it. Making the message body
-binary as well would mean a per-type codec for every registered message - a much larger thing, and
-one no cross-language client could follow. Saying "binary wire format" and meaning the envelope is
-worth stating plainly.
+**Fields are tagged by position, not by name.** Each field carries a small tag - its index and how
+it is laid out - which is what lets a reader step over a field it does not know instead of losing
+its place. Appending a property to a message is therefore safe across a rolling upgrade; reordering
+the parameters of a record is not, but that is a breaking change to the type in any case.
+
+**Anything the codec cannot encode travels as JSON inside the binary envelope**, decided once per
+type. Strings, numbers, `bool`, `decimal`, `Guid`, dates, `TimeSpan`, enums, nullables, arrays and
+lists of those, and messages made of those are covered; a dictionary is not. That fallback is what
+makes this safe to turn on - correctness does not depend on the codec covering every shape a
+message can take, only on it being honest about which ones it covers.
 
 **Nothing is negotiated.** A frame says which encoding it is in - JSON starts with `{`, binary with
 `0xAC` - and a connection is answered in the encoding it was addressed in. So:

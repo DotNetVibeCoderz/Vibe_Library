@@ -20,7 +20,7 @@ public sealed class BinaryWireFormatTests
     {
         Kind = WireKind.AskRequest,
         Target = "BankAccountActor/acct-001",
-        Sender = "LedgerActor/ledger",
+        Sender = "DictionaryActor/ledger",
         MessageAlias = "bank.deposit",
         Payload = JsonSerializer.Deserialize<JsonElement>("""{"Amount":125.5,"Reference":"opening"}"""),
         CorrelationId = "a2f4c0d8-8f5e-4a1a-9f1e-1c2b3d4e5f60",
@@ -116,6 +116,91 @@ public sealed class BinaryWireFormatTests
     }
 
     [Fact]
+    public void TheBodyIsEncodedRatherThanCopiedAsJson()
+    {
+        var serializer = new JsonMessageSerializer();
+        serializer.Types.Register<Add>();
+
+        var frame = new WireEnvelope
+        {
+            Kind = WireKind.Message,
+            Target = "CounterActor/counted",
+            MessageAlias = serializer.Types.AliasOf(typeof(Add)),
+            Body = new Add(9),
+            FromNode = "node-1",
+        };
+
+        var bytes = BinaryWireFormat.Write(frame, serializer);
+
+        // The property name is the thing JSON pays for on every message and binary does not. Its
+        // absence is the difference between a binary envelope around JSON and a binary body.
+        Assert.DoesNotContain("By", System.Text.Encoding.UTF8.GetString(bytes), StringComparison.Ordinal);
+
+        var restored = BinaryWireFormat.Read(bytes, serializer.Types);
+        Assert.Equal(new Add(9), restored.Body);
+    }
+
+    [Fact]
+    public void AShapeTheCodecRefusesTravelsAsJsonInsideTheBinaryEnvelope()
+    {
+        var serializer = new JsonMessageSerializer();
+        serializer.Types.Register<DictionaryMessage>();
+
+        var frame = new WireEnvelope
+        {
+            Kind = WireKind.Message,
+            Target = "DictionaryActor/l1",
+            MessageAlias = serializer.Types.AliasOf(typeof(DictionaryMessage)),
+            Body = new DictionaryMessage(new Dictionary<string, int> { ["opening"] = 100 }),
+            FromNode = "node-1",
+        };
+
+        var bytes = BinaryWireFormat.Write(frame, serializer);
+
+        // A dictionary is outside what the codec covers, so this one goes as JSON - inside a binary
+        // envelope, which is what makes the fallback per message rather than per cluster.
+        Assert.Contains("opening", System.Text.Encoding.UTF8.GetString(bytes), StringComparison.Ordinal);
+
+        var restored = BinaryWireFormat.Read(bytes, serializer.Types);
+        Assert.Null(restored.Body);
+        Assert.NotNull(restored.Payload);
+    }
+
+    [Fact]
+    public async Task AMessageTheCodecRefusesStillCrossesABinaryCluster()
+    {
+        await using var harness = new TestHarness();
+
+        void Binary(ActorSystemOptions o) => o.WireFormat = WireFormat.Binary;
+
+        var here = await harness.NetworkedAsync("fb-a", seeds: [], configure: Binary);
+        var there = await harness.NetworkedAsync("fb-b", seeds: [$"127.0.0.1:{here.BoundPort}"], configure: Binary);
+
+        foreach (var node in new[] { here, there })
+        {
+            node.RegisterActor<DictionaryActor>();
+            node.RegisterMessage<DictionaryMessage>();
+            node.RegisterMessage<GetDictionary>();
+            node.RegisterMessage<DictionarySize>();
+        }
+
+        await TestHarness.AssertEventuallyAsync(
+            () => here.Cluster.Members.Count == 2 && there.Cluster.Members.Count == 2,
+            "the cluster should converge", TimeSpan.FromSeconds(15));
+
+        var remote = Enumerable.Range(0, 2000)
+            .Select(i => ActorId.For<DictionaryActor>($"fb-{i}"))
+            .First(id => here.Cluster.OwnerOf(id) == "fb-b");
+
+        // The whole point of the fallback: a message the codec cannot encode is not a message the
+        // cluster cannot carry.
+        await here.TellAsync(remote, new DictionaryMessage(new Dictionary<string, int> { ["a"] = 1, ["b"] = 2 }));
+
+        var size = await here.AskAsync<DictionarySize>(remote, new GetDictionary(), TimeSpan.FromSeconds(15));
+        Assert.Equal(2, size.Entries);
+    }
+
+    [Fact]
     public async Task ABinaryClusterCarriesRealTraffic()
     {
         await using var harness = new TestHarness();
@@ -136,6 +221,29 @@ public sealed class BinaryWireFormatTests
         await here.TellAsync(remote, new Add(7));
 
         Assert.Equal(7, (await here.AskAsync<Total>(remote, new GetTotal(), TimeSpan.FromSeconds(15))).Value);
+    }
+
+    [Fact]
+    public async Task AJsonClientIsAnsweredByABinaryNode()
+    {
+        await using var harness = new TestHarness();
+
+        var node = await harness.NetworkedAsync("client-bin", seeds: [], configure: o => o.WireFormat = WireFormat.Binary);
+
+        // The SDK clients speak JSON and nothing else. A node set to binary answers on the
+        // connection it was addressed on, in the encoding it was addressed in - so this is the
+        // case that decides whether the option is safe to turn on at all.
+        await using var client = new Client.ActorNetClient("127.0.0.1", node.BoundPort);
+        client.RegisterMessage<Add>();
+        client.RegisterMessage<GetTotal>();
+        client.RegisterMessage<Total>();
+
+        var id = ActorId.For<CounterActor>("json-client");
+
+        await client.TellAsync(id, new Add(6), TestContext.Current.CancellationToken);
+        var total = await client.AskAsync<Total>(id, new GetTotal(), TimeSpan.FromSeconds(15), TestContext.Current.CancellationToken);
+
+        Assert.Equal(6, total.Value);
     }
 
     [Fact]
@@ -167,5 +275,21 @@ public sealed class BinaryWireFormatTests
 
         Assert.Equal(3, (await json.AskAsync<Total>(onBinary, new GetTotal(), TimeSpan.FromSeconds(15))).Value);
         Assert.Equal(5, (await binary.AskAsync<Total>(onJson, new GetTotal(), TimeSpan.FromSeconds(15))).Value);
+    }
+}
+
+public sealed record DictionaryMessage(Dictionary<string, int> Entries);
+public sealed record GetDictionary;
+public sealed record DictionarySize(int Entries);
+
+/// <summary>Holds a shape the binary codec does not cover, so the JSON fallback has a user.</summary>
+public sealed class DictionaryActor : ReceiveActor
+{
+    private int _entries;
+
+    public DictionaryActor()
+    {
+        On<DictionaryMessage>(m => _entries = m.Entries.Count);
+        On<GetDictionary>(async (_, ct) => await Context.ReplyAsync(new DictionarySize(_entries), ct));
     }
 }

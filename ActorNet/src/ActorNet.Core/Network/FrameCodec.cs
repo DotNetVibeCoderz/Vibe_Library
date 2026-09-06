@@ -36,10 +36,23 @@ public static class FrameCodec
         WriteAsync(stream, envelope, WireFormat.Json, cancellationToken);
 
     /// <summary>Writes one frame in <paramref name="format"/>.</summary>
-    public static async ValueTask WriteAsync(Stream stream, WireEnvelope envelope, WireFormat format, CancellationToken cancellationToken)
+    public static ValueTask WriteAsync(Stream stream, WireEnvelope envelope, WireFormat format, CancellationToken cancellationToken) =>
+        WriteAsync(stream, envelope, format, null, cancellationToken);
+
+    /// <summary>Writes one frame, encoding the body with <paramref name="serializer"/> if it needs to.</summary>
+    /// <remarks>
+    /// The body is left un-serialized until here on purpose. A frame that goes out binary would
+    /// otherwise be turned into JSON first and the JSON thrown away, which is the cost this whole
+    /// format exists to avoid - so the encoding decision and the encoding happen in the same place.
+    /// </remarks>
+    public static async ValueTask WriteAsync(
+        Stream stream, WireEnvelope envelope, WireFormat format, IMessageSerializer? serializer, CancellationToken cancellationToken)
     {
+        if (format != WireFormat.Binary && envelope.Payload is null && envelope.Body is { } body && serializer is not null)
+            envelope.Payload = serializer.Serialize(body).Payload;
+
         var payload = format == WireFormat.Binary
-            ? BinaryWireFormat.Write(envelope)
+            ? BinaryWireFormat.Write(envelope, serializer)
             : JsonSerializer.SerializeToUtf8Bytes(envelope, typeof(WireEnvelope), WireJsonContext.Default);
         if (payload.Length > MaxFrameBytes)
             throw new ActorNetException($"Frame of {payload.Length:N0} bytes exceeds the {MaxFrameBytes:N0} byte limit.");
@@ -77,7 +90,16 @@ public static class FrameCodec
     /// answer in the encoding it was addressed in. That is what lets a node speak binary to its
     /// peers and JSON to a client that only knows JSON, on the same listener.
     /// </remarks>
-    public static async ValueTask<(WireEnvelope? Envelope, WireFormat Format)> ReadFramedAsync(Stream stream, CancellationToken cancellationToken)
+    public static ValueTask<(WireEnvelope? Envelope, WireFormat Format)> ReadFramedAsync(Stream stream, CancellationToken cancellationToken) =>
+        ReadFramedAsync(stream, null, cancellationToken);
+
+    /// <inheritdoc cref="ReadFramedAsync(Stream, CancellationToken)" />
+    /// <param name="serializer">
+    /// The allow-list a binary body is resolved against. Without it a binary body is left
+    /// undecoded, which the ordinary unknown-message path then reports.
+    /// </param>
+    public static async ValueTask<(WireEnvelope? Envelope, WireFormat Format)> ReadFramedAsync(
+        Stream stream, IMessageSerializer? serializer, CancellationToken cancellationToken)
     {
         var header = new byte[HeaderBytes];
         if (!await ReadExactlyOrEofAsync(stream, header, cancellationToken).ConfigureAwait(false)) return (null, WireFormat.Json);
@@ -93,7 +115,7 @@ public static class FrameCodec
                 throw new EndOfStreamException($"Connection closed {length:N0} bytes into a frame.");
 
             if (buffer[0] == BinaryWireFormat.Magic)
-                return (BinaryWireFormat.Read(buffer.AsSpan(0, length)), WireFormat.Binary);
+                return (BinaryWireFormat.Read(buffer.AsSpan(0, length), serializer?.Types), WireFormat.Binary);
 
             return (JsonSerializer.Deserialize(buffer.AsSpan(0, length), typeof(WireEnvelope), WireJsonContext.Default) as WireEnvelope,
                     WireFormat.Json);

@@ -104,8 +104,8 @@ works and something automated proves it** — not when the code exists.
 - [x] TLS between nodes (1.2/1.3), with thumbprint pinning and optional mutual TLS
 - [x] Authentication between nodes - HMAC challenge-response, the secret never sent
 - [x] A binary envelope encoding, chosen per node and detected per frame
-- [ ] A binary payload; the message body is still JSON inside a binary envelope, and measured
-      at 40-69% of a real frame
+- [x] A binary message body, tagged by position so an unknown field can be skipped, with a
+      per-type fallback to JSON for shapes it does not cover
 
 ## Streams
 

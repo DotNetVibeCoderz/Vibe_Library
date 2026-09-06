@@ -38,6 +38,10 @@ public class NodeSettings : Spectre.Console.Cli.CommandSettings
     [System.ComponentModel.Description("Join a cluster with no seeds of its own - what the first node of a cluster needs, since it has nobody to join.")]
     public bool Cluster { get; init; }
 
+    [Spectre.Console.Cli.CommandOption("--wire-format <FORMAT>")]
+    [System.ComponentModel.Description("How this node writes to peers: json or binary. Default json. Reading is always both, and the SDK clients are unaffected either way.")]
+    public string? WireFormat { get; init; }
+
     [Spectre.Console.Cli.CommandOption("--split-brain <STRATEGY>")]
     [System.ComponentModel.Description("What to do when only part of the cluster is reachable: none, keep-majority, or static-quorum. Default none - both halves keep serving.")]
     public string? SplitBrain { get; init; }
@@ -107,6 +111,13 @@ internal static class NodeFactory
 
             if (settings.TlsPin is { Length: > 0 } pin) options.Security.PinnedThumbprint(pin);
         }
+
+        options.WireFormat = settings.WireFormat?.ToLowerInvariant() switch
+        {
+            null or "" or "json" => Network.WireFormat.Json,
+            "binary" => Network.WireFormat.Binary,
+            _ => throw new ArgumentException($"Unknown --wire-format '{settings.WireFormat}'. Use json or binary."),
+        };
 
         if (settings.Seeds.Length > 0 || settings.Cluster)
         {

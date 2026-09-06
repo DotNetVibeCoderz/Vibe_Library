@@ -163,9 +163,8 @@ public sealed class ActorNetClient : IAsyncDisposable
             }
 
             ConnectedTo = null;
-            throw new ActorNetException(
-                $"None of the {_endpoints.Count} configured node(s) accepted a connection: {string.Join(", ", Endpoints)}.",
-                last);
+            var message = $"None of the {_endpoints.Count} configured node(s) accepted a connection: {string.Join(", ", Endpoints)}.";
+            throw last is null ? new ActorNetException(message) : new ActorNetException(message, last);
         }
         finally
         {

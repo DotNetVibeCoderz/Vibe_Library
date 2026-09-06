@@ -57,6 +57,16 @@ public sealed class TcpTransport : ITransport
     private readonly ClusterSecurityOptions _security;
     private readonly TimeSpan _sendTimeout;
     private readonly WireFormat _format;
+
+    /// <summary>
+    /// The allow-list and encoder for message bodies, when this node encodes them itself.
+    /// </summary>
+    /// <remarks>
+    /// The transport does not otherwise care what a frame contains. It needs this only because the
+    /// binary format encodes and decodes the body in the same place it encodes the envelope, which
+    /// is what keeps a frame from being serialized twice.
+    /// </remarks>
+    private readonly IMessageSerializer? _serializer;
     private readonly int _outboundQueueCapacity;
     private readonly Func<WireEnvelope, Task> _onFrame;
     private readonly Func<string, (string Host, int Port)?> _resolveNode;
@@ -91,13 +101,15 @@ public sealed class TcpTransport : ITransport
         ClusterSecurityOptions? security = null,
         TimeSpan? sendTimeout = null,
         int outboundQueueCapacity = 8192,
-        WireFormat format = WireFormat.Json)
+        WireFormat format = WireFormat.Json,
+        IMessageSerializer? serializer = null)
     {
         _host = host;
         _requestedPort = port;
         _security = security ?? new ClusterSecurityOptions();
         _sendTimeout = sendTimeout ?? TimeSpan.FromSeconds(30);
         _format = format;
+        _serializer = serializer;
         _outboundQueueCapacity = outboundQueueCapacity > 0
             ? outboundQueueCapacity
             : throw new ArgumentOutOfRangeException(nameof(outboundQueueCapacity), outboundQueueCapacity, "Capacity must be positive.");
@@ -154,9 +166,10 @@ public sealed class TcpTransport : ITransport
         }
 
         var peer = _peers.GetOrAdd(nodeId, static (id, state) =>
-            new PeerConnection(id, state.Address.Host, state.Address.Port, state.Logger, state.OnFrame, state.Security, state.SendTimeout, state.Capacity, state.Format, state.Token),
+            new PeerConnection(id, state.Address.Host, state.Address.Port, state.Logger, state.OnFrame, state.Security, state.SendTimeout, state.Capacity, state.Format, state.Serializer, state.Token),
             (Address: address.Value, Logger: _logger, OnFrame: _onFrame, Security: _security,
-             SendTimeout: _sendTimeout, Capacity: _outboundQueueCapacity, Format: _format, Token: _shutdown.Token));
+             SendTimeout: _sendTimeout, Capacity: _outboundQueueCapacity, Format: _format,
+             Serializer: _serializer, Token: _shutdown.Token));
 
         return peer.SendAsync(frame, cancellationToken);
     }
@@ -171,7 +184,7 @@ public sealed class TcpTransport : ITransport
         using var client = new TcpClient();
         await client.ConnectAsync(host, port, cancellationToken).ConfigureAwait(false);
         await using var stream = await SecureChannel.ConnectAsync(client, host, _security, cancellationToken).ConfigureAwait(false);
-        await FrameCodec.WriteAsync(stream, frame, _format, cancellationToken).ConfigureAwait(false);
+        await FrameCodec.WriteAsync(stream, frame, _format, _serializer, cancellationToken).ConfigureAwait(false);
     }
 
     private async Task AcceptLoopAsync(CancellationToken cancellationToken)
@@ -206,11 +219,11 @@ public sealed class TcpTransport : ITransport
 
             // Security first: a peer that cannot prove it belongs never gets a frame parsed.
             await using var stream = await SecureChannel.AcceptAsync(client, _security, cancellationToken).ConfigureAwait(false);
-            var connection = new InboundConnection(stream, client);
+            var connection = new InboundConnection(stream, client, _serializer);
 
             while (!cancellationToken.IsCancellationRequested)
             {
-                var (frame, format) = await FrameCodec.ReadFramedAsync(stream, cancellationToken).ConfigureAwait(false);
+                var (frame, format) = await FrameCodec.ReadFramedAsync(stream, _serializer, cancellationToken).ConfigureAwait(false);
                 if (frame is null) return;
 
                 // Replies go back in the encoding the request arrived in. That is what lets one
@@ -291,7 +304,7 @@ public sealed class TcpTransport : ITransport
     /// threads can all want this socket at once, and two concurrent writes would interleave their
     /// bytes into frames neither of them sent.
     /// </remarks>
-    private sealed class InboundConnection(Stream stream, TcpClient client)
+    private sealed class InboundConnection(Stream stream, TcpClient client, IMessageSerializer? serializer)
     {
         private readonly SemaphoreSlim _writeGate = new(1, 1);
         private volatile bool _closed;
@@ -313,7 +326,7 @@ public sealed class TcpTransport : ITransport
             await _writeGate.WaitAsync(cancellationToken).ConfigureAwait(false);
             try
             {
-                await FrameCodec.WriteAsync(stream, frame, Format, cancellationToken).ConfigureAwait(false);
+                await FrameCodec.WriteAsync(stream, frame, Format, serializer, cancellationToken).ConfigureAwait(false);
             }
             finally
             {
@@ -338,6 +351,7 @@ public sealed class TcpTransport : ITransport
         private readonly ClusterSecurityOptions _security;
         private readonly TimeSpan _sendTimeout;
         private readonly WireFormat _format;
+        private readonly IMessageSerializer? _serializer;
         private readonly Channel<WireEnvelope> _outbound;
 
         /// <summary>Whether the socket is currently up, which is what separates busy from gone.</summary>
@@ -348,9 +362,10 @@ public sealed class TcpTransport : ITransport
         public PeerConnection(
             string nodeId, string host, int port, ILogger logger,
             Func<WireEnvelope, Task> onFrame, ClusterSecurityOptions security, TimeSpan sendTimeout,
-            int queueCapacity, WireFormat format, CancellationToken shutdown)
+            int queueCapacity, WireFormat format, IMessageSerializer? serializer, CancellationToken shutdown)
         {
             _format = format;
+            _serializer = serializer;
             _nodeId = nodeId;
             _security = security;
             _sendTimeout = sendTimeout;
@@ -433,7 +448,7 @@ public sealed class TcpTransport : ITransport
                     while (await _outbound.Reader.WaitToReadAsync(cancellationToken).ConfigureAwait(false))
                     {
                         while (_outbound.Reader.TryRead(out var frame))
-                            await FrameCodec.WriteAsync(stream, frame, _format, cancellationToken).ConfigureAwait(false);
+                            await FrameCodec.WriteAsync(stream, frame, _format, _serializer, cancellationToken).ConfigureAwait(false);
                     }
 
                     await reader.ConfigureAwait(false);
@@ -464,7 +479,7 @@ public sealed class TcpTransport : ITransport
             {
                 while (!cancellationToken.IsCancellationRequested)
                 {
-                    var frame = await FrameCodec.ReadAsync(stream, cancellationToken).ConfigureAwait(false);
+                    var (frame, _) = await FrameCodec.ReadFramedAsync(stream, _serializer, cancellationToken).ConfigureAwait(false);
                     if (frame is null) return;
                     await _onFrame(frame).ConfigureAwait(false);
                 }

@@ -69,8 +69,23 @@ public static class BinaryWireFormat
     private const byte TagTraceParent = 11;
     private const byte TagTraceState = 12;
 
+    /// <summary>A body encoded by <see cref="BinaryMessageCodec"/> rather than as JSON text.</summary>
+    /// <remarks>
+    /// A separate tag rather than a flag on <see cref="TagPayload"/>, so a reader that predates
+    /// this simply skips it - it would find a message with no body, which is a clean failure rather
+    /// than a JSON parser being handed bytes.
+    /// </remarks>
+    private const byte TagBinaryPayload = 13;
+
+    /// <summary>Encodes message bodies. Shared, because its per-type plans are worth keeping.</summary>
+    private static readonly BinaryMessageCodec Codec = new();
+
     /// <summary>Encodes an envelope.</summary>
-    public static byte[] Write(WireEnvelope envelope)
+    /// <param name="serializer">
+    /// Used only when the body's shape is one the codec does not support, to fall back to JSON for
+    /// that message. Null means an already-serialized payload is the only fallback there is.
+    /// </param>
+    public static byte[] Write(WireEnvelope envelope, IMessageSerializer? serializer = null)
     {
         ArgumentNullException.ThrowIfNull(envelope);
 
@@ -86,12 +101,28 @@ public static class BinaryWireFormat
         String(buffer, TagSender, envelope.Sender);
         String(buffer, TagAlias, envelope.MessageAlias);
 
-        if (envelope.Payload is { } payload)
+        // The body, encoded if this codec knows the shape and copied as JSON if it does not. The
+        // fallback is per type and decided once, which is what makes turning this on safe: nothing
+        // depends on the codec covering every shape a message can take.
+        var body = new ArrayBufferWriter<byte>(128);
+        if (envelope.Body is { } message && Codec.TryWrite(message, body))
         {
-            // The payload's own bytes, copied rather than re-serialized. It arrived as JSON and
-            // leaves as JSON; this format does not claim to understand it.
-            Byte(buffer, TagPayload);
-            Bytes(buffer, Encoding.UTF8.GetBytes(payload.GetRawText()));
+            Byte(buffer, TagBinaryPayload);
+            Bytes(buffer, body.WrittenSpan);
+        }
+        else
+        {
+            // The codec did not know this shape, so the body travels as JSON inside a binary
+            // envelope. Serialized here rather than earlier, because until this point nobody knew
+            // it would be needed.
+            var json = envelope.Payload
+                ?? (envelope.Body is { } fallback && serializer is not null ? serializer.Serialize(fallback).Payload : null);
+
+            if (json is { } text)
+            {
+                Byte(buffer, TagPayload);
+                Bytes(buffer, Encoding.UTF8.GetBytes(text.GetRawText()));
+            }
         }
 
         String(buffer, TagCorrelationId, envelope.CorrelationId);
@@ -121,7 +152,11 @@ public static class BinaryWireFormat
     }
 
     /// <summary>Decodes an envelope written by <see cref="Write"/>.</summary>
-    public static WireEnvelope Read(ReadOnlySpan<byte> source)
+    /// <param name="types">
+    /// The allow-list, needed to turn a binary body back into a message. Null reads the frame
+    /// without decoding one, which is what a caller that only wants the envelope should pass.
+    /// </param>
+    public static WireEnvelope Read(ReadOnlySpan<byte> source, MessageTypeRegistry? types = null)
     {
         if (source.Length < 3 || source[0] != Magic)
             throw new ActorNetException("Not a binary ActorNet frame.");
@@ -130,6 +165,7 @@ public static class BinaryWireFormat
             throw new ActorNetException($"Binary frame version {source[1]} is not supported; this node speaks version {Version}.");
 
         var envelope = new WireEnvelope();
+        byte[]? binaryBody = null;
         var at = 2;
 
         while (at < source.Length)
@@ -154,6 +190,12 @@ public static class BinaryWireFormat
                         envelope.Payload = document.RootElement.Clone();
                     }
 
+                    break;
+                case TagBinaryPayload:
+                    // Kept as bytes here. Turning it into a message needs the alias to say which
+                    // type, and the alias may not have been read yet - the frame does not promise
+                    // an order, and inventing one would be a rule for the sake of this line.
+                    binaryBody = ReadBytes(source, ref at).ToArray();
                     break;
                 case TagCorrelationId: envelope.CorrelationId = ReadText(source, ref at); break;
                 case TagReplyToNode: envelope.ReplyToNode = ReadText(source, ref at); break;
@@ -186,7 +228,24 @@ public static class BinaryWireFormat
             }
         }
 
+        if (binaryBody is not null) envelope.Body = Decode(envelope.MessageAlias, binaryBody, types);
+
         return envelope;
+    }
+
+    /// <summary>Turns a binary body back into a message, or leaves it to fail as a dead letter.</summary>
+    /// <remarks>
+    /// A type this node does not have on its allow-list is not decoded and not guessed at: the
+    /// envelope comes back with no body, and the ordinary unknown-message path reports it. That is
+    /// the same refusal the JSON path makes, and it is the one that stops a peer choosing which
+    /// type this process constructs.
+    /// </remarks>
+    private static object? Decode(string? alias, byte[] body, MessageTypeRegistry? types)
+    {
+        if (alias is null || types is null) return null;
+        if (!types.TryResolve(alias, out var type)) return null;
+
+        return Codec.Read(type, body);
     }
 
     private static void Byte(ArrayBufferWriter<byte> buffer, byte value)

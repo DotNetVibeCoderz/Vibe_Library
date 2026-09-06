@@ -483,22 +483,35 @@ alias pesan, id korelasi. Dalam JSON masing-masing membawa kunci berkutip, tanda
 options.WireFormat = WireFormat.Binary;   // bawaannya Json
 ```
 
-Diukur di mesin ini, hanya amplopnya:
+```bash
+actornet run --port 9000 --cluster --wire-format binary
+```
+
+Amplop dan badan pesannya sama-sama disandikan. Diukur di mesin ini, terhadap frame yang sama dalam
+bentuk JSON:
 
 | Frame | JSON | Biner | |
 | --- | --- | --- | --- |
-| `tell` dengan payload kecil | 179 B | 94 B | 47% lebih kecil |
-| `ask` dengan id korelasi | 202 B | 125 B | 38% lebih kecil |
-| `ask` yang sama membawa trace | 255 B | 182 B | 29% lebih kecil |
+| Sebuah setoran | 179 B | 83 B | 54% lebih kecil |
+| `ask` untuk sebuah statement | 198 B | 106 B | 46% lebih kecil |
+| Statement yang kembali | 338 B | 204 B | 40% lebih kecil |
+| Satu bacaan telemetri | 225 B | 87 B | 61% lebih kecil |
 | Satu denyut gossip, lima anggota | 364 B | 115 B | 68% lebih kecil |
 
 Gossip paling banyak untungnya, dan itu justru yang paling kecil artinya per frame dan paling besar
 artinya secara total: ia lalu lintas yang tidak pernah berhenti.
 
-**Payload-nya tetap JSON.** Yang disandikan di sini adalah amplop di sekelilingnya. Membuat badan
-pesannya ikut biner berarti satu codec per tipe untuk setiap pesan terdaftar — perkara yang jauh
-lebih besar, dan tak satu pun klien lintas bahasa bisa mengikutinya. Mengatakan "format kabel biner"
-padahal yang dimaksud amplopnya perlu disebutkan terus terang.
+**Field ditandai berdasarkan posisi, bukan nama.** Tiap field membawa tag kecil — indeksnya dan
+bagaimana ia disusun — dan itulah yang membuat pembaca bisa melangkahi field yang tak dikenalnya
+alih-alih kehilangan tempatnya. Menambahkan properti ke sebuah pesan karena itu aman saat upgrade
+bergilir; menukar urutan parameter sebuah record tidak, tapi itu memang perubahan yang memutus tipe
+tersebut.
+
+**Apa pun yang tak bisa disandikan codec-nya berjalan sebagai JSON di dalam amplop biner**, diputus
+sekali per tipe. String, angka, `bool`, `decimal`, `Guid`, tanggal, `TimeSpan`, enum, nullable, array
+dan list dari semuanya, serta pesan yang tersusun dari itu semua tercakup; dictionary tidak. Cadangan
+itulah yang membuat fitur ini aman dinyalakan — kebenarannya tidak bergantung pada codec yang
+mencakup setiap bentuk pesan, hanya pada kejujurannya tentang bentuk mana yang ia cakup.
 
 **Tidak ada yang dinegosiasikan.** Sebuah frame menyatakan sendiri sandinya — JSON diawali `{`, biner
 diawali `0xAC` — dan sebuah koneksi dijawab dengan sandi yang dipakai menyapanya. Jadi:
