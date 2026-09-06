@@ -139,7 +139,8 @@ works and something automated proves it** — not when the code exists.
 - [x] Node.js — verified against a live node
 - [x] Python — verified against a live node
 - [x] Go — compiles and is exercised in CI; not run on the machine it was written on
-- [ ] Reconnect and failover to another node
+- [x] Reconnect and failover to another node - C# client, several endpoints tried in rotation
+- [ ] The same for the Node.js, Python and Go clients
 - [ ] Cluster-aware routing in clients (they connect to one node and let it forward)
 
 ## Testing

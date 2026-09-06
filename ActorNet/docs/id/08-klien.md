@@ -12,8 +12,11 @@ Sebuah klien **bukan** anggota cluster. Ia terhubung ke satu node, dan node itu 
 mana pun yang memiliki actor tujuan, jadi node mana pun adalah titik masuk yang sah.
 
 Yang tidak didapat klien adalah pandangan keanggotaan miliknya sendiri. Ia tidak bisa memberi tahu di
-mana sebuah actor berada, dan bila node yang ia sambungi mati, ia harus menyambung ulang ke tempat
-lain alih-alih melakukan failover sendiri.
+mana sebuah actor berada, dan ia tidak tahu node mana yang memiliki sebuah kunci — ia mengirim ke
+node mana pun yang sedang tersambung dan membiarkan ring mengurus sisanya.
+
+Bila diberi lebih dari satu endpoint, klien C# menyambung ulang ke node lain ketika node yang sedang
+dipakainya menghilang. Tiga klien lainnya menerima satu endpoint dan ikut berhenti bersamanya.
 
 Karena klien tidak punya alamat yang bisa dihubungi cluster, **node menjawab lewat koneksi yang
 dibuka klien**. Itulah sebabnya setiap klien memelihara satu socket berumur panjang dan terus
@@ -70,6 +73,26 @@ client.RegisterMessagesFromAssembly(typeof(Deposit).Assembly);
 await client.TellAsync(ActorId.Parse("BankAccountActor/alice"), new Deposit(500m));
 var statement = await client.AskAsync<Statement>(ActorId.Parse("BankAccountActor/alice"), new GetStatement());
 ```
+
+Beri lebih dari satu node, dan ia selamat dari matinya node yang ia hubungi:
+
+```csharp
+await using var client = new ActorNetClient(["10.0.1.5:9000", "10.0.1.6:9000", "10.0.1.7:9000"]);
+```
+
+Node mana yang dihubungi klien tidak penting — node yang tidak memiliki kunci tujuannya akan
+meneruskan lewat ring — jadi setiap node adalah pintu masuk yang sama benarnya, dan klien yang
+terikat hanya pada satu di antaranya adalah hal yang aneh bagi klien sebuah cluster.
+
+Endpoint dicoba bergiliran mulai dari yang terakhir berhasil, sehingga penyambungan ulang biasa
+kembali ke tempat semula dan hanya node yang benar-benar hilang yang membuatnya pindah.
+`ConnectedTo` menyebutkan mana yang sedang dipakai. Berputar pada setiap penyambungan justru
+keriuhan, bukan penyeimbangan: tidak ada yang didapat dari pindah, dan ada satu koneksi yang harus
+dibangun ulang karenanya.
+
+**Apa pun yang sedang di jalan saat koneksi putus tetap gagal.** Pengirimannya at-most-once, dan
+mengirim ulang permintaan yang balasannya hilang diam-diam mengubahnya jadi at-least-once. Pemanggil
+tahu apakah operasinya aman diulang; klien tidak.
 
 ## Node.js
 
@@ -168,8 +191,8 @@ Masing-masing menghormati `ACTORNET_HOST` / `ACTORNET_PORT` (Go memakai `ACTORNE
 
 ## Belum dibangun
 
-- Sambung ulang dan failover ke node lain
-- Perutean sadar-cluster di sisi klien
+- Sambung ulang dan failover pada klien Node.js, Python, dan Go; klien C# sudah punya
+- Perutean sadar-cluster, supaya klien mengirim langsung ke node pemilik kunci
 
 Lihat [roadmap](../../Plan.md).
 

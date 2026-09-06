@@ -12,8 +12,11 @@ A client is **not** a cluster member. It connects to one node, and that node for
 node owns the target actor, so any node is a valid entry point.
 
 What a client does not get is a membership view of its own. It cannot tell you where an actor
-lives, and if the node it is connected to goes down it must reconnect somewhere else rather than
-failing over on its own.
+lives, and it does not know which node owns a key - it sends to whichever node it is connected to
+and lets the ring do the rest.
+
+Given more than one endpoint, the C# client reconnects to another node when the one it is using
+goes away. The other three take one endpoint and stop when it does.
 
 Because a client has no address the cluster can dial, **the node answers on the connection the
 client opened**. That is why every client keeps one long-lived socket and keeps reading it even
@@ -70,6 +73,25 @@ client.RegisterMessagesFromAssembly(typeof(Deposit).Assembly);
 await client.TellAsync(ActorId.Parse("BankAccountActor/alice"), new Deposit(500m));
 var statement = await client.AskAsync<Statement>(ActorId.Parse("BankAccountActor/alice"), new GetStatement());
 ```
+
+Give it more than one node and it survives losing the one it dialled:
+
+```csharp
+await using var client = new ActorNetClient(["10.0.1.5:9000", "10.0.1.6:9000", "10.0.1.7:9000"]);
+```
+
+It does not matter which node a client reaches - one that does not own the target key forwards by
+the ring - so every node is an equally correct entrance, and a client bound to exactly one of them
+is a strange thing for a client of a cluster to be.
+
+Endpoints are tried in rotation from the last one that worked, so an ordinary reconnect goes back
+where it was and only a node that is really gone costs a move. `ConnectedTo` says which one is in
+use. Rotating on every connect would be churn rather than balance: there is nothing to gain by
+moving and a connection to re-establish by moving.
+
+**Anything in flight when a connection drops still fails.** Delivery is at-most-once, and re-sending
+a request whose reply was lost would quietly make it at-least-once. The caller knows whether its
+operation is safe to repeat; the client does not.
 
 ## Node.js
 
@@ -168,8 +190,8 @@ Each honours `ACTORNET_HOST` / `ACTORNET_PORT` (Go uses `ACTORNET_ADDR`).
 
 ## Not built yet
 
-- Reconnect and failover to another node
-- Cluster-aware routing in clients
+- Reconnect and failover in the Node.js, Python and Go clients; the C# one has it
+- Cluster-aware routing, so a client sends straight to the node that owns the key
 
 See the [roadmap](../../Plan.md).
 
