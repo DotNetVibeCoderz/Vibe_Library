@@ -72,7 +72,13 @@ public sealed class WarmHandoffTests
             await leaving.AskAsync<Total>(id, new GetTotal(), TimeSpan.FromSeconds(10));
 
         await leaving.StopAsync();
-        await Task.Delay(TimeSpan.FromSeconds(1));
+
+        // Waiting for the ring rather than for a second. Asking before the survivor owns these keys
+        // forwards to a node that has gone, and the ask sits there until it times out - which is a
+        // slow machine failing this test rather than the option not working.
+        await TestHarness.AssertEventuallyAsync(
+            () => staying.Cluster.IsSingleNode,
+            "the survivor should own the whole ring", TimeSpan.FromSeconds(20));
 
         // Off is off. The addresses still work - the next message brings each actor back - which is
         // the behaviour this option turns the warming into.
