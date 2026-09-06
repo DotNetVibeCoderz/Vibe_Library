@@ -99,6 +99,24 @@ public sealed class ClusterOptions
     public TimeSpan SplitBrainStabilityWindow { get; set; } = TimeSpan.FromSeconds(7);
 
     /// <summary>
+    /// Whether a seed given as a hostname is expanded to every address it resolves to.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A Kubernetes headless service resolves to one address per pod. Connecting to the name gets
+    /// whichever record the resolver happened to return first, so a single seed entry reaches one
+    /// pod - and if that pod is the one still starting, the join fails and the node waits for its
+    /// next beat to try the same coin flip again.
+    /// </para>
+    /// <para>
+    /// With this on, one seed entry means every replica behind the name, and a cluster's whole
+    /// configuration is the service name. Addresses are re-resolved on each attempt, so pods that
+    /// appear later are picked up without a restart.
+    /// </para>
+    /// </remarks>
+    public bool ResolveSeedHostnames { get; set; } = true;
+
+    /// <summary>
     /// How many peers this node gossips to per beat. Zero means every peer.
     /// </summary>
     /// <remarks>

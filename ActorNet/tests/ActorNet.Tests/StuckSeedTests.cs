@@ -17,6 +17,13 @@ namespace ActorNet.Tests;
 /// </remarks>
 public sealed class StuckSeedTests
 {
+    // Address literals rather than names. A seed given as a name is resolved before it is dialled,
+    // and a name that does not exist can take seconds to fail on some resolvers - which would make
+    // this a test about DNS instead of about one seed starving the others. These two are from
+    // TEST-NET-1, which is reserved for exactly this.
+    private const string BlackHole = "192.0.2.1";
+    private const string Reachable = "192.0.2.2";
+
     /// <summary>A transport where one address swallows everything sent to it.</summary>
     private sealed class HangingTransport : ITransport
     {
@@ -71,11 +78,11 @@ public sealed class StuckSeedTests
     [Fact]
     public async Task AStuckSeedDoesNotStarveTheSeedsListedAfterIt()
     {
-        var transport = new HangingTransport("black-hole");
+        var transport = new HangingTransport(BlackHole);
         var options = new ClusterOptions
         {
             Enabled = true,
-            Seeds = ["black-hole:9000", "reachable:9001"],
+            Seeds = [$"{BlackHole}:9000", $"{Reachable}:9001"],
             JoinTimeout = TimeSpan.FromSeconds(2),
         };
 
@@ -84,17 +91,17 @@ public sealed class StuckSeedTests
 
         // Contacted at once rather than in turn, so the seed after the black hole still gets its
         // join. In sequence it would have waited behind a connect nobody was ever going to answer.
-        Assert.Equal(["reachable:9001"], transport.Delivered);
+        Assert.Equal([$"{Reachable}:9001"], transport.Delivered);
     }
 
     [Fact]
     public async Task StartingDoesNotWaitForASeedThatNeverAnswers()
     {
-        var transport = new HangingTransport("black-hole");
+        var transport = new HangingTransport(BlackHole);
         var options = new ClusterOptions
         {
             Enabled = true,
-            Seeds = ["black-hole:9000"],
+            Seeds = [$"{BlackHole}:9000"],
             JoinTimeout = TimeSpan.FromMilliseconds(500),
         };
 

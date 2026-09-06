@@ -371,6 +371,28 @@ A `Host` that is not parseable as an IP makes the listener bind to all interface
 advertising the name, which is exactly what a container needs. Verified with a hostname on one
 machine; not yet verified across real containers.
 
+**A seed name stands for every address behind it.** A Kubernetes headless service resolves to one
+address per pod, so one seed entry is the whole cluster's configuration:
+
+```yaml
+# A headless service - clusterIP: None - gives one A record per ready pod.
+command:
+  - run
+  - --host=0.0.0.0
+  - --advertised-host=$(POD_IP)
+  - --port=9000
+  - --seed=actornet-headless.default.svc.cluster.local:9000
+```
+
+Every address the name resolves to is sent a join, not whichever record came back first. That
+matters at rollout: connecting to the name alone would reach one pod, and if that pod happened to
+be the one still starting, the node would wait for its next beat and try the same coin flip again.
+
+Names are re-resolved on every attempt, so pods that appear later are picked up without a restart,
+and a name that does not resolve is still dialled as given — a typo surfaces as a connect error
+naming the seed rather than as a seed that quietly stopped being tried. Set
+`Cluster.ResolveSeedHostnames = false` to go back to letting the connect do the lookup.
+
 ### Binding one address and advertising another
 
 `Host` and `Port` are what the listener binds. `AdvertisedHost` and `AdvertisedPort` are what peers

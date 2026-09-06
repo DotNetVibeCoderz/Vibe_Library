@@ -66,7 +66,8 @@ works and something automated proves it** — not when the code exists.
 - [x] `--split-brain` and `--quorum` on the CLI
 - [ ] A protocol between the halves, so two sides cannot both decide they are the majority
 - [ ] Replica placement using `PreferenceList`
-- [ ] Non-static seed discovery (DNS, Kubernetes)
+- [x] Seed names resolved to every address behind them, for a Kubernetes headless service
+- [ ] Watching the Kubernetes API for members, rather than resolving a name each attempt
 
 ## Persistence
 

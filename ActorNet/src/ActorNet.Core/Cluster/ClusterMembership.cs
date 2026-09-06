@@ -220,7 +220,7 @@ public sealed class ClusterMembership : IClusterView, IAsyncDisposable
             if (!ClusterOptions.TryParseSeed(seed, out var host, out var port)) continue;
             if (port == self.Port && IsSelfHost(host)) continue;
 
-            attempts.Add(SendJoinAsync(seed, host, port, frame, cancellationToken));
+            attempts.Add(JoinOneSeedAsync(seed, host, port, self.Port, frame, cancellationToken));
         }
 
         var reached = 0;
@@ -235,6 +235,61 @@ public sealed class ClusterMembership : IClusterView, IAsyncDisposable
             _logger.LogDebug("Still alone; reached {Reached} of {Total} seeds.", reached, _options.Seeds.Count);
         else
             _logger.LogInformation("Join sent to {Reached} of {Total} seeds.", reached, _options.Seeds.Count);
+    }
+
+    /// <summary>
+    /// Resolves one seed and joins every node behind it. True when any of them answered.
+    /// </summary>
+    /// <remarks>
+    /// Resolution belongs inside this, not in the loop that calls it: doing it up front would put
+    /// every seed behind the slowest name lookup, which is the same starvation that contacting the
+    /// seeds one at a time caused.
+    /// </remarks>
+    private async Task<bool> JoinOneSeedAsync(string seed, string host, int port, int selfPort, WireEnvelope frame, CancellationToken cancellationToken)
+    {
+        // One name can stand for many nodes, and reaching all of them is what makes a headless
+        // service work as a seed rather than a coin flip between its pods.
+        var addresses = await ResolveAsync(host, cancellationToken).ConfigureAwait(false);
+
+        var sends = addresses
+            .Where(address => port != selfPort || !IsSelfHost(address))
+            .Select(address => SendJoinAsync(seed, address, port, frame, cancellationToken))
+            .ToArray();
+
+        if (sends.Length == 0) return false;
+
+        return (await Task.WhenAll(sends).ConfigureAwait(false)).Any(answered => answered);
+    }
+
+    /// <summary>
+    /// Every address a seed host stands for, or the host itself when there is nothing to resolve.
+    /// </summary>
+    /// <remarks>
+    /// An unresolvable name is returned unchanged rather than dropped, so the failure surfaces as a
+    /// connect error naming the seed - which is what somebody debugging a typo needs to see - and
+    /// not as a seed that silently stopped being tried.
+    /// </remarks>
+    private async Task<IReadOnlyList<string>> ResolveAsync(string host, CancellationToken cancellationToken)
+    {
+        // An address literal is already an answer, and asking the resolver about one is a syscall
+        // that can only return what it was given.
+        if (!_options.ResolveSeedHostnames || System.Net.IPAddress.TryParse(host, out _)) return [host];
+
+        try
+        {
+            var addresses = await System.Net.Dns.GetHostAddressesAsync(host, cancellationToken).ConfigureAwait(false);
+            if (addresses.Length == 0) return [host];
+
+            return addresses.Select(a => a.ToString()).Distinct(StringComparer.Ordinal).ToArray();
+        }
+        catch (Exception ex) when (ex is System.Net.Sockets.SocketException or ArgumentException or OperationCanceledException)
+        {
+            // Cancellation included: the deadline belongs to the round, and a lookup that ran out
+            // of time is no different from a name that does not resolve. Letting it escape would
+            // take down the whole handshake over one bad seed.
+            _logger.LogDebug(ex, "Could not resolve seed host {Host}; trying it as given.", host);
+            return [host];
+        }
     }
 
     /// <summary>Sends one join frame. Never throws: a seed that is down is an ordinary outcome.</summary>

@@ -48,7 +48,6 @@ peer's own heartbeat history rather than one deadline chosen for the worst link.
 | --- | --- |
 | Source-generated actor proxies | `AskAsync<Balance>(id, new GetBalance())` could be `account.GetBalanceAsync()`, checked at compile time. |
 | ASP.NET Core integration package | Endpoint filters and health checks that know about actors. |
-| Kubernetes discovery | Seeds are static strings. A headless service should be enough. |
 | A binary wire format | JSON is the right default and the wrong choice for a hot inter-node path. |
 
 ## Deliberately not planned

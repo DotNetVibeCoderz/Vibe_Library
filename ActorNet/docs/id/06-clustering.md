@@ -376,6 +376,29 @@ services:
 mengiklankan namanya, dan itu persis yang dibutuhkan container. Sudah diuji dengan hostname di satu
 mesin; belum diuji lintas container sungguhan.
 
+**Sebuah nama seed mewakili semua alamat di baliknya.** Headless service Kubernetes menerjemah
+menjadi satu alamat per pod, jadi satu entri seed sudah menjadi seluruh konfigurasi cluster:
+
+```yaml
+# Headless service - clusterIP: None - memberi satu record A per pod yang siap.
+command:
+  - run
+  - --host=0.0.0.0
+  - --advertised-host=$(POD_IP)
+  - --port=9000
+  - --seed=actornet-headless.default.svc.cluster.local:9000
+```
+
+Setiap alamat hasil penerjemahan nama itu dikirimi join, bukan hanya record yang kebetulan kembali
+lebih dulu. Itu penting saat rollout: menghubungi namanya saja hanya menyentuh satu pod, dan bila pod
+itu kebetulan yang masih menyala, node-nya akan menunggu denyut berikutnya lalu mengulang undian yang
+sama.
+
+Nama diterjemahkan ulang pada setiap percobaan, jadi pod yang muncul belakangan ikut terjaring tanpa
+restart; dan nama yang gagal diterjemahkan tetap dihubungi apa adanya — salah ketik muncul sebagai
+error koneksi yang menyebut seed-nya, bukan sebagai seed yang diam-diam berhenti dicoba. Setel
+`Cluster.ResolveSeedHostnames = false` untuk kembali menyerahkan pencarian nama ke proses connect.
+
 ### Mem-bind satu alamat dan mengiklankan alamat lain
 
 `Host` dan `Port` adalah yang di-bind listener. `AdvertisedHost` dan `AdvertisedPort` adalah yang
