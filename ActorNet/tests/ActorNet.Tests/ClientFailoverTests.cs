@@ -63,6 +63,20 @@ public sealed class ClientFailoverTests
             () => second.Cluster.IsSingleNode,
             "the survivor should own the whole ring", TimeSpan.FromSeconds(20));
 
+        // The first call after the socket dies may fail, and should: at-most-once means the client
+        // cannot know whether a request already in flight was handled, so it reports rather than
+        // guesses. Whether it fails depends on how far the close had got, which is why this is
+        // tolerated rather than asserted either way.
+        try
+        {
+            await client.AskAsync<Total>(ActorId.For<CounterActor>("fo-counter"), new GetTotal(),
+                TimeSpan.FromSeconds(15), TestContext.Current.CancellationToken);
+        }
+        catch (ActorNetException)
+        {
+            // Expected on one side of that race. What must not happen is the next call failing too.
+        }
+
         var total = await client.AskAsync<Total>(ActorId.For<CounterActor>("fo-counter"), new GetTotal(),
             TimeSpan.FromSeconds(15), TestContext.Current.CancellationToken);
 

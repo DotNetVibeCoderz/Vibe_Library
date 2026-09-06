@@ -52,13 +52,46 @@ node is most likely to be in, and a binary envelope for the traffic between node
 ## 0.5 — the shape of the remaining gaps
 
 Nothing here is a feature so much as an admission. Each is something already built that works in
-one place and not another.
+one place and not another. The console now collects counters from every peer, all four clients fail
+over between nodes, and a departing node hands its actors to their successors; what is left is
+below, with the reasoning rather than only the intent.
 
 | Theme | Why it matters |
 | --- | --- |
-| Client reconnect and failover | An SDK client is bound to the node it dialled. That node going down takes the client with it. |
-| Replica placement | `PreferenceList` exists and nothing uses it. Standby replicas would make a node loss invisible. |
-| A binary payload | The envelope is binary; the message body is still JSON, and it is the larger half for anything but the smallest message. |
+| A binary payload | The envelope is binary; the message body is still JSON, and measurement says it is the larger half of a real frame. |
+| Coordinated rolling restarts | A node hands its actors over cleanly, but nothing stops two nodes leaving at once. |
+
+### A binary payload, measured
+
+Worth writing down before anyone starts. Payload share of a binary frame, measured on this machine:
+
+| Frame | Payload | Envelope |
+| --- | --- | --- |
+| A tell with one small field | 40% | 60% |
+| An ask with an empty request | 14% | 86% |
+| A reply carrying a statement | 69% | 31% |
+| A telemetry reading | 59% | 41% |
+| An order-saga step | 61% | 39% |
+
+So for anything but the smallest message the payload is the larger half, and a binary body is worth
+having. What it costs is the part to weigh: `IMessageSerializer` returns a `JsonElement`, and
+`WireEnvelope.Payload` is one, so a binary body means changing the serializer contract and the
+envelope that four language clients read. The generator that already emits message records could
+emit binary readers and writers for them, which is the tractable half; the wire change is not
+something to do quickly.
+
+### Replica placement — not planned as originally written
+
+`PreferenceList` now has a user: a departing node uses it to find each key's successor and hand the
+actors over. What the entry originally meant - standby replicas holding live state so a node loss is
+invisible - is a different thing, and it contradicts the bet the rest of the design is built on.
+State lives in the store; an actor is resident, not authoritative. A standby holding live state
+would need replication and conflict resolution between two copies of an actor, which is
+[actor migration with in-flight state](#deliberately-not-planned) under another name.
+
+What is achievable is narrower and is written down as its own line: eagerly activating inherited
+keys after an *unplanned* loss the way a planned one already does. It needs the survivors to know
+which keys the dead node held, and nothing tells them that today.
 
 ## Deliberately not planned
 

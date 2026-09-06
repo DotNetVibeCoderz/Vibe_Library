@@ -69,7 +69,9 @@ works and something automated proves it** — not when the code exists.
 - [x] Split-brain resolution - `KeepMajority` and `StaticQuorum`, opt-in, the losing side stops
 - [x] `--split-brain` and `--quorum` on the CLI
 - [ ] A protocol between the halves, so two sides cannot both decide they are the majority
-- [ ] Replica placement using `PreferenceList`
+- [x] `PreferenceList` has a user: a departing node finds each key's successor with it
+- [ ] Eagerly activating inherited keys after an unplanned loss; the survivors do not know
+      which keys the dead node held
 - [x] Seed names resolved to every address behind them, for a Kubernetes headless service
 - [ ] Watching the Kubernetes API for members, rather than resolving a name each attempt
 
@@ -102,7 +104,8 @@ works and something automated proves it** — not when the code exists.
 - [x] TLS between nodes (1.2/1.3), with thumbprint pinning and optional mutual TLS
 - [x] Authentication between nodes - HMAC challenge-response, the secret never sent
 - [x] A binary envelope encoding, chosen per node and detected per frame
-- [ ] A binary payload; the message body is still JSON inside a binary envelope
+- [ ] A binary payload; the message body is still JSON inside a binary envelope, and measured
+      at 40-69% of a real frame
 
 ## Streams
 
