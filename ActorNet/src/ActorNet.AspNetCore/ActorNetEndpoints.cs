@@ -100,6 +100,32 @@ public static class ActorNetEndpoints
         })
         .WithName("ActorNetMetrics");
 
+        group.MapGet("/cluster-status", async (ActorSystem system) =>
+        {
+            var status = await system.GetClusterStatusAsync(TimeSpan.FromSeconds(2));
+
+            return Results.Ok(new
+            {
+                takenAt = status.TakenAt,
+                totals = new
+                {
+                    processed = status.MessagesProcessed,
+                    failed = status.MessagesFailed,
+                    inFlight = status.InFlight,
+                    activeActors = status.ActiveActors,
+                    mailboxDepth = status.MailboxDepth,
+                    deadLetters = status.DeadLetters,
+                },
+                busiest = status.Busiest?.NodeId,
+
+                // Named rather than omitted: totals over four nodes presented as five would be
+                // worse than saying which one did not answer.
+                silent = status.Silent,
+                nodes = status.Nodes,
+            });
+        })
+        .WithName("ActorNetClusterStatus");
+
         return group;
     }
 

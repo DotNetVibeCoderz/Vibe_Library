@@ -31,6 +31,15 @@ public enum WireKind : byte
 
     /// <summary>A node announcing a graceful departure.</summary>
     Leave = 8,
+
+    /// <summary>
+    /// Asks a node what its counters say. Answered with an ordinary <see cref="AskReply"/>.
+    /// </summary>
+    /// <remarks>
+    /// Addressed to a node rather than to an actor, which is why it needs a kind of its own: the
+    /// ring routes by key, and there is no key that means "whichever node I am asking".
+    /// </remarks>
+    NodeStatusRequest = 9,
 }
 
 /// <summary>One frame, as it travels between nodes.</summary>

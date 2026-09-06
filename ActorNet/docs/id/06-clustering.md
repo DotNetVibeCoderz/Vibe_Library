@@ -29,9 +29,37 @@ ber-gossip dari sana. Daftarkan dua atau tiga supaya restart tidak bergantung pa
 
 ![Halaman cluster: ring dan tabel member](../images/console-cluster.png)
 
-Tiga member, masing-masing dengan 128 replika di ring, memiliki 36,2%, 32,3%, dan 31,6% dari
+Tiga member, masing-masing dengan 128 replika di ring, memiliki 34,3%, 33,0%, dan 32,7% dari
 keyspace. Garis-garisnya adalah virtual node, dan cara mereka berselang-seling itulah intinya — lihat
 di bawah.
+
+Pencacah di samping tiap member berasal dari member itu sendiri, bukan dari node ini.
+`GetClusterStatusAsync` menanyai setiap peer yang terjangkau tentang angkanya sendiri lalu
+mengembalikan semuanya bersama:
+
+```csharp
+var status = await system.GetClusterStatusAsync(TimeSpan.FromSeconds(2));
+
+status.ActiveActors;   // di seluruh cluster
+status.Busiest;        // node yang menanggung pekerjaan in-flight terbanyak
+status.Silent;         // member yang tidak menjawab tepat waktu
+```
+
+Ring dan tabel member sejak dulu bersifat cluster-wide, sedangkan pencacahnya tidak — jadi sebuah
+konsol bisa melaporkan lima member tapi hanya menunjukkan apa yang dikerjakan satu di antaranya, dan
+node yang terkubur pekerjaan tampak persis seperti node menganggur bila dilihat dari tiga node
+jauhnya. **Total cluster bukan angka yang menarik**; `Busiest` yang menarik, karena satu node
+terkubur sementara yang lain santai adalah masalah penempatan yang justru disembunyikan oleh
+penjumlahan.
+
+**Peer yang tidak menjawab disebut namanya, bukan dibuang.** Menjumlahkan empat node lalu
+menyajikannya sebagai lima akan lebih buruk daripada menyebutkan siapa yang hilang, dan peer yang
+mendadak diam justru hal yang ingin diketahui orang yang sedang menatap halaman ini. Konsolnya
+menampilkan tanda pisah pada barisnya.
+
+Bertanya memakan satu perjalanan bolak-balik per peer, jadi konsol bertanya lebih jarang daripada ia
+menggambar ulang. Halaman yang memungut data dari cluster dua puluh node setiap detik akan berubah
+menjadi pembangkit beban bagi hal yang seharusnya ia amati.
 
 ## Penempatan: hash ring
 

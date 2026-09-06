@@ -130,7 +130,7 @@ works and something automated proves it** — not when the code exists.
 - [x] BenchmarkDotNet suite for messaging and routing
 - [x] `ActorNet.AspNetCore`: a cluster-aware health check, read-only diagnostics endpoints, and a
       readiness filter
-- [ ] Cross-node metrics aggregation in the console (it shows one node)
+- [x] Cross-node metrics aggregation - every peer asked for its own counters, silent ones named
 - [ ] Actor inspector — read an actor's state without writing a query message
 
 ## Clients
@@ -183,8 +183,9 @@ works and something automated proves it** — not when the code exists.
 
 Ticking a box means it works, not that it is finished. These are the caveats worth carrying:
 
-- **The console shows one node.** Counters and the actor list are local. The ring and membership
-  are cluster-wide, but there is no aggregation across nodes.
+- **The console's actor list is still one node's.** Counters are now collected from every peer;
+  the per-actor table is not, and pulling a row per actor from twenty peers on a refresh would cost
+  more than everything else on the wire put together.
 - **The generated proxies have no benchmark.** They emit the same calls a hand-written ask makes,
   so there is no reason to expect a difference, and "no reason to expect" is not a measurement.
 - **The gossip fanout has only been reasoned about, not measured.** A rotation of four peers per

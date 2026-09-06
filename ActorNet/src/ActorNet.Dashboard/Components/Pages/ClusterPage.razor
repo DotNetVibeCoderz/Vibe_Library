@@ -3,7 +3,9 @@
 @rendermode InteractiveServer
 @implements IDisposable
 @inject ActorSystem System
+@inject ILogger<ClusterPage> Logger
 @using System.Globalization
+@using ActorNet.Metrics
 
 <PageTitle>Cluster - ActorNet Console</PageTitle>
 
@@ -56,8 +58,10 @@
                             <th>Node</th>
                             <th>Address</th>
                             <th>Status</th>
+                            <th class="num">Actors</th>
+                            <th class="num">Handled</th>
+                            <th class="num">In flight</th>
                             <th class="num">Last seen</th>
-                            <th class="num">Incarnation</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -73,8 +77,25 @@
                                 </td>
                                 <td class="address" style="color: var(--muted)">@member.Address</td>
                                 <td><span class="status @StatusClass(member.Status)">@member.Status</span></td>
+                                @{
+                                    var work = Work(member.NodeId);
+                                }
+                                @if (work is null)
+                                {
+                                    @* Asked and did not answer. An em dash rather than a zero: the
+                                       difference between "idle" and "did not say" is the whole
+                                       reason this column is worth having. *@
+                                    <td class="num" style="color: var(--faint)">&mdash;</td>
+                                    <td class="num" style="color: var(--faint)">&mdash;</td>
+                                    <td class="num" style="color: var(--faint)">&mdash;</td>
+                                }
+                                else
+                                {
+                                    <td class="num">@work.ActiveActors.ToString("N0", CultureInfo.InvariantCulture)</td>
+                                    <td class="num">@work.MessagesProcessed.ToString("N0", CultureInfo.InvariantCulture)</td>
+                                    <td class="num" style="color: @(work.InFlight > 1000 ? "var(--warn)" : "var(--faint)")">@work.InFlight.ToString("N0", CultureInfo.InvariantCulture)</td>
+                                }
                                 <td class="num" style="color: var(--faint)">@Ago(member.LastSeen)</td>
-                                <td class="num" style="color: var(--faint)">@member.Incarnation</td>
                             </tr>
                         }
                     </tbody>
@@ -82,6 +103,26 @@
             </div>
         </section>
     </div>
+
+    @if (_status is { Nodes.Count: > 1 })
+    {
+        <p class="note">
+            <strong>Across the cluster:</strong>
+            @_status.ActiveActors.ToString("N0", CultureInfo.InvariantCulture) actors,
+            @_status.MessagesProcessed.ToString("N0", CultureInfo.InvariantCulture) messages handled,
+            @_status.InFlight.ToString("N0", CultureInfo.InvariantCulture) in flight.
+            @if (_status.Busiest is { InFlight: > 0 } busiest)
+            {
+                @* The number an aggregate usually hides: one node buried while the others idle is
+                   a placement problem, and a cluster total looks fine while it happens. *@
+                <text> Busiest is <strong>@busiest.NodeId</strong> with @busiest.InFlight.ToString("N0", CultureInfo.InvariantCulture) in flight.</text>
+            }
+            @if (_status.Silent.Count > 0)
+            {
+                <text> No answer from @string.Join(", ", _status.Silent).</text>
+            }
+        </p>
+    }
 
     <p class="note">
         <strong>Unreachable is not down.</strong> A member that misses heartbeats stays on the ring,
@@ -96,17 +137,53 @@
     private static readonly TimeSpan RefreshInterval = TimeSpan.FromSeconds(1);
 
     private IReadOnlyList<ClusterMember> _members = [];
+    private ClusterStatus? _status;
     private Timer? _timer;
 
-    protected override void OnInitialized()
+    /// <summary>
+    /// How often the peers are asked for their counters.
+    /// </summary>
+    /// <remarks>
+    /// Slower than the page refresh on purpose. The membership table is local and free to read;
+    /// every peer's counters cost a round trip each, and a console that polls a twenty-node cluster
+    /// every second becomes a load generator for the thing it is meant to be observing.
+    /// </remarks>
+    private static readonly TimeSpan StatusInterval = TimeSpan.FromSeconds(3);
+
+    private DateTimeOffset _statusAskedAt = DateTimeOffset.MinValue;
+
+    protected override async Task OnInitializedAsync()
     {
         _members = System.Cluster.Members;
-        _timer = new Timer(_ => _ = InvokeAsync(() =>
+
+        // The first ask happens here rather than on the first tick, so the page arrives with the
+        // columns filled in. Waiting for a timer would show a table of dashes for three seconds and
+        // leave a static render - a screenshot, a print, a browser with no websocket - showing
+        // nothing at all.
+        await RefreshStatusAsync();
+
+        _timer = new Timer(_ => _ = InvokeAsync(async () =>
         {
             _members = System.Cluster.Members;
+
+            if (DateTimeOffset.UtcNow - _statusAskedAt >= StatusInterval) await RefreshStatusAsync();
+
             StateHasChanged();
         }), null, RefreshInterval, RefreshInterval);
     }
+
+    private async Task RefreshStatusAsync()
+    {
+        _statusAskedAt = DateTimeOffset.UtcNow;
+
+        // Logged rather than swallowed. A console that throws on a slow peer is worse than one that
+        // shows a dash, but a console that hides why every column is a dash is worse than both.
+        try { _status = await System.GetClusterStatusAsync(TimeSpan.FromSeconds(2)); }
+        catch (Exception ex) { Logger.LogWarning(ex, "Could not collect cluster status."); }
+    }
+
+    /// <summary>What a member last reported, or null when it did not answer.</summary>
+    private NodeStatus? Work(string nodeId) => _status?.Nodes.FirstOrDefault(n => n.NodeId == nodeId);
 
     private static string StatusClass(MemberStatus status) => status switch
     {

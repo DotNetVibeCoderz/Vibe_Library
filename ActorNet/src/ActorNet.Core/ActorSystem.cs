@@ -117,6 +117,7 @@ public sealed class ActorSystem : IActorSystem
         Serializer.Types.Register<Watch>();
         Serializer.Types.Register<Unwatch>();
         Serializer.Types.Register<Terminated>();
+        Serializer.Types.Register<NodeStatus>();
         MetricsCollector = new MetricsCollector(Options.NodeId);
         _cluster = new ClusterMembership(
             Options.NodeId,
@@ -286,6 +287,96 @@ public sealed class ActorSystem : IActorSystem
         {
             MetricsCollector.RecordAskTimedOut();
             throw new AskTimeoutException(target, window);
+        }
+        finally
+        {
+            _pendingAsks.TryRemove(correlationId, out _);
+        }
+    }
+
+    /// <summary>
+    /// Asks every reachable member what its counters say, and returns them together.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The ring and the member table were already cluster-wide; the counters were not, so a console
+    /// could report five members and only what one of them was doing. A node buried under work
+    /// looks exactly like an idle one from three nodes away.
+    /// </para>
+    /// <para>
+    /// Peers that do not answer inside <paramref name="timeout"/> are named in
+    /// <see cref="ClusterStatus.Silent"/> rather than dropped. Summing four nodes and presenting it
+    /// as five would be worse than showing which one is missing - and a peer going quiet is itself
+    /// the thing somebody looking at this page wants to know.
+    /// </para>
+    /// </remarks>
+    public async Task<ClusterStatus> GetClusterStatusAsync(TimeSpan? timeout = null, CancellationToken cancellationToken = default)
+    {
+        var window = timeout ?? TimeSpan.FromSeconds(2);
+        var here = NodeStatus.From(MetricsCollector.Snapshot());
+
+        var peers = _cluster.Members
+            .Where(m => m.NodeId != NodeId && m.Status == MemberStatus.Up)
+            .Select(m => m.NodeId)
+            .ToArray();
+
+        if (peers.Length == 0 || _transport is null)
+            return new ClusterStatus(DateTimeOffset.UtcNow, [here], []);
+
+        // Asked in parallel: one slow peer should cost the whole refresh its own latency, not the
+        // sum of everyone's.
+        var answers = await Task.WhenAll(peers.Select(peer => AskNodeStatusAsync(peer, window, cancellationToken)))
+            .ConfigureAwait(false);
+
+        var nodes = new List<NodeStatus> { here };
+        var silent = new List<string>();
+
+        for (var i = 0; i < peers.Length; i++)
+        {
+            if (answers[i] is { } status) nodes.Add(status);
+            else silent.Add(peers[i]);
+        }
+
+        return new ClusterStatus(
+            DateTimeOffset.UtcNow,
+            nodes.OrderBy(n => n.NodeId, StringComparer.Ordinal).ToArray(),
+            silent);
+    }
+
+    /// <summary>One peer's counters, or null when it did not answer in time.</summary>
+    private async Task<NodeStatus?> AskNodeStatusAsync(string nodeId, TimeSpan window, CancellationToken cancellationToken)
+    {
+        var correlationId = Guid.NewGuid().ToString("N");
+        var pending = new PendingAsk();
+        _pendingAsks[correlationId] = pending;
+
+        using var timeoutSource = new CancellationTokenSource(window);
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutSource.Token);
+        await using var registration = linked.Token.Register(static state =>
+        {
+            var (asks, id) = ((ConcurrentDictionary<string, PendingAsk>, string))state!;
+            if (asks.TryRemove(id, out var waiting)) waiting.Cancel();
+        }, (_pendingAsks, correlationId)).ConfigureAwait(false);
+
+        try
+        {
+            var frame = new WireEnvelope
+            {
+                Kind = WireKind.NodeStatusRequest,
+                CorrelationId = correlationId,
+                ReplyToNode = NodeId,
+                FromNode = NodeId,
+            };
+
+            await SendRemoteFrameAsync(nodeId, frame, null, cancellationToken).ConfigureAwait(false);
+            return await pending.Task.ConfigureAwait(false) as NodeStatus;
+        }
+        catch (Exception ex)
+        {
+            // A peer that is gone, congested or simply slow is an ordinary outcome here, not a
+            // failure of the query: it is reported as silence rather than thrown.
+            _logger.LogDebug(ex, "No status from {NodeId} within {Window}.", nodeId, window);
+            return null;
         }
         finally
         {
@@ -601,6 +692,27 @@ public sealed class ActorSystem : IActorSystem
                     try { await _transport.SendAsync(from, reply, _shutdown.Token).ConfigureAwait(false); }
                     catch (Exception ex) { _logger.LogDebug(ex, "Could not answer a {Kind} from {NodeId}.", frame.Kind, from); }
                 }
+
+                return;
+            }
+
+            case WireKind.NodeStatusRequest:
+            {
+                if (frame.CorrelationId is not { } correlation || frame.FromNode is not { Length: > 0 } asker || _transport is null)
+                    return;
+
+                var (alias, payload) = Serializer.Serialize(NodeStatus.From(MetricsCollector.Snapshot()));
+                var reply = new WireEnvelope
+                {
+                    Kind = WireKind.AskReply,
+                    CorrelationId = correlation,
+                    FromNode = NodeId,
+                    MessageAlias = alias,
+                    Payload = payload,
+                };
+
+                try { await _transport.SendAsync(asker, reply, _shutdown.Token).ConfigureAwait(false); }
+                catch (Exception ex) { _logger.LogDebug(ex, "Could not answer a status request from {NodeId}.", asker); }
 
                 return;
             }

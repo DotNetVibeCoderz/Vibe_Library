@@ -29,8 +29,32 @@ there. List two or three so a restart does not depend on one machine being up.
 
 ![The cluster page: the ring and the member table](../images/console-cluster.png)
 
-Three members, each with 128 replicas on the ring, owning 36.2%, 32.3% and 31.6% of the keyspace.
+Three members, each with 128 replicas on the ring, owning 34.3%, 33.0% and 32.7% of the keyspace.
 The stripes are the virtual nodes, and their interleaving is the whole point — see below.
+
+The counters beside each member come from that member, not from this node. `GetClusterStatusAsync`
+asks every reachable peer for its own numbers and returns them together:
+
+```csharp
+var status = await system.GetClusterStatusAsync(TimeSpan.FromSeconds(2));
+
+status.ActiveActors;   // across the cluster
+status.Busiest;        // the node carrying the most in-flight work
+status.Silent;         // members that did not answer in time
+```
+
+The ring and the member table were always cluster-wide and the counters were not, so a console could
+report five members and only what one of them was doing — and a node buried under work looks exactly
+like an idle one from three nodes away. **The cluster total is not the interesting number**;
+`Busiest` is, because one node buried while the others idle is a placement problem that a sum hides.
+
+**A peer that does not answer is named rather than dropped.** Summing four nodes and presenting the
+result as five would be worse than saying which one is missing, and a peer going quiet is itself
+what somebody looking at this page wants to know. The console shows an em dash in its row.
+
+Asking costs a round trip per peer, so the console asks less often than it redraws. A page that
+polled a twenty-node cluster every second would become a load generator for the thing it is meant
+to be observing.
 
 ## Placement: the hash ring
 
