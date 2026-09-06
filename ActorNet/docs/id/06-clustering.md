@@ -299,7 +299,8 @@ Karena itu `StopAsync` berjalan dalam urutan ini:
 2. Mengumumkan kepergian, supaya peer mengeluarkan node ini dari ring.
 3. Menguras sekali lagi, untuk apa pun yang aktif selagi langkah 1 berjalan — node ini masih
    memiliki kunci-kunci itu dan memang benar melayaninya.
-4. Menutup transport.
+4. Meminta tiap penerus mengaktifkan aktor yang baru saja diwarisinya.
+5. Menutup transport.
 
 Urutannya justru intinya. Mengumumkan lebih dulu berarti peer membangun ulang ring-nya dan pesan
 pertama ke kunci yang berpindah mengaktifkan aktor itu dari store yang belum ditulisi node ini:
@@ -307,9 +308,26 @@ aktivasi baru berangkat dari versi basi, dan penulisan yang belum sempat terjadi
 apa pun yang sudah dikerjakannya. Pada store di memori jendela itu berukuran mikrodetik dan tak akan
 pernah terlihat; pada basis data di seberang jaringan, selebar waktu satu penulisan.
 
-Ini membuat restart bergilir aman — tarik satu node, tunggu ring-nya tenang, nyalakan lagi — tapi
-belum berupa *upgrade* bergilir. Pemilik berikutnya masih mengaktifkan aktor saat diminta, bukan
-diserahi lebih dulu, jadi pesan pertama ke tiap kunci yang pindah membayar satu pembacaan store.
+Lalu ia menyerahkan aktor-aktornya. Untuk tiap kunci yang berpindah, node yang pergi menghitung
+siapa penerimanya — entri sesudah dirinya pada preference list ring — dan meminta node itu
+mengaktifkannya sekarang:
+
+```csharp
+options.WarmHandoffLimit = 1000;   // 0 untuk mematikannya
+```
+
+Tanpa ini, pesan pertama ke setiap kunci yang berpindah membayar satu pembacaan store, dan pada
+restart bergilir itu berarti semua aktor yang ditahan node tersebut sekaligus, tepat ketika lalu
+lintas datang. Dengan ini, penerusnya sudah memegang mereka.
+
+Semuanya bersifat sebisanya. Penerus yang tidak menjawab akan mengaktifkan saat diminta nanti —
+persis yang akan terjadi tanpa fitur ini — dan node yang sedang pergi bukan tempat yang tepat untuk
+memaksakan apa pun. Batasnya ada karena ini satu pesan per aktor dan sebuah node bisa menahan sangat
+banyak; melewati batas itu, sisanya aktif saat diminta.
+
+Dengan begitu restart bergilir jadi aman sekaligus hangat. Yang masih kurang adalah *upgrade*
+bergilir dalam arti yang lebih besar: tidak ada yang mengatur urutan node dimatikan, jadi menarik dua
+node sekaligus masih hal yang harus dihindari operator, bukan hal yang ditolak cluster.
 
 ## Mengirim antar node
 

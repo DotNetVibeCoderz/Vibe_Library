@@ -271,6 +271,11 @@ internal sealed class ActorCell
             return;
         }
 
+        // Getting here is the whole message. Reaching this method means the cell exists and its
+        // actor has been activated, which is what the sender wanted; passing it on would only make
+        // every actor write a handler to ignore it.
+        if (envelope.Message is Warm) return;
+
         _context.BeginMessage(envelope);
         try
         {

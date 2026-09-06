@@ -16,6 +16,24 @@ namespace ActorNet;
 [ActorMessage(Alias = "actornet.watch")]
 public sealed record Watch(string Watcher);
 
+/// <summary>
+/// Asks the receiving node to activate an actor now, rather than on the first message.
+/// </summary>
+/// <remarks>
+/// <para>
+/// Sent by a node that is shutting down, to whoever inherits its keys. Rebalancing works by
+/// deactivating an actor and letting the next message reactivate it from the store, so the first
+/// message to every key that moved pays a read. On a rolling restart that is every actor the node
+/// held, all at once, at the moment traffic arrives.
+/// </para>
+/// <para>
+/// The receiving cell handles this itself and the actor never sees it. Activation is the entire
+/// point of the message; there is nothing else to do with it.
+/// </para>
+/// </remarks>
+[ActorMessage(Alias = "actornet.warm")]
+public sealed record Warm;
+
 /// <summary>Withdraws a <see cref="Watch"/>.</summary>
 /// <param name="Watcher">The actor that no longer wants to be told.</param>
 [ActorMessage(Alias = "actornet.unwatch")]

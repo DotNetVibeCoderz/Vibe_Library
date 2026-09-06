@@ -290,7 +290,8 @@ it is going.
 2. Announce the leave, so peers take this node off the ring.
 3. Drain once more, for anything that activated while step 1 was running — this node still owned
    those keys and was right to serve them.
-4. Close the transport.
+4. Ask each successor to activate the actors it has just inherited.
+5. Close the transport.
 
 The order is the whole point. Announcing first means a peer rebuilds its ring and the first message
 to a key that moved reactivates that actor from a store this node has not written to yet: the new
@@ -298,9 +299,25 @@ activation starts from a stale version, and the flush still to come lands on top
 on to do. On an in-memory store that window is microseconds and you will never see it; on a database
 across a network it is however long a write takes.
 
-This makes a rolling restart safe — take one node out, wait for the ring to settle, bring it back —
-but it is not yet a rolling *upgrade*. The next owner still activates on demand rather than being
-handed the actors in advance, so the first message to each moved key pays a load from the store.
+Then it hands the actors over. For each key that is moving, the departing node works out who takes
+it — the entry after itself in the ring's preference list — and asks that node to activate it now:
+
+```csharp
+options.WarmHandoffLimit = 1000;   // 0 turns it off
+```
+
+Without this, the first message to every key that moved pays a read from the store, and on a rolling
+restart that is every actor the node held, all at once, at the moment traffic arrives. With it the
+successor is already holding them.
+
+It is best effort throughout. A successor that does not answer activates on demand later, which is
+what would have happened anyway, and a node on its way out is the wrong place to insist on anything.
+The cap is there because it is one message per actor and a node can hold a great many; past it the
+rest activate on demand.
+
+That makes a rolling restart both safe and warm. What is still missing is a *rolling upgrade* in the
+larger sense: nothing coordinates the order nodes go down in, so taking two out at once is still
+something an operator has to avoid rather than something the cluster refuses.
 
 ## Sending across nodes
 

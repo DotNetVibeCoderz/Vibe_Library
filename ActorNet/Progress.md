@@ -53,7 +53,8 @@ works and something automated proves it** — not when the code exists.
 - [x] Process-independent hash, verified against pinned vectors
 - [x] Automatic rebalancing on membership change
 - [x] Graceful leave, flushing state before the departure is announced
-- [ ] Warm handoff: the next owner is handed the actors rather than loading them on demand
+- [x] Warm handoff: a leaving node asks each successor to activate the keys it inherits
+- [ ] Coordinating a rolling restart, so two nodes cannot leave at once
 - [x] `--cluster` for the first node, which has no seeds of its own
 - [x] Nodes across machines, bound to a routable address - three machines, two operating systems
       and two processor architectures in one cluster

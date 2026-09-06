@@ -118,6 +118,7 @@ public sealed class ActorSystem : IActorSystem
         Serializer.Types.Register<Unwatch>();
         Serializer.Types.Register<Terminated>();
         Serializer.Types.Register<NodeStatus>();
+        Serializer.Types.Register<Warm>();
         MetricsCollector = new MetricsCollector(Options.NodeId);
         _cluster = new ClusterMembership(
             Options.NodeId,
@@ -189,6 +190,9 @@ public sealed class ActorSystem : IActorSystem
 
         _logger.LogInformation("Node {NodeId} stopping; deactivating {Count} actor(s).", NodeId, _cells.Count);
 
+        // Noted before the drain empties the directory. These are the keys that are about to move.
+        var moving = _cells.Keys.ToArray();
+
         // Flush before announcing, not after. A peer that hears the leave rebuilds its ring at once
         // and the first message to a key that moved reactivates that actor from the store - so if
         // this node's state has not landed yet, the new activation starts from a stale version and
@@ -202,6 +206,9 @@ public sealed class ActorSystem : IActorSystem
         // One more pass: after the announce nothing new is routed here.
         await DrainAsync().ConfigureAwait(false);
 
+        // After the announce, because the successors only own these keys once they have heard.
+        await WarmSuccessorsAsync(moving).ConfigureAwait(false);
+
         await _shutdown.CancelAsync().ConfigureAwait(false);
 
         foreach (var pending in _pendingAsks.Values) pending.Fail(new ActorNetException("The node stopped before a reply arrived."));
@@ -211,6 +218,54 @@ public sealed class ActorSystem : IActorSystem
         if (_transport is not null) await _transport.DisposeAsync().ConfigureAwait(false);
 
         _logger.LogInformation("Node {NodeId} stopped.", NodeId);
+    }
+
+    /// <summary>
+    /// Tells whoever inherits these keys to activate them now rather than on the first message.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This is what <see cref="HashRing.PreferenceList"/> is for: the entry after this node is the
+    /// one that takes the key when this node goes. Best effort throughout - a successor that does
+    /// not answer simply activates on demand later, which is what would have happened anyway, and
+    /// a node on its way out is the wrong place to insist on anything.
+    /// </para>
+    /// <para>
+    /// Runs after the leave has been announced, because until then the successors do not own these
+    /// keys and would forward the message straight back here.
+    /// </para>
+    /// </remarks>
+    private async Task WarmSuccessorsAsync(IReadOnlyCollection<ActorId> moving)
+    {
+        if (Options.WarmHandoffLimit <= 0 || moving.Count == 0 || _transport is null) return;
+        if (!Options.Cluster.Enabled || _cluster.Ring.Nodes.Count <= 1) return;
+
+        var ring = _cluster.Ring;
+        var warmed = 0;
+
+        foreach (var id in moving)
+        {
+            if (warmed >= Options.WarmHandoffLimit) break;
+
+            var successor = ring.PreferenceList(id.ToString(), 2)
+                .FirstOrDefault(node => !string.Equals(node, NodeId, StringComparison.Ordinal));
+
+            if (successor is null) continue;
+
+            try
+            {
+                await SendRemoteAsync(successor, WireKind.Message, id, new Warm(), default, null, CancellationToken.None)
+                    .ConfigureAwait(false);
+                warmed++;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Could not warm {ActorId} on {NodeId}.", id, successor);
+            }
+        }
+
+        if (warmed > 0)
+            _logger.LogInformation("Asked successors to activate {Count} of {Total} actor(s) before stopping.", warmed, moving.Count);
     }
 
     /// <summary>Deactivates every live actor and waits for them to finish.</summary>

@@ -143,6 +143,23 @@ public sealed class ActorSystemOptions
     /// </remarks>
     public Network.WireFormat WireFormat { get; set; } = Network.WireFormat.Json;
 
+    /// <summary>
+    /// How many actors a departing node asks its successors to activate before it closes.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Rebalancing deactivates an actor and lets the next message reactivate it from the store, so
+    /// after a planned restart the first message to every key that moved pays a read - all of them
+    /// at once, at the moment traffic arrives. A leaving node knows which keys are moving and where
+    /// to, and can say so.
+    /// </para>
+    /// <para>
+    /// Capped because it is one message per actor and a node can hold a great many. Beyond the cap
+    /// the rest activate on demand, which is the behaviour without this at all. Zero turns it off.
+    /// </para>
+    /// </remarks>
+    public int WarmHandoffLimit { get; set; } = 1000;
+
     /// <summary>Cluster membership and placement settings.</summary>
     public ClusterOptions Cluster { get; set; } = new();
 

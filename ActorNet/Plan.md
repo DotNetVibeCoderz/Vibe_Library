@@ -58,7 +58,6 @@ one place and not another.
 | --- | --- |
 | Client reconnect and failover | An SDK client is bound to the node it dialled. That node going down takes the client with it. |
 | Replica placement | `PreferenceList` exists and nothing uses it. Standby replicas would make a node loss invisible. |
-| A warm handoff | A leaving node flushes before it announces, so a rolling restart is safe. The next owner still loads each actor on the first message. |
 | A binary payload | The envelope is binary; the message body is still JSON, and it is the larger half for anything but the smallest message. |
 
 ## Deliberately not planned
