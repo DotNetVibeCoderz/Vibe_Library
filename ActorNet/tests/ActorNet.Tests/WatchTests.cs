@@ -26,6 +26,12 @@ public sealed class WatchTests
         var target = ActorId.For<CounterActor>("watched-1");
 
         await system.TellAsync(watcher, new WatchThis(target.ToString()));
+
+        // Two barriers, because registering a watch is two hops: the test tells the watcher, and
+        // the watcher tells the target. Asking the watcher proves it has sent the Watch; asking the
+        // target proves the target has handled it. Stopping the target before both would be a race
+        // that a fast machine wins and a loaded CI runner loses.
+        await system.AskAsync<Total>(watcher, new GetTotal(), TimeSpan.FromSeconds(5));
         await system.AskAsync<Total>(target, new GetTotal(), TimeSpan.FromSeconds(5));
 
         await system.DeactivateAsync(target);
@@ -47,6 +53,12 @@ public sealed class WatchTests
         var doomed = ActorId.For<FlakyActor>("watched-doomed");
 
         await system.TellAsync(watcher, new WatchThis(doomed.ToString()));
+
+        // The same two barriers. Without them the Boom can reach the actor before the Watch does,
+        // and an actor that stops before anyone is watching has nobody to tell.
+        await system.AskAsync<Total>(watcher, new GetTotal(), TimeSpan.FromSeconds(5));
+        await system.AskAsync<Total>(doomed, new GetTotal(), TimeSpan.FromSeconds(5));
+
         await system.TellAsync(doomed, new Boom("stopped for good"));
 
         await TestHarness.AssertEventuallyAsync(
@@ -136,6 +148,10 @@ public sealed class WatchTests
             .First(id => here.Cluster.OwnerOf(id) == "watch-b");
 
         await here.TellAsync(watcher, new WatchThis(target.ToString()));
+
+        // Both barriers again, and they hold across the wire for the same reason they hold in a
+        // mailbox: the watcher's Watch and this ask travel the same peer connection, in order.
+        await here.AskAsync<Total>(watcher, new GetTotal(), TimeSpan.FromSeconds(15));
         await here.AskAsync<Total>(target, new GetTotal(), TimeSpan.FromSeconds(15));
 
         await there.DeactivateAsync(target);

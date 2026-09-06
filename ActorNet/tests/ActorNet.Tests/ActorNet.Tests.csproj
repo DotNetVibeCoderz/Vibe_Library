@@ -1,6 +1,14 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
+    <!--
+      Microsoft.Data.SqlClient throws "Globalization Invariant Mode is not supported" on its first
+      call, so the repository-wide InvariantGlobalization is turned off here. The property belongs
+      to whichever executable is running, and this one talks to SQL Server; the library itself is
+      unaffected either way. It only ever showed up in CI, because that is the only place the SQL
+      Server suite has a server to run against.
+    -->
+    <InvariantGlobalization>false</InvariantGlobalization>
     <RootNamespace>ActorNet.Tests</RootNamespace>
     <IsPackable>false</IsPackable>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>

@@ -206,6 +206,12 @@ aman** — bukan lock dan bukan tingkat isolasi. Sebuah append membaca ujung str
 menyisipkan di ujung+1; bila aktivasi lain sampai lebih dulu, basis datanya menolak sisipan itu dan
 yang kalah diberi tahu.
 
+**SQL Server membutuhkan ICU.** `Microsoft.Data.SqlClient` melempar `NotSupportedException:
+Globalization Invariant Mode is not supported` pada panggilan pertamanya, jadi aplikasi yang menyetel
+`<InvariantGlobalization>true</InvariantGlobalization>` — cara yang lazim untuk merampingkan
+container — tidak bisa memakai provider ini. Batasan itu milik driver-nya, bukan ActorNet, dan
+berlaku pada executable yang berjalan, bukan pada library-nya. Enam provider lain tidak terpengaruh.
+
 **Timestamp berupa milidetik Unix dalam `BIGINT`.** Tipe tanggal dan waktu adalah tempat keempat basis
 data paling berbeda, dan tidak satu pun store membandingkan atau merentang pada kolom itu — ia hanya
 informatif.

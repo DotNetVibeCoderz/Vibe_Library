@@ -203,6 +203,12 @@ tip+1; if another activation got there first, the database refuses the insert an
 **Timestamps are Unix milliseconds in a `BIGINT`.** Date and time types are where the four databases
 differ most, and none of the stores ever compares or ranges on the column - it is informational.
 
+**SQL Server needs ICU.** `Microsoft.Data.SqlClient` throws `NotSupportedException: Globalization
+Invariant Mode is not supported` on its first call, so an application that sets
+`<InvariantGlobalization>true</InvariantGlobalization>` - a common way to slim a container - cannot
+use this provider. The constraint is the driver's, not ActorNet's, and it applies to whichever
+executable is running rather than to the library. The other six providers are unaffected.
+
 ### Writing a provider
 
 ```csharp
