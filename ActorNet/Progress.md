@@ -61,7 +61,9 @@ works and something automated proves it** — not when the code exists.
 - [x] Phi-accrual failure detection, adaptive per peer and the default
 - [x] Fixed deadlines kept as an option, for when a stated number beats an accurate one
 - [x] Gossip fanout, taken in rotation so the interval between two nodes stays learnable
-- [ ] Split-brain resolution
+- [x] Split-brain resolution - `KeepMajority` and `StaticQuorum`, opt-in, the losing side stops
+- [x] `--split-brain` and `--quorum` on the CLI
+- [ ] A protocol between the halves, so two sides cannot both decide they are the majority
 - [ ] Replica placement using `PreferenceList`
 - [ ] Non-static seed discovery (DNS, Kubernetes)
 

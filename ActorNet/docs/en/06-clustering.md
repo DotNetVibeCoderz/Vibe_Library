@@ -174,6 +174,58 @@ behind a firewall that drops packets cannot starve the others, and when the dead
 node comes up alone and keeps retrying. A node that has not finished starting cannot serve the
 actors it already owns, which is worse than being briefly alone.
 
+### When the cluster splits in two
+
+A partition looks the same from both sides: half the members stop answering, and the half you are
+standing in looks healthy. Left alone, both halves take the other's keys, and the same actor is
+activated twice with two versions of its state that will never be reconciled.
+
+Nothing is done about that unless you ask for it:
+
+```csharp
+options.Cluster.SplitBrainStrategy = SplitBrainStrategy.KeepMajority;
+options.Cluster.SplitBrainStabilityWindow = TimeSpan.FromSeconds(7);
+```
+
+| Strategy | A side survives if |
+| --- | --- |
+| `None` (default) | Always. Both halves keep serving. |
+| `KeepMajority` | It can see more than half of the last agreed membership |
+| `StaticQuorum` | It can see at least `StaticQuorumSize` members |
+
+From the CLI it is two flags:
+
+```bash
+actornet run --node-id a --host 10.0.1.5 --port 9000 --cluster --split-brain keep-majority
+actornet run --node-id b --host 10.0.1.6 --port 9000 --seed 10.0.1.5:9000 \
+             --split-brain static-quorum --quorum 3
+```
+
+The losing side takes itself off the ring and **stops**. That is not a failure to handle: a node
+that keeps serving actors it no longer owns is the thing the strategy exists to prevent. Rejoining
+means starting the node again.
+
+Three details carry the weight:
+
+**Majority is counted against the last membership everyone agreed on**, not against what a side can
+currently see. Otherwise each half would count itself a majority of itself. Nodes that joined after
+the split do not get a vote either, or a minority could manufacture a majority by starting nodes.
+
+**An even split is settled by the lowest node id.** Without that, a two-node cluster would lose both
+halves to one broken link, which is worse than the split brain being guarded against.
+
+**A member that left gracefully is not a missing half.** Departures are remembered separately from
+failures; otherwise scaling a cluster down would read as a partition and the survivors would shut
+themselves off.
+
+The window is what stops a decision being made against a membership still in motion — a partition
+is rarely a clean cut, and nodes drop out over several seconds. It costs the losing side that much
+extra availability and buys deciding once.
+
+This is the honest limit of it: the decision is made from one node's view, and there is no protocol
+between the halves. Two sides that disagree about who is reachable can both decide they are the
+majority, which is why `StaticQuorum` is the safer choice when the cluster size is fixed.
+
 ### Incarnation numbers
 
 Each node's entry carries a monotonic counter. A node's own view of itself always wins: if a peer
@@ -432,8 +484,9 @@ cluster is carrying more than a peer can take.
 
 ## Known limits
 
-- **Split brain is unresolved.** Two halves of a partition each believe they own the whole ring,
-  which means two activations of the same actor.
+- **Split-brain resolution is off by default, and one-sided.** `KeepMajority` and `StaticQuorum`
+  are there, but each node decides alone from its own view; there is no protocol between the halves
+  to agree on who lost.
 - **Suspicion is per-node, and nothing reconciles two nodes that disagree.** Phi is measured
   against each peer's own history, so one node may call a peer unreachable while another does not.
   That is honest — reachability is not symmetric — but there is no protocol for settling it.

@@ -39,7 +39,6 @@ peer's own heartbeat history rather than one deadline chosen for the worst link.
 
 | Theme | Why it matters |
 | --- | --- |
-| Split-brain resolution | Two halves of a partitioned cluster each believe they own the whole ring. Today nothing arbitrates. |
 | Replica placement | `PreferenceList` exists and nothing uses it. Standby replicas would make a node loss invisible. |
 | Rolling upgrade | Handing off a node's actors before it stops, rather than deactivating them and waiting for traffic. |
 

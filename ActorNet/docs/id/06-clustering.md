@@ -178,6 +178,59 @@ seed di balik firewall yang membuang paket tidak bisa menelantarkan seed lain; d
 lewat, node itu naik sendirian lalu terus mencoba lagi. Node yang belum selesai start tidak bisa
 melayani aktor yang sudah menjadi miliknya, dan itu lebih buruk daripada sebentar sendirian.
 
+### Ketika cluster terbelah dua
+
+Partisi terlihat sama dari kedua sisi: separuh anggota berhenti menjawab, dan separuh tempat Anda
+berdiri tampak sehat. Bila dibiarkan, kedua belahan mengambil kunci milik lawannya, dan aktor yang
+sama diaktifkan dua kali dengan dua versi state yang tak akan pernah didamaikan.
+
+Tidak ada yang dilakukan soal itu kecuali Anda memintanya:
+
+```csharp
+options.Cluster.SplitBrainStrategy = SplitBrainStrategy.KeepMajority;
+options.Cluster.SplitBrainStabilityWindow = TimeSpan.FromSeconds(7);
+```
+
+| Strategi | Sebuah sisi bertahan bila |
+| --- | --- |
+| `None` (bawaan) | Selalu. Kedua belahan terus melayani. |
+| `KeepMajority` | Ia melihat lebih dari separuh keanggotaan terakhir yang disepakati |
+| `StaticQuorum` | Ia melihat sedikitnya `StaticQuorumSize` anggota |
+
+Dari CLI cukup dua flag:
+
+```bash
+actornet run --node-id a --host 10.0.1.5 --port 9000 --cluster --split-brain keep-majority
+actornet run --node-id b --host 10.0.1.6 --port 9000 --seed 10.0.1.5:9000 \
+             --split-brain static-quorum --quorum 3
+```
+
+Sisi yang kalah mengeluarkan dirinya dari ring lalu **berhenti**. Itu bukan kegagalan menangani:
+node yang terus melayani aktor yang bukan lagi miliknya adalah hal yang justru ingin dicegah
+strategi ini. Untuk bergabung lagi, nyalakan ulang node-nya.
+
+Tiga hal memikul bobotnya:
+
+**Mayoritas dihitung terhadap keanggotaan terakhir yang disepakati semua**, bukan terhadap apa yang
+bisa dilihat satu sisi sekarang. Kalau tidak, tiap belahan akan menghitung dirinya sebagai mayoritas
+atas dirinya sendiri. Node yang bergabung setelah pembelahan juga tidak punya suara, kalau tidak
+sebuah minoritas bisa merekayasa mayoritas dengan menyalakan node baru.
+
+**Pembelahan sama rata diputus oleh node id terkecil.** Tanpa itu, cluster dua node akan kehilangan
+kedua belahannya hanya karena satu tautan putus — lebih buruk daripada split brain yang dijaga.
+
+**Anggota yang pamit baik-baik bukan belahan yang hilang.** Kepergian diingat terpisah dari
+kegagalan; kalau tidak, mengecilkan cluster akan terbaca sebagai partisi dan yang tersisa akan
+mematikan dirinya sendiri.
+
+Jendela waktunya mencegah keputusan diambil atas keanggotaan yang masih bergerak — partisi jarang
+berupa potongan rapi, dan node berguguran selama beberapa detik. Ia memakan ketersediaan sisi yang
+kalah selama itu, dan membeli keputusan yang diambil sekali saja.
+
+Ini batas jujurnya: keputusan diambil dari pandangan satu node, dan tidak ada protokol antar
+belahan. Dua sisi yang berbeda pendapat soal siapa yang terjangkau bisa sama-sama merasa mayoritas,
+dan itulah sebabnya `StaticQuorum` lebih aman ketika ukuran cluster-nya tetap.
+
 ### Nomor inkarnasi
 
 Entri setiap node membawa penghitung monoton. Pandangan sebuah node tentang dirinya sendiri selalu
@@ -440,8 +493,9 @@ berarti cluster-nya membawa lebih banyak daripada yang sanggup diterima sebuah p
 
 ## Batas yang diketahui
 
-- **Split brain belum tertangani.** Dua belahan dari sebuah partisi masing-masing meyakini memiliki
-  seluruh ring, yang berarti dua aktivasi untuk actor yang sama.
+- **Resolusi split-brain mati secara bawaan, dan sepihak.** `KeepMajority` dan `StaticQuorum`
+  tersedia, tapi tiap node memutuskan sendiri dari pandangannya; tidak ada protokol antar belahan
+  untuk menyepakati siapa yang kalah.
 - **Kecurigaan bersifat per-node, dan tidak ada yang mendamaikan dua node yang berbeda pendapat.**
   Phi diukur terhadap riwayat masing-masing peer, jadi satu node bisa menyebut sebuah peer tidak
   terjangkau sementara node lain tidak. Itu jujur — keterjangkauan memang tidak simetris — tapi

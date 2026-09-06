@@ -38,6 +38,14 @@ public class NodeSettings : Spectre.Console.Cli.CommandSettings
     [System.ComponentModel.Description("Join a cluster with no seeds of its own - what the first node of a cluster needs, since it has nobody to join.")]
     public bool Cluster { get; init; }
 
+    [Spectre.Console.Cli.CommandOption("--split-brain <STRATEGY>")]
+    [System.ComponentModel.Description("What to do when only part of the cluster is reachable: none, keep-majority, or static-quorum. Default none - both halves keep serving.")]
+    public string? SplitBrain { get; init; }
+
+    [Spectre.Console.Cli.CommandOption("--quorum <COUNT>")]
+    [System.ComponentModel.Description("Members a side must see to survive, for --split-brain static-quorum. Set it above half the intended cluster size.")]
+    public int? Quorum { get; init; }
+
     [Spectre.Console.Cli.CommandOption("--secret <SECRET>")]
     [System.ComponentModel.Description("Shared secret every node must know. Turns on a challenge-response handshake; the secret itself is never sent.")]
     public string? SharedSecret { get; init; }
@@ -104,6 +112,8 @@ internal static class NodeFactory
         {
             options.Cluster.Enabled = true;
             options.Cluster.Seeds = settings.Seeds.ToList();
+            options.Cluster.SplitBrainStrategy = ParseSplitBrain(settings.SplitBrain);
+            if (settings.Quorum is { } quorum) options.Cluster.StaticQuorumSize = quorum;
         }
 
         if (settings.DataDirectory is { Length: > 0 } directory)
@@ -124,6 +134,19 @@ internal static class NodeFactory
         await system.StartAsync(cancellationToken);
         return system;
     }
+
+    /// <summary>Reads the split-brain strategy, refusing a name it does not know.</summary>
+    /// <remarks>
+    /// A typo here would silently leave a cluster with no resolution at all, which is the one
+    /// outcome somebody passing this flag is trying to avoid.
+    /// </remarks>
+    private static Cluster.SplitBrainStrategy ParseSplitBrain(string? name) => name?.ToLowerInvariant() switch
+    {
+        null or "" or "none" => Cluster.SplitBrainStrategy.None,
+        "keep-majority" or "majority" => Cluster.SplitBrainStrategy.KeepMajority,
+        "static-quorum" or "quorum" => Cluster.SplitBrainStrategy.StaticQuorum,
+        _ => throw new ArgumentException($"Unknown --split-brain strategy '{name}'. Use none, keep-majority, or static-quorum."),
+    };
 
     /// <summary>
     /// Logs to the console, quietly by default.
