@@ -174,7 +174,8 @@ works and something automated proves it** — not when the code exists.
 - [x] NuGet metadata pointing at the subfolder, SourceLink, symbol packages
 - [x] Published to nuget.org - 8 packages at 0.1.0
 - [x] Published to npm (`actornet-client`, with type definitions) and PyPI (`actornet`)
-- [ ] A tagged release (`ActorNet-v0.1.0`); 0.1.0 was pushed by hand, not by the workflow
+- [x] A tagged release: `ActorNet-v0.4.0` published all nine packages through the workflow,
+      verified by installing `ActorNet` from nuget.org into a project that uses a generated proxy
 
 ---
 
