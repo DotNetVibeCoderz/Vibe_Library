@@ -25,6 +25,8 @@ public sealed class WarmHandoffTests
             () => leaving.Cluster.Members.Count == 2 && staying.Cluster.Members.Count == 2,
             "the cluster should converge", TimeSpan.FromSeconds(15));
 
+        await TestHarness.AssertRingsAgreeAsync(leaving, staying);
+
         // Activate a handful of actors on the node that is about to go.
         var mine = Enumerable.Range(0, 2000)
             .Select(i => ActorId.For<CounterActor>($"warm-{i}"))
@@ -61,6 +63,8 @@ public sealed class WarmHandoffTests
         await TestHarness.AssertEventuallyAsync(
             () => leaving.Cluster.Members.Count == 2 && staying.Cluster.Members.Count == 2,
             "the cluster should converge", TimeSpan.FromSeconds(15));
+
+        await TestHarness.AssertRingsAgreeAsync(leaving, staying);
 
         var mine = Enumerable.Range(0, 2000)
             .Select(i => ActorId.For<CounterActor>($"cold-{i}"))

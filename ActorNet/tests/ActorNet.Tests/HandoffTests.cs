@@ -65,6 +65,8 @@ public sealed class HandoffTests
             () => leaving.Cluster.Members.Count == 2 && staying.Cluster.Members.Count == 2,
             "the cluster should converge", TimeSpan.FromSeconds(15));
 
+        await TestHarness.AssertRingsAgreeAsync(leaving, staying);
+
         var mine = Enumerable.Range(0, 2000)
             .Select(i => ActorId.For<WalletActor>($"hand-{i}"))
             .First(id => leaving.Cluster.OwnerOf(id) == "hand-a");
@@ -106,6 +108,8 @@ public sealed class HandoffTests
         await TestHarness.AssertEventuallyAsync(
             () => leaving.Cluster.Members.Count == 2 && staying.Cluster.Members.Count == 2,
             "the cluster should converge", TimeSpan.FromSeconds(15));
+
+        await TestHarness.AssertRingsAgreeAsync(leaving, staying);
 
         var mine = Enumerable.Range(0, 2000)
             .Select(i => ActorId.For<WalletActor>($"go-{i}"))

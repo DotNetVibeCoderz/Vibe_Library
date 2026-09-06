@@ -192,6 +192,10 @@ Ticking a box means it works, not that it is finished. These are the caveats wor
 - **The console's actor list is still one node's.** Counters are now collected from every peer;
   the per-actor table is not, and pulling a row per actor from twenty peers on a refresh would cost
   more than everything else on the wire put together.
+- **A node's member table is updated before its ring is rebuilt from it.** For that moment a node
+  reports the right membership and still routes by the old ring, which is why tests wait on the
+  ring rather than the table. Nothing in the runtime depends on the two being in step, but anything
+  that reads membership to predict placement does.
 - **The generated proxies have no benchmark.** They emit the same calls a hand-written ask makes,
   so there is no reason to expect a difference, and "no reason to expect" is not a measurement.
 - **The gossip fanout has only been reasoned about, not measured.** A rotation of four peers per

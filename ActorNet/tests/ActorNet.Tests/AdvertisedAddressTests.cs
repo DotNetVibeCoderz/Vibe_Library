@@ -128,6 +128,8 @@ public sealed class AdvertisedAddressTests
             "the cluster should converge when the seed advertises a routable address",
             TimeSpan.FromSeconds(15));
 
+        await TestHarness.AssertRingsAgreeAsync(seed, joiner);
+
         Assert.Equal("127.0.0.1", joiner.Cluster.Members.Single(m => m.NodeId == "seed-any").Host);
 
         // And the traffic genuinely flows both ways over that address.

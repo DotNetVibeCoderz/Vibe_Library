@@ -69,6 +69,8 @@ public sealed class TracingTests : IDisposable
             () => here.Cluster.Members.Count == 2 && there.Cluster.Members.Count == 2,
             "the cluster should converge", TimeSpan.FromSeconds(15));
 
+        await TestHarness.AssertRingsAgreeAsync(here, there);
+
         var remote = Enumerable.Range(0, 2000)
             .Select(i => ActorId.For<CounterActor>($"trace-{i}"))
             .First(id => here.Cluster.OwnerOf(id) == "trace-b");

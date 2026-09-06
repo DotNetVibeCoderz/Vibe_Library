@@ -49,6 +49,8 @@ public sealed class SeedRetryTests
             () => joiner.Cluster.Members.Count == 2 && seed.Cluster.Members.Count == 2,
             "a joiner whose seed was down at startup should join once the seed comes up",
             TimeSpan.FromSeconds(20));
+
+        await TestHarness.AssertRingsAgreeAsync(joiner, seed);
     }
 
     [Fact]
@@ -62,6 +64,8 @@ public sealed class SeedRetryTests
         await TestHarness.AssertEventuallyAsync(
             () => joiner.Cluster.Members.Count == 2,
             "the cluster should converge", TimeSpan.FromSeconds(15));
+
+        await TestHarness.AssertRingsAgreeAsync(seed, joiner);
 
         // Several heartbeats later the table must still hold exactly the two of them. A retry that
         // kept firing after the join succeeded would be harmless but wasteful, and a re-seed that
@@ -84,6 +88,8 @@ public sealed class SeedRetryTests
         await TestHarness.AssertEventuallyAsync(
             () => joiner.Cluster.Members.Count == 2 && seed.Cluster.Members.Count == 2,
             "the cluster should converge after the late join", TimeSpan.FromSeconds(20));
+
+        await TestHarness.AssertRingsAgreeAsync(joiner, seed);
 
         // Converging is not the same as working: the ring has to route and the transport has to
         // carry a reply back.

@@ -50,6 +50,8 @@ public sealed class ClientFailoverTests
             () => first.Cluster.Members.Count == 2 && second.Cluster.Members.Count == 2,
             "the cluster should converge", TimeSpan.FromSeconds(15));
 
+        await TestHarness.AssertRingsAgreeAsync(first, second);
+
         await using var client = Client($"127.0.0.1:{first.BoundPort}", $"127.0.0.1:{second.BoundPort}");
 
         await client.TellAsync(ActorId.For<CounterActor>("fo-counter"), new Add(4), TestContext.Current.CancellationToken);

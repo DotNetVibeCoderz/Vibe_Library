@@ -19,6 +19,8 @@ public sealed class ClusterTests
             "both nodes should know about each other after the join handshake",
             TimeSpan.FromSeconds(15));
 
+        await TestHarness.AssertRingsAgreeAsync(first, second);
+
         Assert.Contains(first.Cluster.Members, m => m.NodeId == "node-2");
         Assert.Contains(second.Cluster.Members, m => m.NodeId == "node-1");
     }
@@ -34,6 +36,8 @@ public sealed class ClusterTests
         await TestHarness.AssertEventuallyAsync(
             () => first.Cluster.Members.Count == 2 && second.Cluster.Members.Count == 2,
             "the cluster should have converged", TimeSpan.FromSeconds(15));
+
+        await TestHarness.AssertRingsAgreeAsync(first, second);
 
         // Disagreement here would mean two activations of the same actor, one per node - the
         // failure that the process-independent hash exists to prevent.
@@ -68,6 +72,8 @@ public sealed class ClusterTests
             () => first.Cluster.Members.Count == 2 && second.Cluster.Members.Count == 2,
             "the cluster should have converged", TimeSpan.FromSeconds(15));
 
+        await TestHarness.AssertRingsAgreeAsync(first, second);
+
         // Find a key the first node does not own, so the send genuinely crosses the network.
         var remote = Enumerable.Range(0, 500)
             .Select(i => ActorId.For<CounterActor>($"remote-{i}"))
@@ -91,6 +97,8 @@ public sealed class ClusterTests
         await TestHarness.AssertEventuallyAsync(
             () => first.Cluster.Members.Count == 2 && second.Cluster.Members.Count == 2,
             "the cluster should have converged", TimeSpan.FromSeconds(15));
+
+        await TestHarness.AssertRingsAgreeAsync(first, second);
 
         var remote = Enumerable.Range(0, 500)
             .Select(i => ActorId.For<CounterActor>($"ask-{i}"))
@@ -121,6 +129,8 @@ public sealed class ClusterTests
         await TestHarness.AssertEventuallyAsync(
             () => first.Cluster.Members.Count == 2 && second.Cluster.Members.Count == 2,
             "the cluster should have converged", TimeSpan.FromSeconds(15));
+
+        await TestHarness.AssertRingsAgreeAsync(first, second);
 
         // Handing off is deactivating: state was flushed and the next message re-activates the
         // actor on its new owner. Roughly half should have moved.
@@ -207,6 +217,8 @@ public sealed class ClusterMetricsTests
         await TestHarness.AssertEventuallyAsync(
             () => first.Cluster.Members.Count == 2 && second.Cluster.Members.Count == 2,
             "the cluster should have converged", TimeSpan.FromSeconds(15));
+
+        await TestHarness.AssertRingsAgreeAsync(first, second);
 
         var remote = Enumerable.Range(0, 500)
             .Select(i => ActorId.For<CounterActor>($"metrics-{i}"))

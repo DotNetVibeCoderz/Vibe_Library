@@ -115,6 +115,29 @@ public sealed class TestHarness : IAsyncDisposable
         if (!await WaitForAsync(condition, timeout)) Assert.Fail(because);
     }
 
+    /// <summary>
+    /// Waits until every node's <em>ring</em> holds every node, not just its member table.
+    /// </summary>
+    /// <remarks>
+    /// The member table is updated before the ring is rebuilt from it, so there is a window where a
+    /// node reports the right number of members and still routes by the old ring. A test that picks
+    /// a key by one node's view and sends it from another during that window sends it to the wrong
+    /// place - the message is handled somewhere, the actor it was meant for never sees it, and the
+    /// failure reads as a lost message rather than as a race in the fixture.
+    /// </remarks>
+    public static async Task AssertRingsAgreeAsync(params ActorSystem[] nodes)
+    {
+        ArgumentNullException.ThrowIfNull(nodes);
+
+        var expected = nodes.Select(n => n.NodeId).OrderBy(id => id, StringComparer.Ordinal).ToArray();
+
+        await AssertEventuallyAsync(
+            () => nodes.All(n => n.Cluster.Ring.Nodes.OrderBy(id => id, StringComparer.Ordinal).SequenceEqual(expected)),
+            $"every node's ring should hold all of [{string.Join(", ", expected)}]; they held " +
+            string.Join(" | ", nodes.Select(n => $"{n.NodeId}:[{string.Join(",", n.Cluster.Ring.Nodes)}]")),
+            TimeSpan.FromSeconds(20));
+    }
+
     public async ValueTask DisposeAsync()
     {
         foreach (var system in _systems)

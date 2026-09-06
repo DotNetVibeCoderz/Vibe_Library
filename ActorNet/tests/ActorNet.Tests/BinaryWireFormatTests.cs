@@ -188,6 +188,8 @@ public sealed class BinaryWireFormatTests
             () => here.Cluster.Members.Count == 2 && there.Cluster.Members.Count == 2,
             "the cluster should converge", TimeSpan.FromSeconds(15));
 
+        await TestHarness.AssertRingsAgreeAsync(here, there);
+
         var remote = Enumerable.Range(0, 2000)
             .Select(i => ActorId.For<DictionaryActor>($"fb-{i}"))
             .First(id => here.Cluster.OwnerOf(id) == "fb-b");
@@ -213,6 +215,8 @@ public sealed class BinaryWireFormatTests
         await TestHarness.AssertEventuallyAsync(
             () => here.Cluster.Members.Count == 2 && there.Cluster.Members.Count == 2,
             "a binary cluster should converge", TimeSpan.FromSeconds(15));
+
+        await TestHarness.AssertRingsAgreeAsync(here, there);
 
         var remote = Enumerable.Range(0, 2000)
             .Select(i => ActorId.For<CounterActor>($"bin-{i}"))
@@ -261,6 +265,8 @@ public sealed class BinaryWireFormatTests
         await TestHarness.AssertEventuallyAsync(
             () => json.Cluster.Members.Count == 2 && binary.Cluster.Members.Count == 2,
             "a mixed cluster should converge", TimeSpan.FromSeconds(15));
+
+        await TestHarness.AssertRingsAgreeAsync(json, binary);
 
         var onBinary = Enumerable.Range(0, 2000)
             .Select(i => ActorId.For<CounterActor>($"mix-{i}"))

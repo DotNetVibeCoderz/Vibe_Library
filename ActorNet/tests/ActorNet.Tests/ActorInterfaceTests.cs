@@ -60,6 +60,8 @@ public sealed class ActorInterfaceTests
             () => here.Cluster.Members.Count == 2 && there.Cluster.Members.Count == 2,
             "the cluster should converge", TimeSpan.FromSeconds(15));
 
+        await TestHarness.AssertRingsAgreeAsync(here, there);
+
         var remote = Enumerable.Range(0, 2000)
             .Select(i => $"vault-{i}")
             .First(key => here.Cluster.OwnerOf(ActorId.For<VaultActor>(key)) == "proxy-b");

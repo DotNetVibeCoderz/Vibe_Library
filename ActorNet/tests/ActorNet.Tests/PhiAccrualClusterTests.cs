@@ -40,6 +40,8 @@ public sealed class PhiAccrualClusterTests
             () => joiner.Cluster.Members.Count == 2 && seed.Cluster.Members.Count == 2,
             "the cluster should converge", TimeSpan.FromSeconds(15));
 
+        await TestHarness.AssertRingsAgreeAsync(joiner, seed);
+
         // Several dozen heartbeats of a working link. A detector that suspects here would take a
         // healthy cluster apart on its own.
         await Task.Delay(TimeSpan.FromSeconds(3));

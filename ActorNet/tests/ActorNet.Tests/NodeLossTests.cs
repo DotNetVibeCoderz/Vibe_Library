@@ -35,6 +35,8 @@ public sealed class NodeLossTests
             () => survivor.Cluster.Members.Count == 2 && doomed.Cluster.Members.Count == 2,
             "the cluster should converge", TimeSpan.FromSeconds(15));
 
+        await TestHarness.AssertRingsAgreeAsync(survivor, doomed);
+
         await KillAsync(doomed);
 
         // Unreachable first, because the usual cause of silence is a pause and moving a node's keys
@@ -57,6 +59,8 @@ public sealed class NodeLossTests
         await TestHarness.AssertEventuallyAsync(
             () => survivor.Cluster.Members.Count == 2 && doomed.Cluster.Members.Count == 2,
             "the cluster should converge", TimeSpan.FromSeconds(15));
+
+        await TestHarness.AssertRingsAgreeAsync(survivor, doomed);
 
         var theirs = Enumerable.Range(0, 2000)
             .Select(i => ActorId.For<WalletActor>($"heir-{i}"))
@@ -93,6 +97,8 @@ public sealed class NodeLossTests
         await TestHarness.AssertEventuallyAsync(
             () => survivor.Cluster.Members.Count == 2,
             "the cluster should converge", TimeSpan.FromSeconds(15));
+
+        await TestHarness.AssertRingsAgreeAsync(survivor, flapping);
 
         await KillAsync(flapping);
 

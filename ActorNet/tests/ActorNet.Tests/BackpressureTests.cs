@@ -69,6 +69,8 @@ public sealed class BackpressureTests
             () => first.Cluster.Members.Count == 2 && second.Cluster.Members.Count == 2,
             "the cluster should have converged", TimeSpan.FromSeconds(15));
 
+        await TestHarness.AssertRingsAgreeAsync(first, second);
+
         return (first, second);
     }
 

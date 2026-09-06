@@ -77,6 +77,8 @@ public sealed class ClusterSecurityTests
         await TestHarness.AssertEventuallyAsync(
             () => seed.Cluster.Members.Count == 2 && joiner.Cluster.Members.Count == 2,
             "nodes that share the secret should converge", TimeSpan.FromSeconds(15));
+
+        await TestHarness.AssertRingsAgreeAsync(seed, joiner);
     }
 
     [Fact]
@@ -90,6 +92,8 @@ public sealed class ClusterSecurityTests
         await TestHarness.AssertEventuallyAsync(
             () => first.Cluster.Members.Count == 2 && second.Cluster.Members.Count == 2,
             "the cluster should converge", TimeSpan.FromSeconds(15));
+
+        await TestHarness.AssertRingsAgreeAsync(first, second);
 
         // The handshake runs once per connection, so an ask proves it did not break the frame
         // stream that follows it.
@@ -182,6 +186,8 @@ public sealed class ClusterSecurityTests
         await TestHarness.AssertEventuallyAsync(
             () => first.Cluster.Members.Count == 2 && second.Cluster.Members.Count == 2,
             "a TLS cluster should converge", TimeSpan.FromSeconds(20));
+
+        await TestHarness.AssertRingsAgreeAsync(first, second);
 
         var remote = Enumerable.Range(0, 500)
             .Select(i => ActorId.For<CounterActor>($"tls-{i}"))
