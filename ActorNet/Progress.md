@@ -179,8 +179,9 @@ Ticking a box means it works, not that it is finished. These are the caveats wor
 
 - **The console shows one node.** Counters and the actor list are local. The ring and membership
   are cluster-wide, but there is no aggregation across nodes.
-- **Membership is O(members²) per heartbeat.** Fine at tens of nodes. It needs a fanout limit
-  before it is not.
+- **The gossip fanout has only been reasoned about, not measured.** A rotation of four peers per
+  beat converges in about log(members) rounds on paper; the largest cluster ever run here is four
+  nodes, which is below the fanout and therefore still a full mesh.
 - **The Go client has never run** on the machine it was written on. CI compiles it and drives it
   against a node; that is the only evidence it works.
 - **The benchmark is in-process.** No network hop, no persistence, and the handler does nothing
