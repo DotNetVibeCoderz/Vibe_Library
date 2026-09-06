@@ -145,7 +145,8 @@ public sealed class ActorSystem : IActorSystem
         {
             _transport = new TcpTransport(
                 Options.Host, Options.Port, OnFrameAsync, _cluster.Resolve,
-                LoggerFactory.CreateLogger<TcpTransport>(), Options.Security);
+                LoggerFactory.CreateLogger<TcpTransport>(), Options.Security, Options.SendTimeout,
+                Options.OutboundQueueCapacity);
             await _transport.StartAsync(cancellationToken).ConfigureAwait(false);
             // The bound port unless one was pinned - a published container port is not the port
             // the listener actually opened.
@@ -606,11 +607,60 @@ public sealed class ActorSystem : IActorSystem
                 // Delivered locally even if the ring has since moved this key elsewhere. The
                 // sender routed with the view it had, and bouncing the message onward risks a
                 // loop between two nodes that disagree during a rebalance.
-                await DispatchLocalAsync(
-                    Envelope.Create(target, message, sender, frame.CorrelationId, frame.ReplyToNode),
-                    _shutdown.Token).ConfigureAwait(false);
+                await DeliverInboundAsync(
+                    Envelope.Create(target, message, sender, frame.CorrelationId, frame.ReplyToNode))
+                    .ConfigureAwait(false);
                 return;
             }
+        }
+    }
+
+    /// <summary>
+    /// Delivers an inbound remote message, bounding how long it may wait and telling the sender
+    /// when it cannot be delivered at all.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This runs on the connection's reader loop, which is why it cannot simply await mailbox room
+    /// the way a local send does: every other actor's traffic on that connection is queued behind
+    /// it, so one busy actor with a bounded mailbox would stall the whole node.
+    /// </para>
+    /// <para>
+    /// It stays sequential rather than dispatching concurrently, because concurrent dispatch would
+    /// break the ordering guarantee that messages from one sender to one actor arrive in order.
+    /// The honest trade-off is therefore a <em>bounded</em> stall: other traffic on this connection
+    /// waits at most <see cref="ActorSystemOptions.RemoteDeliveryTimeout"/> behind a full mailbox,
+    /// and then the message is refused rather than waited on forever.
+    /// </para>
+    /// <para>
+    /// Every failure path answers a waiting ask. Without that, a caller on another node sees only
+    /// a timeout and cannot tell a refused delivery from a slow handler.
+    /// </para>
+    /// </remarks>
+    private async Task DeliverInboundAsync(Envelope envelope)
+    {
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(_shutdown.Token);
+        deadline.CancelAfter(Options.RemoteDeliveryTimeout);
+
+        try
+        {
+            await DispatchLocalAsync(envelope, deadline.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (deadline.IsCancellationRequested && !_shutdown.IsCancellationRequested)
+        {
+            var refusal = new MailboxFullException(envelope.Target, Options.RemoteDeliveryTimeout);
+
+            RecordDeadLetter(envelope.Target, envelope.Sender, envelope.Message,
+                envelope.Message.GetType().Name, DeadLetterReason.MailboxFull, refusal.Message);
+
+            await FailAskAsync(envelope, refusal).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            // Already recorded as a dead letter wherever it was detected - an unregistered actor
+            // type, say. What is still missing is telling the remote caller, who would otherwise
+            // wait out the ask timeout for a message this node refused immediately.
+            await FailAskAsync(envelope, ex).ConfigureAwait(false);
         }
     }
 

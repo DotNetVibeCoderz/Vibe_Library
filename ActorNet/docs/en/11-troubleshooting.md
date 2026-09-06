@@ -34,6 +34,11 @@ In order of likelihood:
    actor's only thread of control.
 4. **A remote node is unreachable.** The reply cannot get back. Check the cluster page.
 
+If the message could not be *delivered* at all you get a different exception, not a timeout:
+`MailboxFullException` when the target actor is too far behind, `NodeCongestedException` when the
+peer is, and `NodeUnreachableException` when it is down. A timeout means the message arrived and no
+reply came - so look at the handler.
+
 Note what it is *not*: if the handler **throws**, you get an `ActorNetException` carrying the
 original as its inner exception, not a timeout. A timeout means nothing came back at all.
 

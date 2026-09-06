@@ -63,6 +63,42 @@ public sealed class NodeUnreachableException(string nodeId, Exception? inner = n
     public string NodeId { get; } = nodeId;
 }
 
+/// <summary>
+/// Thrown when a peer is reachable but so far behind that its send queue never made room.
+/// </summary>
+/// <remarks>
+/// Deliberately distinct from <see cref="NodeUnreachableException"/> and from
+/// <see cref="AskTimeoutException"/>. The three call for different responses: an unreachable node
+/// means route elsewhere, a congested one means send less or slow down, and an ask timeout means
+/// the actor itself is slow. Collapsing congestion into a timeout is what made a backed-up peer
+/// indistinguishable from a slow handler.
+/// </remarks>
+public sealed class NodeCongestedException(string nodeId, int queueCapacity, TimeSpan waited) : ActorNetException(
+    $"Node '{nodeId}' still had {queueCapacity:N0} frames queued after {waited.TotalSeconds:N0}s. " +
+    "It is reachable but not keeping up; send less, or raise SendTimeout if this is a legitimate burst.")
+{
+    public string NodeId { get; } = nodeId;
+    public int QueueCapacity { get; } = queueCapacity;
+    public TimeSpan Waited { get; } = waited;
+}
+
+/// <summary>
+/// Thrown when an actor's bounded mailbox stayed full for longer than a remote delivery may wait.
+/// </summary>
+/// <remarks>
+/// Only reachable with <see cref="ActorSystemOptions.MailboxCapacity"/> set - the default mailbox
+/// is unbounded and always accepts. A local sender blocks instead, which is the backpressure
+/// working as intended; a remote one cannot, because the thread it would block is the connection's
+/// reader and every other actor's traffic is behind it.
+/// </remarks>
+public sealed class MailboxFullException(ActorId actor, TimeSpan waited) : ActorNetException(
+    $"The mailbox for '{actor}' was still full after {waited.TotalSeconds:N0}s, so the message was refused. " +
+    "The actor is not keeping up with what is being sent to it.")
+{
+    public ActorId Actor { get; } = actor;
+    public TimeSpan Waited { get; } = waited;
+}
+
 /// <summary>Thrown when a supervisor escalated a failure all the way to the root.</summary>
 public sealed class ActorFailureEscalatedException(ActorId id, Exception inner)
     : ActorNetException($"Failure in '{id}' was escalated to the root guardian and the actor was stopped.", inner)

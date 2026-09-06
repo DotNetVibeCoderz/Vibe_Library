@@ -79,6 +79,50 @@ public sealed class ActorSystemOptions
     /// <summary>Timeout applied to an ask that does not specify one.</summary>
     public TimeSpan DefaultAskTimeout { get; set; } = TimeSpan.FromSeconds(10);
 
+    /// <summary>
+    /// How long an inbound remote message may wait for room in a bounded mailbox before it is
+    /// refused.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A local sender waiting on a full mailbox is backpressure working: the thread being slowed
+    /// down is the one producing the work. A remote sender cannot be slowed the same way, because
+    /// the thread that would block is the connection's reader - and every other actor's traffic on
+    /// that connection is queued behind it. One busy actor would stall the whole node.
+    /// </para>
+    /// <para>
+    /// So an inbound delivery waits, but not forever. Past this deadline the message becomes a
+    /// dead letter and any waiting ask is answered with <see cref="MailboxFullException"/> rather
+    /// than left to time out.
+    /// </para>
+    /// <para>
+    /// Unreachable unless <see cref="MailboxCapacity"/> is set: an unbounded mailbox always accepts.
+    /// </para>
+    /// </remarks>
+    public TimeSpan RemoteDeliveryTimeout { get; set; } = TimeSpan.FromSeconds(5);
+
+    /// <summary>
+    /// How long a send may wait for room in a peer's outbound queue before it is refused with
+    /// <see cref="NodeCongestedException"/>.
+    /// </summary>
+    /// <remarks>
+    /// Generous on purpose, so it fires only when a peer is genuinely stuck rather than briefly
+    /// busy. Waiting indefinitely is not backpressure - it is a hang that surfaces later as an ask
+    /// timeout with no indication that the peer, rather than the actor, was the problem.
+    /// </remarks>
+    public TimeSpan SendTimeout { get; set; } = TimeSpan.FromSeconds(30);
+
+    /// <summary>
+    /// Frames that may be queued for one peer before a send has to wait for room.
+    /// </summary>
+    /// <remarks>
+    /// The per-peer buffer that absorbs a burst without letting an unreachable or badly-behind peer
+    /// grow this node's heap without limit. Raise it for bursty traffic; lower it to feel
+    /// backpressure sooner. It is a count of frames, so the memory it can hold depends on how large
+    /// the messages are.
+    /// </remarks>
+    public int OutboundQueueCapacity { get; set; } = 8192;
+
     /// <summary>Supervision policy for actors that were not registered with one of their own.</summary>
     public SupervisorStrategy DefaultSupervisorStrategy { get; set; } = SupervisorStrategy.Default;
 
@@ -143,6 +187,12 @@ public sealed class ActorSystemOptions
             throw new ArgumentOutOfRangeException(nameof(MailboxCapacity), MailboxCapacity, "MailboxCapacity must be zero (unbounded) or positive.");
         if (DefaultAskTimeout <= TimeSpan.Zero)
             throw new ArgumentOutOfRangeException(nameof(DefaultAskTimeout), DefaultAskTimeout, "DefaultAskTimeout must be positive.");
+        if (RemoteDeliveryTimeout <= TimeSpan.Zero)
+            throw new ArgumentOutOfRangeException(nameof(RemoteDeliveryTimeout), RemoteDeliveryTimeout, "RemoteDeliveryTimeout must be positive.");
+        if (SendTimeout <= TimeSpan.Zero)
+            throw new ArgumentOutOfRangeException(nameof(SendTimeout), SendTimeout, "SendTimeout must be positive.");
+        if (OutboundQueueCapacity < 1)
+            throw new ArgumentOutOfRangeException(nameof(OutboundQueueCapacity), OutboundQueueCapacity, "OutboundQueueCapacity must be positive.");
         Cluster.Validate();
         Security.Validate();
     }

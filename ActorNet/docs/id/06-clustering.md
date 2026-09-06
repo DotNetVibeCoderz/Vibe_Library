@@ -296,6 +296,53 @@ Pilihan terkuat sekaligus paling banyak kerjanya: setiap node butuh sepasang kun
 merotasinya. Shared secret adalah jawaban yang lebih murah untuk pertanyaan yang sama, dan keduanya
 bisa digabung.
 
+### Backpressure melintasi batas node
+
+`MailboxCapacity` bawaannya tak berbatas, jadi tidak ada dari ini yang aktif sampai Anda membatasi
+sebuah mailbox. Begitu dibatasi, jalur lokal dan remote harus berbeda:
+
+**Pengirim lokal menunggu.** Thread yang diperlambat adalah thread yang menghasilkan pekerjaannya,
+dan itu persis tugas backpressure.
+
+**Pengirim remote tidak bisa diperlambat dengan cara yang sama.** Thread yang akan terblokir adalah
+reader milik koneksi itu, dan lalu lintas semua aktor lain di koneksi tersebut mengantre di
+belakangnya — satu aktor sibuk akan menghentikan seluruh node. Jadi pengiriman masuk menunggu, tapi
+hanya selama `RemoteDeliveryTimeout` (bawaan 5 detik). Lewat itu pesannya menjadi dead letter
+`MailboxFull` dan ask yang menunggu dijawab dengan `MailboxFullException`.
+
+```csharp
+options.MailboxCapacity = 10_000;                          // memilih memakai backpressure
+options.RemoteDeliveryTimeout = TimeSpan.FromSeconds(5);   // berapa lama pesan masuk boleh menunggu
+options.SendTimeout = TimeSpan.FromSeconds(30);            // berapa lama pengiriman menunggu antrean
+options.OutboundQueueCapacity = 8_192;                      // frame yang ditampung per peer
+```
+
+Jalur masuk sengaja tetap berurutan. Mengirimkannya secara bersamaan akan membuat pesan yang dibaca
+belakangan bisa sampai lebih dulu, dan itu melanggar jaminan bahwa pesan dari satu pengirim ke satu
+aktor tiba berurutan. Kompromi jujurnya adalah stall yang **berbatas**, bukan tanpa stall: lalu
+lintas lain di koneksi itu menunggu paling lama `RemoteDeliveryTimeout` di belakang mailbox penuh.
+
+Sebuah `tell` yang ditolak begini dicatat di node *penerima*, karena `tell` tidak punya pemanggil
+untuk diberi tahu. Sebuah `ask` dijawab di kedua sisi.
+
+### Membedakan kemacetan, gangguan, dan aktor lambat
+
+Tiga kegagalan yang dulu tampak serupa, padahal menuntut respons berbeda:
+
+| | Artinya | Lakukan |
+| --- | --- | --- |
+| `NodeUnreachableException` | Peer-nya mati atau tak pernah terjangkau | Rutekan ke tempat lain; periksa halaman cluster |
+| `NodeCongestedException` | Peer-nya hidup tapi tidak sanggup mengejar | Kirim lebih sedikit, atau naikkan `SendTimeout` untuk lonjakan yang wajar |
+| `MailboxFullException` | Satu aktor tidak sanggup mengejar | Periksa aktor itu, bukan jaringannya |
+| `AskTimeoutException` | Pesannya sampai dan balasannya tidak datang | Periksa handler-nya |
+
+Antrean penuh pada peer yang **belum pernah tersambung** dilaporkan sebagai tidak terjangkau, bukan
+macet — "kirim lebih sedikit" adalah saran yang salah untuk node yang memang mati.
+
+Kemacetan juga tersedia sebagai metrik `actornet.node.congested`, ditandai nama node-nya. Layak
+diberi alert terpisah dari dead letter: dead letter biasanya berarti salah perakitan, kemacetan
+berarti cluster-nya membawa lebih banyak daripada yang sanggup diterima sebuah peer.
+
 ## Batas yang diketahui
 
 - **Split brain belum tertangani.** Dua belahan dari sebuah partisi masing-masing meyakini memiliki

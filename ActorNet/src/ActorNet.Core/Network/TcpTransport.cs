@@ -55,6 +55,8 @@ public sealed class TcpTransport : ITransport
     private readonly string _host;
     private readonly int _requestedPort;
     private readonly ClusterSecurityOptions _security;
+    private readonly TimeSpan _sendTimeout;
+    private readonly int _outboundQueueCapacity;
     private readonly Func<WireEnvelope, Task> _onFrame;
     private readonly Func<string, (string Host, int Port)?> _resolveNode;
     private readonly ILogger _logger;
@@ -85,11 +87,17 @@ public sealed class TcpTransport : ITransport
         Func<WireEnvelope, Task> onFrame,
         Func<string, (string Host, int Port)?> resolveNode,
         ILogger logger,
-        ClusterSecurityOptions? security = null)
+        ClusterSecurityOptions? security = null,
+        TimeSpan? sendTimeout = null,
+        int outboundQueueCapacity = 8192)
     {
         _host = host;
         _requestedPort = port;
         _security = security ?? new ClusterSecurityOptions();
+        _sendTimeout = sendTimeout ?? TimeSpan.FromSeconds(30);
+        _outboundQueueCapacity = outboundQueueCapacity > 0
+            ? outboundQueueCapacity
+            : throw new ArgumentOutOfRangeException(nameof(outboundQueueCapacity), outboundQueueCapacity, "Capacity must be positive.");
         _onFrame = onFrame;
         _resolveNode = resolveNode;
         _logger = logger;
@@ -138,8 +146,9 @@ public sealed class TcpTransport : ITransport
         }
 
         var peer = _peers.GetOrAdd(nodeId, static (id, state) =>
-            new PeerConnection(id, state.Address.Host, state.Address.Port, state.Logger, state.OnFrame, state.Security, state.Token),
-            (Address: address.Value, Logger: _logger, OnFrame: _onFrame, Security: _security, Token: _shutdown.Token));
+            new PeerConnection(id, state.Address.Host, state.Address.Port, state.Logger, state.OnFrame, state.Security, state.SendTimeout, state.Capacity, state.Token),
+            (Address: address.Value, Logger: _logger, OnFrame: _onFrame, Security: _security,
+             SendTimeout: _sendTimeout, Capacity: _outboundQueueCapacity, Token: _shutdown.Token));
 
         return peer.SendAsync(frame, cancellationToken);
     }
@@ -295,7 +304,8 @@ public sealed class TcpTransport : ITransport
     /// </summary>
     private sealed class PeerConnection : IAsyncDisposable
     {
-        private const int MaxQueuedFrames = 8192;
+        /// <summary>Frames that may await the writer loop before a send has to wait.</summary>
+        private readonly int _queueCapacity;
 
         private readonly string _nodeId;
         private readonly string _host;
@@ -303,16 +313,23 @@ public sealed class TcpTransport : ITransport
         private readonly ILogger _logger;
         private readonly Func<WireEnvelope, Task> _onFrame;
         private readonly ClusterSecurityOptions _security;
+        private readonly TimeSpan _sendTimeout;
         private readonly Channel<WireEnvelope> _outbound;
+
+        /// <summary>Whether the socket is currently up, which is what separates busy from gone.</summary>
+        private volatile bool _connected;
         private readonly CancellationTokenSource _cts;
         private readonly Task _writerLoop;
 
         public PeerConnection(
             string nodeId, string host, int port, ILogger logger,
-            Func<WireEnvelope, Task> onFrame, ClusterSecurityOptions security, CancellationToken shutdown)
+            Func<WireEnvelope, Task> onFrame, ClusterSecurityOptions security, TimeSpan sendTimeout,
+            int queueCapacity, CancellationToken shutdown)
         {
             _nodeId = nodeId;
             _security = security;
+            _sendTimeout = sendTimeout;
+            _queueCapacity = queueCapacity;
             _host = host;
             _port = port;
             _logger = logger;
@@ -321,7 +338,7 @@ public sealed class TcpTransport : ITransport
 
             // Bounded: an unreachable peer must not let this node queue frames until it runs out
             // of memory. Once full, sends wait, and the caller feels the backpressure.
-            _outbound = Channel.CreateBounded<WireEnvelope>(new BoundedChannelOptions(MaxQueuedFrames)
+            _outbound = Channel.CreateBounded<WireEnvelope>(new BoundedChannelOptions(queueCapacity)
             {
                 SingleReader = true,
                 SingleWriter = false,
@@ -331,9 +348,20 @@ public sealed class TcpTransport : ITransport
             _writerLoop = Task.Run(() => RunAsync(_cts.Token), CancellationToken.None);
         }
 
+        /// <summary>
+        /// Queues a frame for this peer, waiting for room but not indefinitely.
+        /// </summary>
+        /// <remarks>
+        /// A full queue means the peer is reachable and badly behind. Waiting forever there is not
+        /// backpressure - it is a hang that surfaces much later as an ask timeout, with nothing to
+        /// say the peer rather than the actor was the problem. <see cref="NodeCongestedException"/>
+        /// says exactly that, and is distinct from the connection simply being gone.
+        /// </remarks>
         public async ValueTask SendAsync(WireEnvelope frame, CancellationToken cancellationToken)
         {
             using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _cts.Token);
+            linked.CancelAfter(_sendTimeout);
+
             try
             {
                 await _outbound.Writer.WriteAsync(frame, linked.Token).ConfigureAwait(false);
@@ -341,6 +369,19 @@ public sealed class TcpTransport : ITransport
             catch (ChannelClosedException ex)
             {
                 throw new NodeUnreachableException(_nodeId, ex);
+            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested && !_cts.IsCancellationRequested)
+            {
+                // Only our own deadline fired - the caller did not cancel and we are not shutting
+                // down, so the queue genuinely never made room.
+                // A full queue on a peer we have never reached is not congestion, it is a peer
+                // that is down - and "send less" would be the wrong advice for it.
+                if (!_connected) throw new NodeUnreachableException(_nodeId);
+
+                Metrics.ActorNetDiagnostics.Congestion.Add(1,
+                    new KeyValuePair<string, object?>("node", _nodeId));
+
+                throw new NodeCongestedException(_nodeId, _queueCapacity, _sendTimeout);
             }
         }
 
@@ -357,6 +398,7 @@ public sealed class TcpTransport : ITransport
                     await using var stream = await SecureChannel.ConnectAsync(client, _host, _security, cancellationToken).ConfigureAwait(false);
 
                     backoff = TimeSpan.FromMilliseconds(100);
+                    _connected = true;
                     _logger.LogDebug("Connected to {NodeId} at {Host}:{Port}.", _nodeId, _host, _port);
 
                     // The peer answers on this same socket for anything it chooses to send back,
@@ -378,6 +420,7 @@ public sealed class TcpTransport : ITransport
                 }
                 catch (Exception ex)
                 {
+                    _connected = false;
                     _logger.LogWarning(ex, "Connection to {NodeId} at {Host}:{Port} failed; retrying in {Backoff}.", _nodeId, _host, _port, backoff);
                     try { await Task.Delay(backoff, cancellationToken).ConfigureAwait(false); }
                     catch (OperationCanceledException) { return; }

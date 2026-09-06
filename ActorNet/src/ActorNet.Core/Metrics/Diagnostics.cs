@@ -63,6 +63,17 @@ public static class ActorNetDiagnostics
     public static Counter<long> DeadLetters { get; } =
         Meter.CreateCounter<long>("actornet.deadletters", "{message}", "Messages that could not be delivered.");
 
+    /// <summary>
+    /// Sends refused because a peer's outbound queue never made room, tagged with the node.
+    /// </summary>
+    /// <remarks>
+    /// Worth alerting on separately from dead letters. A dead letter usually means a wiring
+    /// mistake; congestion means the cluster is carrying more than a peer can take, which is a
+    /// capacity signal rather than a bug.
+    /// </remarks>
+    public static Counter<long> Congestion { get; } =
+        Meter.CreateCounter<long>("actornet.node.congested", "{send}", "Sends refused because a peer's queue was full.");
+
     /// <summary>How long a handler took.</summary>
     public static Histogram<double> ProcessingDuration { get; } =
         Meter.CreateHistogram<double>("actornet.message.duration", "ms", "Time spent in an actor's handler.");

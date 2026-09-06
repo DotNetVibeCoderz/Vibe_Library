@@ -16,6 +16,15 @@ public enum DeadLetterReason
     /// <summary>The node that owns the key could not be reached.</summary>
     NodeUnreachable,
 
+    /// <summary>
+    /// A bounded mailbox stayed full for longer than an inbound remote delivery may wait.
+    /// </summary>
+    /// <remarks>
+    /// Only reachable with a bounded mailbox, and only on the inbound remote path - a local sender
+    /// waits instead, which is the backpressure doing its job.
+    /// </remarks>
+    MailboxFull,
+
     /// <summary>A frame arrived naming a message alias this node does not allow.</summary>
     UnknownMessageType,
 

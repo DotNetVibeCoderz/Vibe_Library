@@ -290,6 +290,53 @@ options.Security.ClientCertificate = X509CertificateLoader.LoadPkcs12FromFile("n
 The strongest option and the most work: every node needs a key pair and a rotation story. The shared
 secret is the cheaper answer to the same question, and the two can be combined.
 
+### Backpressure across a node boundary
+
+`MailboxCapacity` is unbounded by default, so none of this engages until you bound a mailbox. Once
+you do, the local and remote paths have to differ:
+
+**A local sender waits.** The thread being slowed is the one producing the work, which is
+backpressure doing exactly its job.
+
+**A remote sender cannot be slowed the same way.** The thread that would block is the connection's
+reader, and every other actor's traffic on that connection is queued behind it — one busy actor
+would stall the whole node. So an inbound delivery waits, but only for
+`RemoteDeliveryTimeout` (5s by default). Past that the message becomes a `MailboxFull` dead letter
+and any waiting ask is answered with `MailboxFullException`.
+
+```csharp
+options.MailboxCapacity = 10_000;                          // opt into backpressure
+options.RemoteDeliveryTimeout = TimeSpan.FromSeconds(5);   // how long inbound may wait for room
+options.SendTimeout = TimeSpan.FromSeconds(30);            // how long a send waits for queue room
+options.OutboundQueueCapacity = 8_192;                      // frames buffered per peer
+```
+
+The inbound path stays sequential on purpose. Dispatching concurrently would let a message read
+later be delivered first, breaking the guarantee that messages from one sender to one actor arrive
+in order. The honest trade-off is a **bounded** stall rather than none: other traffic on that
+connection waits at most `RemoteDeliveryTimeout` behind a full mailbox.
+
+A tell that is refused this way is recorded on the *receiving* node, since a tell has no caller to
+tell. An ask is answered on both.
+
+### Telling congestion from an outage from a slow actor
+
+Three failures that used to look alike, and call for different responses:
+
+| | Means | Do |
+| --- | --- | --- |
+| `NodeUnreachableException` | The peer is down or was never reachable | Route elsewhere; check the cluster page |
+| `NodeCongestedException` | The peer is up and cannot keep up | Send less, or raise `SendTimeout` for a legitimate burst |
+| `MailboxFullException` | One actor cannot keep up | Look at that actor, not the network |
+| `AskTimeoutException` | The message arrived and no reply came | Look at the handler |
+
+A full queue on a peer that has **never connected** is reported as unreachable, not congested —
+"send less" is the wrong advice for a node that is simply gone.
+
+Congestion is also a metric, `actornet.node.congested`, tagged with the node. Worth alerting on
+separately from dead letters: a dead letter usually means a wiring mistake, congestion means the
+cluster is carrying more than a peer can take.
+
 ## Known limits
 
 - **Split brain is unresolved.** Two halves of a partition each believe they own the whole ring,

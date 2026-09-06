@@ -23,6 +23,9 @@ works and something automated proves it** — not when the code exists.
 - [x] `ReceiveActor` for type-dispatched handlers
 - [x] Constructor injection through `IServiceProvider`
 - [x] Synchronous fast path for the common send
+- [x] Bounded inbound delivery, so one full mailbox cannot stall a connection's other actors
+- [x] Congestion, outage, refusal and ask timeout are four distinct, diagnosable failures
+- [x] `SendTimeout` and `OutboundQueueCapacity` for the per-peer send queue
 - [x] Dead-letter queue for undeliverable messages, bounded, with a subscription
 - [ ] Message priority or a second mailbox lane
 

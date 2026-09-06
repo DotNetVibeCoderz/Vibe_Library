@@ -25,14 +25,11 @@ consistent hashing, two persistence models, reactive streams, a console, desktop
 client SDKs. It is not yet a framework anyone should run a bank on, and the roadmap below is mostly
 about closing that gap.
 
-## 0.2 — durability and operability
+## 0.2 — durability and operability — **done**
 
-The things that stand between this and a production pilot.
-
-| Theme | Why it matters |
-| --- | --- |
-| Backpressure that reaches the sender | A bounded mailbox blocks the local sender today, but a remote sender only sees a full transport queue. |
-| Ask over a bounded transport queue | A slow peer currently makes an ask time out with no way to distinguish it from a slow actor. |
+The things that stood between this and a production pilot: database persistence, dead letters,
+OpenTelemetry, and flow control that a remote sender can see. See
+[Progress.md](Progress.md) for what each of those turned into.
 
 ## 0.3 — clustering that survives a bad day
 

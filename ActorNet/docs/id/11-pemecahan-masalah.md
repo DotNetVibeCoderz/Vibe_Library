@@ -34,6 +34,11 @@ Berdasarkan urutan kemungkinan:
    menahan satu-satunya alur kendali actor itu.
 4. **Sebuah node remote tidak terjangkau.** Balasannya tidak bisa kembali. Periksa halaman cluster.
 
+Bila pesannya sama sekali tidak bisa *dikirimkan*, Anda mendapat exception lain, bukan timeout:
+`MailboxFullException` saat aktor tujuannya terlalu tertinggal, `NodeCongestedException` saat
+peer-nya yang tertinggal, dan `NodeUnreachableException` saat peer-nya mati. Timeout berarti pesannya
+sampai dan balasannya tidak datang - jadi periksalah handler-nya.
+
 Perhatikan apa yang **bukan** timeout: bila handler-nya **melempar exception**, Anda mendapat
 `ActorNetException` yang membawa exception aslinya sebagai inner exception, bukan timeout. Timeout
 berarti tidak ada apa pun yang kembali.
