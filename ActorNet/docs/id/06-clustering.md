@@ -73,8 +73,27 @@ Protokolnya kecil:
 2. Seed menjawab `JoinAck` berisi seluruh tabel member-nya.
 3. Setelah itu setiap node secara berkala mengirim seluruh tabelnya ke setiap peer yang dikenalnya.
 
-Itu konvergen, dan biayanya O(member²) denyut per interval — tidak berarti pada puluhan node, dan
-membutuhkan batas fanout di atas itu. Ini ada di roadmap, dan ini adalah plafon nyata hari ini.
+### Fanout
+
+Langkah 3 tidak berarti ke semua orang, karena biayanya akan O(member²) frame per interval — tidak
+berarti pada sepuluh node dan menghancurkan pada seratus. Setiap denyut meng-gossip ke
+`GossipFanout` peer (bawaan 4), dan informasinya sampai ke sisanya secara tak langsung:
+
+```csharp
+options.Cluster.GossipFanout = 4;   // 0 berarti semua peer, dan cluster kecil memang begitu
+```
+
+Di bawah angka fanout tidak ada yang perlu dibatasi, jadi cluster lima node berperilaku persis
+seperti sebelumnya. Di atasnya, konvergensi butuh sekitar log(member) ronde alih-alih satu — pada
+denyut dua detik, itu beberapa detik untuk cluster seratus node.
+
+**Peer diambil bergiliran, bukan acak.** Subset acak adalah pilihan buku teks dan justru keliru di
+sini, karena jarak antara dua node tertentu jadi untung-untungan — sedangkan detektor kegagalan,
+yang belajar seberapa sering ia mendengar tiap peer, tidak bisa mempelajari lemparan koin. Ia
+terpaksa dibuat toleran terhadap kesunyian yang sekadar sial, dan toleransi itulah yang membuat
+detektor jadi lambat. Rotasi membuat jaraknya tepat `ceil(peer / fanout)` denyut, dan angka itu
+diberitahukan ke detektor supaya anggota yang baru ditemukan tidak dicurigai sebelum jendelanya
+terisi.
 
 ### Node boleh dinyalakan dalam urutan apa pun
 
@@ -423,14 +442,13 @@ berarti cluster-nya membawa lebih banyak daripada yang sanggup diterima sebuah p
 
 - **Split brain belum tertangani.** Dua belahan dari sebuah partisi masing-masing meyakini memiliki
   seluruh ring, yang berarti dua aktivasi untuk actor yang sama.
-- **Keanggotaan bersifat kuadratik** terhadap jumlah member per ronde heartbeat.
 - **Kecurigaan bersifat per-node, dan tidak ada yang mendamaikan dua node yang berbeda pendapat.**
   Phi diukur terhadap riwayat masing-masing peer, jadi satu node bisa menyebut sebuah peer tidak
   terjangkau sementara node lain tidak. Itu jujur — keterjangkauan memang tidak simetris — tapi
   belum ada protokol untuk menyelesaikannya.
 - **`PreferenceList` ada dan tidak dipakai apa pun.** Penempatan replika belum diimplementasikan.
 
-Keempatnya ada di [roadmap](../../Plan.md).
+Ketiganya ada di [roadmap](../../Plan.md).
 
 ## Selanjutnya
 

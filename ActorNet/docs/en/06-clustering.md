@@ -70,8 +70,27 @@ A small protocol:
 2. A seed answers `JoinAck` with its whole member table.
 3. From then on every node periodically sends its whole table to every peer it knows.
 
-That converges, and it costs O(members²) beats per interval — nothing at tens of nodes, and in need
-of a fanout limit beyond that. It is on the roadmap, and it is a real ceiling today.
+### Fanout
+
+Step 3 does not mean everybody, or the cost would be O(members²) frames per interval — nothing at
+ten nodes and ruinous at a hundred. Each beat gossips to `GossipFanout` peers (4 by default), and
+the information reaches the rest second-hand:
+
+```csharp
+options.Cluster.GossipFanout = 4;   // 0 means every peer, which is what a small cluster gets anyway
+```
+
+Below the fanout there is nothing to limit, so a cluster of five behaves exactly as before. Above
+it, convergence takes about log(members) rounds rather than one, which at a two-second beat is a
+few seconds for a cluster of a hundred.
+
+**Peers are taken in rotation, not at random.** A random subset is the textbook choice and it is
+the wrong one here, because the gap between two particular nodes then becomes a coin flip — and the
+failure detector, which learns how often it hears from each peer, cannot learn a coin flip. It
+would have to be made tolerant of a silence that was merely unlucky, which is exactly the tolerance
+that makes a detector slow. A rotation makes the gap exactly `ceil(peers / fanout)` beats, and the
+detector is told that number so a newly discovered member is not suspected before its window has
+filled.
 
 ### Nodes may start in any order
 
@@ -415,13 +434,12 @@ cluster is carrying more than a peer can take.
 
 - **Split brain is unresolved.** Two halves of a partition each believe they own the whole ring,
   which means two activations of the same actor.
-- **Membership is quadratic** in the number of members per heartbeat round.
 - **Suspicion is per-node, and nothing reconciles two nodes that disagree.** Phi is measured
   against each peer's own history, so one node may call a peer unreachable while another does not.
   That is honest — reachability is not symmetric — but there is no protocol for settling it.
 - **`PreferenceList` exists and nothing uses it.** Replica placement is not implemented.
 
-All four are in the [roadmap](../../Plan.md).
+All three are in the [roadmap](../../Plan.md).
 
 ## Next
 

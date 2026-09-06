@@ -75,7 +75,7 @@ public sealed class PhiAccrualFailureDetector
 
     private readonly Dictionary<string, History> _nodes = new(StringComparer.Ordinal);
     private readonly Lock _gate = new();
-    private readonly double _firstHeartbeatMillis;
+    private double _firstHeartbeatMillis;
     private readonly double _acceptablePauseMillis;
     private readonly double _minimumStandardDeviation;
     private readonly int _sampleSize;
@@ -104,6 +104,19 @@ public sealed class PhiAccrualFailureDetector
         _acceptablePauseMillis = acceptableHeartbeatPause.TotalMilliseconds;
         _minimumStandardDeviation = minimumStandardDeviation.TotalMilliseconds;
         _sampleSize = sampleSize;
+    }
+
+    /// <summary>
+    /// What to assume about a peer heard from only once.
+    /// </summary>
+    /// <remarks>
+    /// Settable because the expected gap depends on the gossip fanout and on how many members there
+    /// are, neither of which is known when the detector is built.
+    /// </remarks>
+    public TimeSpan FirstHeartbeatEstimate
+    {
+        get { lock (_gate) return TimeSpan.FromMilliseconds(_firstHeartbeatMillis); }
+        set { lock (_gate) _firstHeartbeatMillis = value.TotalMilliseconds; }
     }
 
     /// <summary>Records that a peer was heard from.</summary>

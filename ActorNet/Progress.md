@@ -60,6 +60,7 @@ works and something automated proves it** — not when the code exists.
 - [x] `AdvertisedHost` / `AdvertisedPort` separate from the bind address, with startup validation
 - [x] Phi-accrual failure detection, adaptive per peer and the default
 - [x] Fixed deadlines kept as an option, for when a stated number beats an accurate one
+- [x] Gossip fanout, taken in rotation so the interval between two nodes stays learnable
 - [ ] Split-brain resolution
 - [ ] Replica placement using `PreferenceList`
 - [ ] Non-static seed discovery (DNS, Kubernetes)

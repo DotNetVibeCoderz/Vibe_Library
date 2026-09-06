@@ -14,9 +14,9 @@ namespace ActorNet.Cluster;
 /// <para>
 /// The protocol is deliberately small: a joiner sends <see cref="WireKind.Join"/> to its seeds and
 /// gets back the seed's member table; from then on every node periodically sends its whole table
-/// to every peer it knows. That is gossip in the loose sense - it converges, and it costs
-/// O(members squared) beats per interval, which is nothing at the tens-of-nodes scale this
-/// targets and would need a fanout limit beyond it.
+/// to <see cref="ClusterOptions.GossipFanout"/> of its peers, taken in rotation, and the rest of
+/// the cluster hears it second-hand. That is gossip in the loose sense - it converges in about
+/// log(members) rounds at a cost of O(members x fanout) frames per interval.
 /// </para>
 /// <para>
 /// Failure detection is phi-accrual by default: suspicion is measured against how long a peer's
@@ -40,6 +40,8 @@ public sealed class ClusterMembership : IClusterView, IAsyncDisposable
     private readonly Lock _ringGate = new();
 
     private readonly PhiAccrualFailureDetector _detector;
+
+    private int _gossipCursor;
 
     private ITransport? _transport;
     private Task? _heartbeatLoop;
@@ -278,7 +280,8 @@ public sealed class ClusterMembership : IClusterView, IAsyncDisposable
         catch (OperationCanceledException) { return false; }
     }
 
-    private async Task GossipAsync(CancellationToken cancellationToken)
+    /// <summary>Runs one gossip beat. Internal so a test can drive the rotation a beat at a time.</summary>
+    internal async Task GossipAsync(CancellationToken cancellationToken)
     {
         var frame = new WireEnvelope
         {
@@ -287,9 +290,8 @@ public sealed class ClusterMembership : IClusterView, IAsyncDisposable
             Members = _members.Values.Select(ToWire).ToList(),
         };
 
-        foreach (var member in _members.Values)
+        foreach (var member in NextGossipTargets())
         {
-            if (member.NodeId == SelfNodeId || member.Status == MemberStatus.Down) continue;
             try
             {
                 await _transport!.SendAsync(member.NodeId, frame, cancellationToken).ConfigureAwait(false);
@@ -299,6 +301,50 @@ public sealed class ClusterMembership : IClusterView, IAsyncDisposable
                 _logger.LogDebug(ex, "Gossip to {NodeId} failed.", member.NodeId);
             }
         }
+    }
+
+    /// <summary>
+    /// The peers this beat gossips to, taken in rotation.
+    /// </summary>
+    /// <remarks>
+    /// Sorted by node id so every node walks the same list in the same order, and advanced by a
+    /// cursor so consecutive beats cover different peers. The rotation is what makes the gap
+    /// between any two nodes a fixed number of beats rather than a matter of luck - the failure
+    /// detector can learn a fixed gap and cannot learn a coin flip.
+    /// </remarks>
+    private List<ClusterMember> NextGossipTargets()
+    {
+        var peers = _members.Values
+            .Where(m => m.NodeId != SelfNodeId && m.Status != MemberStatus.Down)
+            .OrderBy(m => m.NodeId, StringComparer.Ordinal)
+            .ToList();
+
+        var fanout = _options.GossipFanout;
+        if (fanout <= 0 || fanout >= peers.Count) return peers;
+
+        var start = _gossipCursor;
+        _gossipCursor = (start + fanout) % peers.Count;
+
+        // Wraps, so the peers at the end of the list are not perpetually the ones left over when
+        // the count does not divide evenly.
+        return Enumerable.Range(0, fanout).Select(i => peers[(start + i) % peers.Count]).ToList();
+    }
+
+    /// <summary>
+    /// Tells the detector how often a peer's beats are actually due, given the fanout.
+    /// </summary>
+    /// <remarks>
+    /// With a fanout, a peer is heard from every <c>ceil(peers / fanout)</c> beats rather than
+    /// every beat. A detector still expecting one beat per interval would suspect every newly
+    /// discovered member in a large cluster before its window had filled with the truth.
+    /// </remarks>
+    private void UpdateExpectedHeartbeatInterval()
+    {
+        var peers = _members.Values.Count(m => m.NodeId != SelfNodeId && m.Status != MemberStatus.Down);
+        var fanout = _options.GossipFanout;
+        var rounds = fanout <= 0 || peers <= fanout ? 1 : (int)Math.Ceiling((double)peers / fanout);
+
+        _detector.FirstHeartbeatEstimate = _options.HeartbeatInterval * rounds;
     }
 
     /// <summary>What this node now believes about a peer, given how long it has been quiet.</summary>
@@ -481,6 +527,8 @@ public sealed class ClusterMembership : IClusterView, IAsyncDisposable
             ring = BuildRing();
             Volatile.Write(ref _ring, ring);
         }
+
+        UpdateExpectedHeartbeatInterval();
 
         var snapshot = Members;
         _logger.LogInformation("Ring rebuilt over {Count} routable member(s): {Members}.",

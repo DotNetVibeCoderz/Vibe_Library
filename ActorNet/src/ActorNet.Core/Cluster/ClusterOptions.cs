@@ -36,6 +36,24 @@ public sealed class ClusterOptions
     public TimeSpan HeartbeatInterval { get; set; } = TimeSpan.FromSeconds(2);
 
     /// <summary>
+    /// How many peers this node gossips to per beat. Zero means every peer.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Gossiping to everybody costs O(members squared) frames per interval, which is nothing at ten
+    /// nodes and ruinous at a hundred. A fanout spreads the same information epidemically at
+    /// O(members x fanout), converging in about log(members) rounds instead of one.
+    /// </para>
+    /// <para>
+    /// Peers are taken in a rotation rather than at random. A random subset makes the gap between
+    /// two particular nodes a coin flip, and the failure detector then has to be tolerant of a
+    /// silence that was merely unlucky. A rotation makes that gap exactly
+    /// <c>ceil(peers / fanout)</c> beats, which is a number the detector can learn.
+    /// </para>
+    /// </remarks>
+    public int GossipFanout { get; set; } = 4;
+
+    /// <summary>
     /// How long the startup handshake may spend on its seeds before the node comes up anyway.
     /// </summary>
     /// <remarks>
@@ -136,6 +154,8 @@ public sealed class ClusterOptions
             throw new ArgumentOutOfRangeException(nameof(MinimumStandardDeviation), MinimumStandardDeviation, "A spread of zero makes phi jump from nothing to enormous within a millisecond.");
         if (HeartbeatSampleSize < 2)
             throw new ArgumentOutOfRangeException(nameof(HeartbeatSampleSize), HeartbeatSampleSize, "Two samples are the fewest that have a spread at all.");
+        if (GossipFanout < 0)
+            throw new ArgumentOutOfRangeException(nameof(GossipFanout), GossipFanout, "Use zero for every peer, not a negative number.");
         if (JoinTimeout <= TimeSpan.Zero)
             throw new ArgumentOutOfRangeException(nameof(JoinTimeout), JoinTimeout, "The startup handshake needs some time to run.");
         if (HeartbeatInterval >= UnreachableAfter)
