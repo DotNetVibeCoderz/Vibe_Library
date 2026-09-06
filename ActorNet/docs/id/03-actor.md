@@ -184,6 +184,43 @@ _timer = Context.ScheduleTell(TimeSpan.FromSeconds(30), new Sweep(), repeatEvery
 Mengembalikan `IDisposable`; buang untuk membatalkan. Timer **tidak** selamat dari deaktivasi atau
 restart node — ini untuk urusan dalam satu aktivasi, bukan penjadwalan yang tahan lama.
 
+## Mengawasi actor lain
+
+```csharp
+await Context.WatchAsync(ActorId.For<PaymentActor>(orderId));
+
+// ... nanti, di actor yang sama
+On<Terminated>(t => Logger.LogWarning("{Actor} berhenti: {Reason}", t.Actor, t.Reason));
+```
+
+`Terminated` datang ketika actor yang diawasi berhenti **karena suatu sebab**: supervisor-nya
+menyerah, atau ada yang memintanya berhenti. `Context.UnwatchAsync` menarik kembali minat itu.
+
+**Ini sengaja lebih sempit daripada `Terminated` milik Akka.** Siklus hidup actor virtual bukan
+siklus hidup actor Akka. Tiga dari lima alasan deaktivasi di sini hanyalah pembukuan rutin:
+
+| Alasan | Memberi tahu | Sebabnya |
+| --- | --- | --- |
+| `Supervision` | **ya** | Supervisor menghentikannya setelah gagal |
+| `Requested` | **ya** | Ada yang memintanya berhenti |
+| `Idle` | tidak | Ia kehabisan waktu; pesan berikutnya membawanya kembali di alamat yang sama |
+| `Rebalanced` | tidak | Ia pindah node; alamatnya tidak berubah |
+| `Shutdown` | tidak | Node-nya berhenti; ia aktif lagi di tempat lain |
+
+Melaporkan tiga yang terakhir akan melatih setiap pengawas untuk mengabaikan notifikasinya, dan itu
+membuat dua yang bermakna ikut tak berguna.
+
+Dua hal yang perlu diketahui:
+
+**Pengawasan itu tersimpan di aktivasi milik target**, di mana pun ia berada dalam cluster.
+`WatchAsync` adalah pesan biasa yang dirutekan oleh ring, jadi mengawasi actor di node lain sama saja
+dengan mengawasi tetangga sebelah, dan pemberitahuannya kembali lewat kabel.
+
+**Pengawasan tidak selamat dari matinya node yang memegangnya.** Kalau node pemilik target mati,
+tidak ada yang datang — pendaftarannya ikut mati. Kehilangan node adalah peristiwa tingkat cluster
+dan halaman cluster-lah tempatnya terlihat; notifikasi per-actor akan menjanjikan sesuatu yang tidak
+bisa dipenuhi lapisan keanggotaan.
+
 ## Dependency injection
 
 ```csharp

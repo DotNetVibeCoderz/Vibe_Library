@@ -99,6 +99,13 @@ public sealed class ActorSystem : IActorSystem
         _logger = LoggerFactory.CreateLogger<ActorSystem>();
         _services = services;
         Serializer = serializer ?? new JsonMessageSerializer();
+
+        // The runtime's own protocol. Registered here rather than left to the application, because
+        // a watch that works locally and fails to serialize across a node boundary would be a worse
+        // outcome than no watch at all.
+        Serializer.Types.Register<Watch>();
+        Serializer.Types.Register<Unwatch>();
+        Serializer.Types.Register<Terminated>();
         MetricsCollector = new MetricsCollector(Options.NodeId);
         _cluster = new ClusterMembership(
             Options.NodeId,

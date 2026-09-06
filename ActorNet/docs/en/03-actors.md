@@ -180,6 +180,43 @@ _timer = Context.ScheduleTell(TimeSpan.FromSeconds(30), new Sweep(), repeatEvery
 Returns an `IDisposable`; dispose it to cancel. Timers do **not** survive deactivation or a node
 restart — this is for in-activation concerns, not durable scheduling.
 
+## Watching another actor
+
+```csharp
+await Context.WatchAsync(ActorId.For<PaymentActor>(orderId));
+
+// ... later, in the same actor
+On<Terminated>(t => Logger.LogWarning("{Actor} stopped: {Reason}", t.Actor, t.Reason));
+```
+
+`Terminated` arrives when the watched actor stops **for a reason**: a supervisor gave up on it, or
+something asked it to stop. `Context.UnwatchAsync` withdraws the interest.
+
+**This is narrower than Akka's `Terminated`, on purpose.** A virtual actor's lifecycle is not an
+Akka actor's. Three of the five deactivation reasons are routine bookkeeping here:
+
+| Reason | Notifies | Why |
+| --- | --- | --- |
+| `Supervision` | **yes** | A supervisor stopped it after a failure |
+| `Requested` | **yes** | Something asked it to stop |
+| `Idle` | no | It timed out; the next message brings it back, same address |
+| `Rebalanced` | no | It moved to another node; the address is unchanged |
+| `Shutdown` | no | Its node is stopping; it reactivates elsewhere |
+
+Reporting the bottom three would train every watcher to ignore the notification, which would make
+the two that mean something useless as well.
+
+Two things worth knowing:
+
+**The watch lives on the target's activation**, wherever in the cluster that is. `WatchAsync` is an
+ordinary message routed by the ring, so watching an actor on another node works the same as watching
+one next door, and the notice comes back over the wire.
+
+**A watch does not survive the node holding it.** If the node that owns the target dies, nothing
+arrives — the registration died with it. Losing a node is a cluster-level event and the cluster page
+is where it shows up; a per-actor notification would be promising something membership cannot
+deliver.
+
 ## Dependency injection
 
 ```csharp

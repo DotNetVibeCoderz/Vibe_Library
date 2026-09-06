@@ -62,4 +62,25 @@ public interface IActorContext
     /// message addressed to it activates a fresh instance.
     /// </summary>
     void DeactivateOnIdle();
+
+    /// <summary>
+    /// Asks to be sent a <see cref="Terminated"/> when <paramref name="target"/> stops.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Only a stop that means something is reported: a supervisor giving up on the actor, or
+    /// something asking it to stop. Idling out, moving during a rebalance and going down with a
+    /// node are routine for a virtual actor - the address stays valid and the next message brings
+    /// it back - so they are not terminations and do not notify.
+    /// </para>
+    /// <para>
+    /// The watch is held by the target's own activation, wherever that is. It does not survive the
+    /// node holding it: if that node dies, nothing arrives, and a node loss is a cluster-level
+    /// event rather than a per-actor one.
+    /// </para>
+    /// </remarks>
+    ValueTask WatchAsync(ActorId target, CancellationToken cancellationToken = default);
+
+    /// <summary>Withdraws a watch. Harmless if there was none.</summary>
+    ValueTask UnwatchAsync(ActorId target, CancellationToken cancellationToken = default);
 }

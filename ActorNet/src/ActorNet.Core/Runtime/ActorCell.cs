@@ -45,6 +45,17 @@ internal sealed class ActorCell
     private long _lastActivityTicks = Stopwatch.GetTimestamp();
     private int _restartCount;
     private int _restartsInWindow;
+
+    /// <summary>
+    /// Who asked to be told when this actor stops, in <c>Type/Key</c> form.
+    /// </summary>
+    /// <remarks>
+    /// Only ever touched from the mailbox loop, like everything else about an activation, so it
+    /// needs no lock. Watches are per-activation on purpose: an actor that idles out and comes back
+    /// is a new activation with nothing to report, which is the same reason idling is not a
+    /// termination.
+    /// </remarks>
+    private readonly HashSet<string> _watchers = new(StringComparer.Ordinal);
     private long _windowStartTicks = Stopwatch.GetTimestamp();
     private bool _deactivateAfterCurrentMessage;
 
@@ -245,6 +256,21 @@ internal sealed class ActorCell
         // Null unless something is listening, which is what makes a span affordable per message.
         using var activity = ActorNetDiagnostics.StartReceive(Id, messageType, envelope.TraceParent, envelope.TraceState);
 
+        // Watch bookkeeping is the runtime's, not the actor's: handled here so an actor cannot be
+        // written to forget it, and so watching works on an actor that has no handler for anything
+        // but its own protocol.
+        if (envelope.Message is Watch watch)
+        {
+            _watchers.Add(watch.Watcher);
+            return;
+        }
+
+        if (envelope.Message is Unwatch unwatch)
+        {
+            _watchers.Remove(unwatch.Watcher);
+            return;
+        }
+
         _context.BeginMessage(envelope);
         try
         {
@@ -410,7 +436,49 @@ internal sealed class ActorCell
         Interlocked.Exchange(ref _state, StateStopped);
         _cts.Dispose();
         _logger.LogDebug("Deactivated {ActorId} ({Reason}).", Id, reason);
+
+        await NotifyWatchersAsync(reason).ConfigureAwait(false);
         _stopped.TrySetResult();
+    }
+
+    /// <summary>
+    /// Tells anyone watching that this actor has stopped, when the reason is one worth reporting.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <see cref="DeactivationReason.Idle"/>, <see cref="DeactivationReason.Rebalanced"/> and
+    /// <see cref="DeactivationReason.Shutdown"/> are routine for a virtual actor: the address stays
+    /// valid and the next message brings it back somewhere. Reporting those as terminations would
+    /// train every watcher to ignore them, which would make the two that matter useless too.
+    /// </para>
+    /// <para>
+    /// Sent after the cell is unregistered, so a watcher that responds by messaging the address
+    /// gets a fresh activation rather than a queue on a mailbox that is already closed.
+    /// </para>
+    /// </remarks>
+    private async Task NotifyWatchersAsync(DeactivationReason reason)
+    {
+        if (_watchers.Count == 0) return;
+        if (reason is not (DeactivationReason.Supervision or DeactivationReason.Requested)) return;
+
+        var notice = new Terminated(Id.ToString(), reason);
+        foreach (var watcher in _watchers)
+        {
+            if (!ActorId.TryParse(watcher, out var target)) continue;
+
+            try
+            {
+                await _system.TellAsync(target, notice).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                // A watcher that has itself gone away is the ordinary case, not a fault worth
+                // failing a deactivation over.
+                _logger.LogDebug(ex, "Could not tell {Watcher} that {ActorId} stopped.", watcher, Id);
+            }
+        }
+
+        _watchers.Clear();
     }
 
     internal void AttachChild(ActorId child) => _children[child] = 0;
@@ -467,6 +535,12 @@ internal sealed class ActorCell
             // failure is already visible as a message that never arrived.
             return new Timer(_ => _ = system.TellAsync(self, message, self).AsTask(), null, delay, period);
         }
+
+        public ValueTask WatchAsync(ActorId target, CancellationToken cancellationToken = default) =>
+            cell._system.TellAsync(target, new Watch(cell.Id.ToString()), cancellationToken: cancellationToken);
+
+        public ValueTask UnwatchAsync(ActorId target, CancellationToken cancellationToken = default) =>
+            cell._system.TellAsync(target, new Unwatch(cell.Id.ToString()), cancellationToken: cancellationToken);
 
         public void DeactivateOnIdle() => cell._deactivateAfterCurrentMessage = true;
     }

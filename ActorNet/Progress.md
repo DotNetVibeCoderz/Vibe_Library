@@ -39,7 +39,8 @@ works and something automated proves it** — not when the code exists.
 - [x] Escalation to the root guardian
 - [x] A supervision stop does not flush half-updated persistent state
 - [x] Exponential backoff with jitter between restarts, the first one still immediate
-- [ ] Watch/`Terminated` notifications between actors
+- [x] Watch/`Terminated` notifications between actors, across nodes, for the two stops that
+      mean something rather than all five
 
 ## Clustering
 
