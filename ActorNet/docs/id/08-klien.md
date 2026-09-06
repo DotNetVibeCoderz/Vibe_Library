@@ -91,9 +91,11 @@ kembali ke tempat semula dan hanya node yang benar-benar hilang yang membuatnya 
 keriuhan, bukan penyeimbangan: tidak ada yang didapat dari pindah, dan ada satu koneksi yang harus
 dibangun ulang karenanya.
 
-**Apa pun yang sedang di jalan saat koneksi putus tetap gagal.** Pengirimannya at-most-once, dan
+**Apa pun yang sedang di jalan saat koneksi putus tetap gagal**, berupa `ActorNetException` yang
+menyebut endpoint-nya dan membawa error soketnya sebagai penyebab. Pengirimannya at-most-once, dan
 mengirim ulang permintaan yang balasannya hilang diam-diam mengubahnya jadi at-least-once. Pemanggil
-tahu apakah operasinya aman diulang; klien tidak.
+tahu apakah operasinya aman diulang; klien tidak — jadi panggilan setelah kegagalan itulah yang
+mencari node lain.
 
 ## Node.js
 

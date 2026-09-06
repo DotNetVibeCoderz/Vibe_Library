@@ -90,9 +90,11 @@ where it was and only a node that is really gone costs a move. `ConnectedTo` say
 use. Rotating on every connect would be churn rather than balance: there is nothing to gain by
 moving and a connection to re-establish by moving.
 
-**Anything in flight when a connection drops still fails.** Delivery is at-most-once, and re-sending
-a request whose reply was lost would quietly make it at-least-once. The caller knows whether its
-operation is safe to repeat; the client does not.
+**Anything in flight when a connection drops still fails**, with an `ActorNetException` naming the
+endpoint and carrying the socket error as its cause. Delivery is at-most-once, and re-sending a
+request whose reply was lost would quietly make it at-least-once. The caller knows whether its
+operation is safe to repeat; the client does not - so the call after the failure is the one that
+finds another node.
 
 ## Node.js
 

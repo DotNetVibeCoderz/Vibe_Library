@@ -277,7 +277,11 @@ public sealed class ActorNetClient : IAsyncDisposable
             // connection dead here is what makes the next call reconnect rather than write into the
             // same socket again.
             _alive = false;
-            throw;
+
+            // Wrapped, because a caller should not have to catch three socket types to handle "the
+            // node went away" - which is an ordinary event for a client of a cluster, not an
+            // exceptional one. The cause is kept.
+            throw new ActorNetException($"The connection to {ConnectedTo ?? "the node"} failed while sending.", ex);
         }
         finally
         {
@@ -306,7 +310,11 @@ public sealed class ActorNetClient : IAsyncDisposable
         {
             _alive = false;
             ConnectedTo = null;
-            FailPending(ex);
+
+            // Same reason as the write path: one exception type for a connection that went away,
+            // with whatever the socket said attached to it.
+            FailPending(ex as ActorNetException
+                ?? new ActorNetException("The connection to the node failed while waiting for a reply.", ex));
             return;
         }
 
