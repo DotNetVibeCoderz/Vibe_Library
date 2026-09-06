@@ -147,7 +147,8 @@ works and something automated proves it** — not when the code exists.
 - [x] Framing across coalesced, split, oversized and torn frames
 - [x] Two-node cluster: convergence, placement agreement, remote tell, remote ask, rebalance
 - [x] External client tell, ask, concurrent asks, failure, timeout, and allow-list refusal
-- [ ] Fault injection — killing a node mid-flight and asserting on recovery
+- [x] Fault injection - a node's transport pulled out from under it, then asserting on
+      detection, inheritance of its keys, and a replacement rejoining at the same address
 - [ ] Long-running soak test
 
 ## Documentation

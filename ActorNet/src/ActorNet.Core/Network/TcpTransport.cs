@@ -134,6 +134,11 @@ public sealed class TcpTransport : ITransport
     /// <inheritdoc />
     public ValueTask SendAsync(string nodeId, WireEnvelope frame, CancellationToken cancellationToken)
     {
+        // A stopped transport does not dial. Without this the peer dictionary is cleared by
+        // StopAsync and then repopulated by the next send, so a node whose transport had been shut
+        // down carried on opening fresh connections and gossiping from beyond the grave.
+        ObjectDisposedException.ThrowIf(_shutdown.IsCancellationRequested, this);
+
         var address = _resolveNode(nodeId);
         if (address is null)
         {
@@ -156,6 +161,8 @@ public sealed class TcpTransport : ITransport
     /// <inheritdoc />
     public async ValueTask SendToAddressAsync(string host, int port, WireEnvelope frame, CancellationToken cancellationToken)
     {
+        ObjectDisposedException.ThrowIf(_shutdown.IsCancellationRequested, this);
+
         // The join handshake happens before the peer has a known id, so this path is deliberately
         // connectionless: dial, send, hang up. Everything after the handshake uses SendAsync.
         using var client = new TcpClient();

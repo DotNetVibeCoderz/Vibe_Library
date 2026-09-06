@@ -47,6 +47,17 @@ public sealed class ActorSystem : IActorSystem
     private readonly ClusterMembership _cluster;
 
     private ITransport? _transport;
+
+    /// <summary>
+    /// This node's transport, for tests that need to pull the network out from under it.
+    /// </summary>
+    /// <remarks>
+    /// Internal on purpose. An abrupt node loss is the case failure detection exists for and the
+    /// one a graceful <see cref="StopAsync"/> cannot produce - it announces a departure, which
+    /// peers act on immediately and which therefore proves nothing about detection. Closing the
+    /// transport is the closest an in-process test can get to unplugging a cable.
+    /// </remarks>
+    internal ITransport? Transport => _transport;
     private Task? _sweeper;
     private int _started;
 
