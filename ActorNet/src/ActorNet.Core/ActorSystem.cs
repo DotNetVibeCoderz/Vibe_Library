@@ -252,10 +252,28 @@ public sealed class ActorSystem : IActorSystem
 
             if (successor is null) continue;
 
+            if (_cluster.Resolve(successor) is not { } address) continue;
+
             try
             {
-                await SendRemoteAsync(successor, WireKind.Message, id, new Warm(), default, null, CancellationToken.None)
+                var (alias, payload) = Serializer.Serialize(new Warm());
+                var frame = new WireEnvelope
+                {
+                    Kind = WireKind.Message,
+                    Target = id.ToString(),
+                    MessageAlias = alias,
+                    Payload = payload,
+                    FromNode = NodeId,
+                };
+
+                // Written straight to a socket rather than queued on the peer connection. The
+                // queue is drained by a writer loop, and this node closes its transport moments
+                // later - so a queued frame is a frame that may never leave. This path returns
+                // once the bytes are out, which is the only thing that makes the handover
+                // reliable rather than usually reliable.
+                await _transport.SendToAddressAsync(address.Host, address.Port, frame, CancellationToken.None)
                     .ConfigureAwait(false);
+
                 warmed++;
             }
             catch (Exception ex)
