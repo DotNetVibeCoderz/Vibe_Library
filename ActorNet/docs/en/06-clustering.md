@@ -437,8 +437,8 @@ thousands of times a second, and one down for 200 ms should not wait a minute.
   from a StatefulSet, not a random one.
 - **`Host` and `Port` must be reachable by peers**, not just bound locally. Peers dial the address
   a node advertises.
-- **Seeds are static strings today.** Discovery through DNS or the Kubernetes API is on the
-  roadmap.
+- **Seeds can be static, DNS names, or the Kubernetes API.** A name resolves to every address
+  behind it; `ActorNet.Kubernetes` watches the API instead. See below.
 - **TLS and authentication are available but off by default.** See below. Until they are on, run
   the cluster on a trusted network - the type allow-list limits what a peer can make a node
   construct, but it is not a substitute for a closed network.
@@ -516,6 +516,49 @@ Names are re-resolved on every attempt, so pods that appear later are picked up 
 and a name that does not resolve is still dialled as given — a typo surfaces as a connect error
 naming the seed rather than as a seed that quietly stopped being tried. Set
 `Cluster.ResolveSeedHostnames = false` to go back to letting the connect do the lookup.
+
+#### Watching the API instead of resolving a name
+
+DNS answers what it has when it is asked. It cannot tell a node that a pod has appeared, so a node
+that is alone finds out by asking again on its next beat. `ActorNet.Kubernetes` is told instead:
+
+```csharp
+var pods = new KubernetesSeedSource(new KubernetesSeedOptions
+{
+    LabelSelector = "app=actornet",   // required: which pods are this cluster
+    Port          = 9000,
+});
+
+options.Cluster.Enabled    = true;
+options.Cluster.SeedSource = pods;    // instead of options.Cluster.Seeds
+```
+
+It lists the matching pods once and then holds a watch open, so a pod that appears is a seed within
+about as long as it takes the API server to say so. Pods that are pending have no address to dial
+and pods that are terminating will refuse the connection, so neither is offered as a seed. Between
+watches it lists again, which is what corrects a watch that has quietly missed an event.
+
+In-cluster defaults come from what the kubelet mounts into the pod — the API server from
+`KUBERNETES_SERVICE_HOST`, the namespace and the bearer token from the service-account files — so a
+deployment usually sets only the selector and the port. The token is read per request rather than
+cached, because a projected token is rotated and a copy taken at startup stops working hours later.
+
+The pod needs permission to see pods in its namespace:
+
+```yaml
+kind: Role
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["list", "watch"]
+```
+
+No Kubernetes client library is involved: two HTTPS calls and a JSON reader. The package is separate
+so that nothing in `ActorNet` itself knows what a pod is.
+
+**This has never run in a real cluster.** It is covered by tests against a local HTTP server serving
+recorded API responses, which exercises the request shape, the streaming of a watch and what each
+event does — and does not exercise RBAC, the in-cluster CA, or a token actually being rotated.
 
 ### Binding one address and advertising another
 

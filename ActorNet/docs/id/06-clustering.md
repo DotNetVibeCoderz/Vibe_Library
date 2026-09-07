@@ -454,7 +454,8 @@ ribuan kali per detik, dan node yang mati 200 ms tidak boleh menunggu semenit.
   bukan nama acak.
 - **`Host` dan `Port` harus terjangkau oleh peer**, bukan sekadar ter-bind lokal. Peer menghubungi
   alamat yang diiklankan sebuah node.
-- **Seed masih berupa string statis.** Penemuan lewat DNS atau API Kubernetes ada di roadmap.
+- **Seed bisa berupa string statis, nama DNS, atau API Kubernetes.** Sebuah nama menerjemah ke
+  semua alamat di baliknya; `ActorNet.Kubernetes` menonton API-nya. Lihat di bawah.
 - **TLS dan autentikasi tersedia tapi mati secara bawaan.** Lihat di bawah. Sampai keduanya
   dinyalakan, jalankan cluster di jaringan tepercaya - allow-list tipe membatasi apa yang bisa
   dibuat peer, tapi itu bukan pengganti jaringan tertutup.
@@ -534,6 +535,52 @@ Nama diterjemahkan ulang pada setiap percobaan, jadi pod yang muncul belakangan 
 restart; dan nama yang gagal diterjemahkan tetap dihubungi apa adanya — salah ketik muncul sebagai
 error koneksi yang menyebut seed-nya, bukan sebagai seed yang diam-diam berhenti dicoba. Setel
 `Cluster.ResolveSeedHostnames = false` untuk kembali menyerahkan pencarian nama ke proses connect.
+
+#### Menonton API alih-alih menerjemahkan nama
+
+DNS menjawab apa yang dimilikinya saat ditanya. Ia tidak bisa memberi tahu sebuah node bahwa ada pod
+baru muncul, jadi node yang sendirian baru tahu dengan bertanya lagi pada denyut berikutnya.
+`ActorNet.Kubernetes` justru diberi tahu:
+
+```csharp
+var pods = new KubernetesSeedSource(new KubernetesSeedOptions
+{
+    LabelSelector = "app=actornet",   // wajib: pod mana yang merupakan cluster ini
+    Port          = 9000,
+});
+
+options.Cluster.Enabled    = true;
+options.Cluster.SeedSource = pods;    // menggantikan options.Cluster.Seeds
+```
+
+Ia mendaftar pod yang cocok sekali, lalu menahan sebuah watch tetap terbuka, jadi pod yang muncul
+menjadi seed kira-kira secepat API server mengatakannya. Pod yang masih pending tidak punya alamat
+untuk dihubungi dan pod yang sedang berhenti akan menolak koneksi, jadi keduanya tidak ditawarkan
+sebagai seed. Di antara dua watch ia mendaftar ulang, dan itulah yang mengoreksi watch yang diam-diam
+melewatkan sebuah peristiwa.
+
+Nilai bawaan di dalam cluster diambil dari apa yang dipasang kubelet ke dalam pod — API server dari
+`KUBERNETES_SERVICE_HOST`, namespace dan token bearer dari berkas service account — jadi sebuah
+deployment biasanya hanya menyetel selector dan port. Token dibaca tiap permintaan, bukan disimpan,
+karena token yang diproyeksikan akan dirotasi dan salinan yang diambil saat start berhenti bekerja
+beberapa jam kemudian.
+
+Pod itu butuh izin untuk melihat pod di namespace-nya:
+
+```yaml
+kind: Role
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["list", "watch"]
+```
+
+Tidak ada pustaka klien Kubernetes yang terlibat: dua panggilan HTTPS dan satu pembaca JSON.
+Paketnya terpisah supaya tidak ada bagian `ActorNet` sendiri yang perlu tahu apa itu pod.
+
+**Ini belum pernah berjalan di cluster sungguhan.** Ia diuji terhadap server HTTP lokal yang
+menyajikan respons API rekaman — menguji bentuk permintaan, aliran watch, dan apa yang dilakukan tiap
+peristiwa — dan tidak menguji RBAC, CA di dalam cluster, maupun token yang benar-benar dirotasi.
 
 ### Mem-bind satu alamat dan mengiklankan alamat lain
 

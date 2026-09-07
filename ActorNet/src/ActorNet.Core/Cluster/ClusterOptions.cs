@@ -165,6 +165,16 @@ public sealed class ClusterOptions
     public bool ResolveSeedHostnames { get; set; } = true;
 
     /// <summary>
+    /// Where the seeds come from, when a fixed list is not the right answer.
+    /// </summary>
+    /// <remarks>
+    /// Null means <see cref="Seeds"/>, which is the usual case. Set it to something live - the
+    /// Kubernetes source in <c>ActorNet.Kubernetes</c>, or your own - when the set of peers changes
+    /// while the process runs, and re-reading a list of names would only ever give the same answer.
+    /// </remarks>
+    public ISeedSource? SeedSource { get; set; }
+
+    /// <summary>
     /// How many peers this node gossips to per beat. Zero means every peer.
     /// </summary>
     /// <remarks>

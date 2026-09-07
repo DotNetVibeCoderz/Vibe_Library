@@ -79,7 +79,9 @@ works and something automated proves it** — not when the code exists.
       which of its keys they would inherit, capped per successor and opt-in
       (`InheritanceDigestLimit`), because it is traffic a healthy cluster pays continuously
 - [x] Seed names resolved to every address behind them, for a Kubernetes headless service
-- [ ] Watching the Kubernetes API for members, rather than resolving a name each attempt
+- [x] Watching the Kubernetes API for members, rather than resolving a name each attempt:
+      `ISeedSource` in the core, `ActorNet.Kubernetes` listing and watching pods over plain HTTP -
+      but see the gaps below, it has never run in a real cluster
 
 ## Persistence
 
@@ -212,6 +214,10 @@ Ticking a box means it works, not that it is finished. These are the caveats wor
   handoff are both written straight to a socket to sidestep this, because both are sent moments
   before the transport closes; everything else still relies on the loop winning the race, which it
   ordinarily does. The right fix is to drain before cancelling, and it has not been made.
+- **The Kubernetes seed source has never run in Kubernetes.** There is no cluster on the machine
+  this was written on. It is covered by tests against a local HTTP server serving recorded API
+  responses - the request shape, the streaming of a watch, and what each event does - and not at
+  all against RBAC, the in-cluster CA, or a projected token being rotated.
 - **The leave token is not a distributed lock.** It lives in the coordinator's memory, so a change
   of coordinator forgets who held it, and in a partition each side has a coordinator and each will
   grant. It orders the shutdowns of a healthy cluster, which is what a rolling restart is. Nothing

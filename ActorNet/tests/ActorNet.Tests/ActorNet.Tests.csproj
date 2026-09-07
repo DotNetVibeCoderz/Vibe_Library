@@ -47,6 +47,7 @@
     <ProjectReference Include="../../src/ActorNet.Generators/ActorNet.Generators.csproj"
                      OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
     <ProjectReference Include="../../src/ActorNet.AspNetCore/ActorNet.AspNetCore.csproj" />
+    <ProjectReference Include="../../src/ActorNet.Kubernetes/ActorNet.Kubernetes.csproj" />
 
     <!--
       Every persistence provider, so one conformance suite can run against all of them. SQLite and

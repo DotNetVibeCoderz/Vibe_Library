@@ -278,7 +278,9 @@ public sealed class ClusterMembership : IClusterView, IAsyncDisposable
     /// </remarks>
     private async Task RejoinIfAloneAsync(CancellationToken cancellationToken)
     {
-        if (_options.Seeds.Count == 0) return;
+        // A live source counts as having seeds even when the configured list is empty, which is the
+        // normal shape of a Kubernetes deployment: nothing is written down, it is all discovered.
+        if (_options.Seeds.Count == 0 && _options.SeedSource is null) return;
 
         // A peer that is merely unreachable still counts - it is on the ring and expected back, and
         // re-seeding on a blip would be churn rather than recovery.
@@ -304,8 +306,12 @@ public sealed class ClusterMembership : IClusterView, IAsyncDisposable
         // seed behind a firewall that drops instead of refusing takes the OS a minute to give up
         // on - long enough, in turn, to starve every seed listed after it. Listing a second seed
         // is meant to make a join more likely, not to make it hostage to the order.
-        var attempts = new List<Task<bool>>(_options.Seeds.Count);
-        foreach (var seed in _options.Seeds)
+        // Asked every attempt, not read once at startup: a source that has just learned about a
+        // new peer is used at the next beat, without anything being restarted.
+        var seeds = await CurrentSeedsAsync(cancellationToken).ConfigureAwait(false);
+
+        var attempts = new List<Task<bool>>(seeds.Count);
+        foreach (var seed in seeds)
         {
             if (!ClusterOptions.TryParseSeed(seed, out var host, out var port)) continue;
             if (port == self.Port && IsSelfHost(host)) continue;
@@ -322,9 +328,29 @@ public sealed class ClusterMembership : IClusterView, IAsyncDisposable
         // Retries run on every heartbeat while the node is alone, so logging each one at
         // Information would bury everything else. The first attempt still says what happened.
         if (isRetry)
-            _logger.LogDebug("Still alone; reached {Reached} of {Total} seeds.", reached, _options.Seeds.Count);
+            _logger.LogDebug("Still alone; reached {Reached} of {Total} seeds.", reached, seeds.Count);
         else
-            _logger.LogInformation("Join sent to {Reached} of {Total} seeds.", reached, _options.Seeds.Count);
+            _logger.LogInformation("Join sent to {Reached} of {Total} seeds.", reached, seeds.Count);
+    }
+
+    /// <summary>The seeds to try now, from the configured source or the configured list.</summary>
+    /// <remarks>
+    /// A source that throws costs this attempt and nothing more. Joining is already a thing that
+    /// retries, and a directory being briefly unavailable is exactly what the retry is for.
+    /// </remarks>
+    private async Task<IReadOnlyList<string>> CurrentSeedsAsync(CancellationToken cancellationToken)
+    {
+        if (_options.SeedSource is not { } source) return [.. _options.Seeds];
+
+        try
+        {
+            return await source.SeedsAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "The seed source could not be read; this join attempt has nothing to try.");
+            return [];
+        }
     }
 
     /// <summary>

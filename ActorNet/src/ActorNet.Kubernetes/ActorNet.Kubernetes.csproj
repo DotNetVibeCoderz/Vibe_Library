@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>ActorNet.Kubernetes</RootNamespace>
+    <AssemblyName>ActorNet.Kubernetes</AssemblyName>
+
+    <IsPackable>true</IsPackable>
+    <PackageId>ActorNet.Kubernetes</PackageId>
+    <PackageTags>actornet;actor-model;cluster;kubernetes;discovery</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="../../README.md" Pack="true" PackagePath="/" />
+  </ItemGroup>
+
+  <!--
+    No Kubernetes client library. The API is HTTPS and JSON, the credentials are three files the
+    kubelet mounts into the pod, and the two calls used here are a list and a watch - so a client
+    library would be a large dependency, its own release cadence and its own generated model, to
+    save an HttpClient and a JsonDocument.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="../ActorNet.Core/ActorNet.Core.csproj" />
+  </ItemGroup>
+
+</Project>
