@@ -1,5 +1,6 @@
 // Dibuat oleh Gravicode Studios, dipimpin oleh Kang Fadhil.
 
+using System.Text.Json;
 using ActorNet.Cluster;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -125,6 +126,40 @@ public static class ActorNetEndpoints
             });
         })
         .WithName("ActorNetClusterStatus");
+
+        group.MapGet("/actors/{type}/{key}", async (string type, string key, ActorSystem system) =>
+        {
+            try
+            {
+                var inspected = await system.InspectAsync(new ActorId(type, key), TimeSpan.FromSeconds(5));
+
+                // The state is already JSON, so it is written through rather than re-encoded: a
+                // string of JSON nested inside JSON is the thing every reader then has to undo.
+                using var document = inspected.State is null ? null : JsonDocument.Parse(inspected.State);
+
+                return Results.Ok(new
+                {
+                    actor = inspected.Actor,
+                    type = inspected.ActorType,
+                    messagesHandled = inspected.MessagesHandled,
+                    activatedAt = inspected.ActivatedAt,
+                    state = document?.RootElement.Clone(),
+                });
+            }
+            catch (ActorTypeNotRegisteredException)
+            {
+                // A type this node does not know is a 404 rather than a 500: the caller asked for
+                // something that does not exist here, which is a fact about the request.
+                return Results.NotFound(new { error = $"No actor type named '{type}' is registered on this node." });
+            }
+            catch (AskTimeoutException)
+            {
+                // An actor that does not answer is usually one that is busy, and an inspection
+                // queues behind whatever it is doing. Saying so beats a generic failure.
+                return Results.StatusCode(StatusCodes.Status504GatewayTimeout);
+            }
+        })
+        .WithName("ActorNetInspect");
 
         return group;
     }

@@ -114,6 +114,19 @@ public sealed class ClusterMembership : IClusterView, IAsyncDisposable
     /// <inheritdoc />
     public bool IsLocal(ActorId id) => string.Equals(OwnerOf(id), SelfNodeId, StringComparison.Ordinal);
 
+    /// <summary>Whether the node that owns <paramref name="id"/> is currently answering.</summary>
+    /// <remarks>
+    /// An unreachable member stays on the ring on purpose - moving its keys on the first missed
+    /// heartbeat would cost a wave of deactivations every time a node paused - so the owner of a key
+    /// can be a node nobody can talk to. That is worth asking about separately from who owns it.
+    /// </remarks>
+    public bool OwnerIsReachable(ActorId id)
+    {
+        var owner = OwnerOf(id);
+        return string.Equals(owner, SelfNodeId, StringComparison.Ordinal)
+            || (_members.TryGetValue(owner, out var member) && member.Status == MemberStatus.Up);
+    }
+
     /// <summary>
     /// Sets the port peers are told to dial, once the transport has bound one.
     /// </summary>
@@ -154,14 +167,31 @@ public sealed class ClusterMembership : IClusterView, IAsyncDisposable
     }
 
     /// <summary>Announces departure so peers take this node off the ring without waiting for a timeout.</summary>
+    /// <remarks>
+    /// <para>
+    /// Written straight to a socket rather than queued on the peer connection, for the same reason
+    /// the warm handoff is: a queued frame is written by a writer loop, and
+    /// <c>PeerConnection.DisposeAsync</c> cancels that loop before it drains, so anything still in
+    /// the queue when this node closes its transport is dropped. A goodbye is sent moments before
+    /// exactly that, and losing it costs the peer a full failure-detector deadline for a node that
+    /// had said where it was going.
+    /// </para>
+    /// <para>
+    /// The window is narrow - the loop usually drains first, and no test here could force the loss
+    /// - so this is closing a hazard the code plainly has rather than one that was reproduced.
+    /// </para>
+    /// </remarks>
     public async Task LeaveAsync(CancellationToken cancellationToken)
     {
         if (!_options.Enabled || _transport is null) return;
 
-        var frame = new WireEnvelope { Kind = WireKind.Leave, FromNode = SelfNodeId };
         foreach (var member in _members.Values.Where(m => m.NodeId != SelfNodeId))
         {
-            try { await _transport.SendAsync(member.NodeId, frame, cancellationToken).ConfigureAwait(false); }
+            // A fresh frame per peer: one envelope written to several sockets is one object handed
+            // to several encoders, and nothing here promises that is safe.
+            var frame = new WireEnvelope { Kind = WireKind.Leave, FromNode = SelfNodeId };
+
+            try { await _transport.SendToAddressAsync(member.Host, member.Port, frame, cancellationToken).ConfigureAwait(false); }
             catch (Exception ex) { _logger.LogDebug(ex, "Could not tell {NodeId} that this node is leaving.", member.NodeId); }
         }
     }

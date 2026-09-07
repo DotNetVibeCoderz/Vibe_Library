@@ -47,7 +47,11 @@ public sealed class WarmHandoffTests
         // the messages to arrive and be handled, not for traffic to trigger anything.
         await TestHarness.AssertEventuallyAsync(
             () => mine.All(id => staying.LocalActors.Contains(id)),
-            "the successor should have activated the actors it inherited", TimeSpan.FromSeconds(15));
+            // Named rather than counted: "3 of 5" does not say whether a warm frame never arrived
+            // or an arrived one was deactivated again, and those are different bugs.
+            () => "the successor should have activated the actors it inherited; it was missing " +
+                  string.Join(", ", mine.Where(id => !staying.LocalActors.Contains(id))),
+            TimeSpan.FromSeconds(15));
 
         Assert.True(staying.LocalActors.Count >= before + mine.Length);
     }

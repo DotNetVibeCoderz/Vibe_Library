@@ -71,12 +71,38 @@
                                 <td class="num" style="color: var(--faint)">@Duration(actor.Idle)</td>
                                 <td class="num">
                                     <button class="button button--quiet"
+                                            title="Ask this actor what it is holding. The answer is read on the actor's own loop, so it queues behind whatever it is doing."
+                                            @onclick="() => InspectAsync(actor.Id)">
+                                        Inspect
+                                    </button>
+                                    <button class="button button--quiet"
                                             title="Flush this actor's state and deactivate it. The next message activates it again."
                                             @onclick="() => DeactivateAsync(actor.Id)">
                                         Deactivate
                                     </button>
                                 </td>
                             </tr>
+
+                            @if (_inspecting == actor.Id)
+                            {
+                                <tr>
+                                    <td colspan="9" style="background: var(--panel-deep, rgba(0,0,0,.15))">
+                                        @if (_inspected is null)
+                                        {
+                                            <span style="color: var(--faint)">asking...</span>
+                                        }
+                                        else
+                                        {
+                                            <div style="color: var(--faint); margin-bottom: .4rem">
+                                                @_inspected.ActorType &middot;
+                                                @_inspected.MessagesHandled.ToString("N0", CultureInfo.InvariantCulture) handled &middot;
+                                                activated @Duration(DateTimeOffset.UtcNow - _inspected.ActivatedAt) ago
+                                            </div>
+                                            <pre style="margin: 0; white-space: pre-wrap; word-break: break-word">@Pretty(_inspected.State)</pre>
+                                        }
+                                    </td>
+                                </tr>
+                            }
                         }
                     </tbody>
                 </table>
@@ -90,6 +116,14 @@
     }
 
     <p class="note">
+        <strong>Inspecting reads the actor, not the store.</strong> The answer is produced on the
+        actor's own mailbox loop, so it is never state a handler is halfway through writing - and an
+        actor that is wedged does not answer at all, which is itself worth knowing. An actor that
+        holds something it would rather not show implements <code>IInspectable</code> and says what
+        it wants seen instead.
+    </p>
+
+    <p class="note">
         <strong>Deactivating is not destructive.</strong> It runs the actor's deactivation hook,
         which is where a persistent actor flushes its state, and removes it from this node. The
         address stays valid and the next message activates a fresh instance from the store - which
@@ -99,6 +133,54 @@
 </div>
 
 @code {
+    // The snapshot addresses actors as strings, so this holds one too rather than parsing on every
+    // render just to compare.
+    private string? _inspecting;
+    private Inspected? _inspected;
+
+    /// <summary>Asks one actor what it is holding, or closes the panel if it is already open.</summary>
+    private async Task InspectAsync(string address)
+    {
+        if (_inspecting == address)
+        {
+            _inspecting = null;
+            _inspected = null;
+            return;
+        }
+
+        _inspecting = address;
+        _inspected = null;
+
+        try
+        {
+            _inspected = await System.InspectAsync(ActorId.Parse(address), TimeSpan.FromSeconds(5));
+        }
+        catch (Exception ex)
+        {
+            // Shown rather than swallowed. "The actor did not answer" is the useful half of the
+            // answer when an actor is busy or gone.
+            _lastAction = $"Could not inspect {address}: {ex.Message}";
+            _inspecting = null;
+        }
+    }
+
+    /// <summary>Re-indents the state, which arrives as one line.</summary>
+    private static string Pretty(string? state)
+    {
+        if (string.IsNullOrWhiteSpace(state)) return "(this actor reports no state)";
+
+        try
+        {
+            using var document = global::System.Text.Json.JsonDocument.Parse(state);
+            return global::System.Text.Json.JsonSerializer.Serialize(document.RootElement,
+                new global::System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+        }
+        catch (global::System.Text.Json.JsonException)
+        {
+            return state;
+        }
+    }
+
     private static readonly TimeSpan RefreshInterval = TimeSpan.FromMilliseconds(750);
 
     private ActorSystemSnapshot _snapshot = default!;

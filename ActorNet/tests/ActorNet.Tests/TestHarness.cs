@@ -116,6 +116,18 @@ public sealed class TestHarness : IAsyncDisposable
     }
 
     /// <summary>
+    /// The same, with the message built from the state the condition ended in.
+    /// </summary>
+    /// <remarks>
+    /// A fixed message describes what should have happened. Building it after the wait describes
+    /// what did, which is the half that shortens the next investigation.
+    /// </remarks>
+    public static async Task AssertEventuallyAsync(Func<bool> condition, Func<string> because, TimeSpan? timeout = null)
+    {
+        if (!await WaitForAsync(condition, timeout)) Assert.Fail(because());
+    }
+
+    /// <summary>
     /// Waits until every node's <em>ring</em> holds every node, not just its member table.
     /// </summary>
     /// <remarks>

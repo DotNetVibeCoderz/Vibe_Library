@@ -2,6 +2,7 @@
 
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Text.Json;
 using ActorNet.Metrics;
 using Microsoft.Extensions.Logging;
 
@@ -276,6 +277,12 @@ internal sealed class ActorCell
         // every actor write a handler to ignore it.
         if (envelope.Message is Warm) return;
 
+        if (envelope.Message is Inspect)
+        {
+            await AnswerInspectAsync(envelope, token).ConfigureAwait(false);
+            return;
+        }
+
         _context.BeginMessage(envelope);
         try
         {
@@ -362,6 +369,101 @@ internal sealed class ActorCell
                 break;
         }
     }
+
+    /// <summary>
+    /// Answers <see cref="Inspect"/> with whatever this actor is holding.
+    /// </summary>
+    /// <remarks>
+    /// Runs on the mailbox loop like every other message, so it never reads state a handler is
+    /// halfway through writing. An actor that is wedged does not answer, which is a true thing to
+    /// learn about it.
+    /// </remarks>
+    private async Task AnswerInspectAsync(Envelope envelope, CancellationToken token)
+    {
+        string? state = null;
+
+        try
+        {
+            var subject = _actor is IInspectable inspectable ? inspectable.Inspect() : StateOf(_actor);
+            if (subject is not null) state = JsonSerializer.Serialize(subject, InspectionJson);
+        }
+        catch (Exception ex)
+        {
+            // A state that will not serialize is a fact about the actor, not a reason to fail the
+            // request: an inspector that throws teaches nothing about what it was inspecting.
+            state = JsonSerializer.Serialize($"<not serializable: {ex.GetType().Name}: {ex.Message}>", InspectionJson);
+        }
+
+        var snapshot = _metrics?.ToSnapshot(Id);
+        var answer = new Inspected(
+            Id.ToString(),
+            _actor.GetType().Name,
+            state,
+            snapshot?.MessagesProcessed ?? 0,
+            snapshot?.ActivatedAt ?? DateTimeOffset.UtcNow);
+
+        _context.BeginMessage(envelope);
+        try { await _context.ReplyAsync(answer, token).ConfigureAwait(false); }
+        finally { _context.EndMessage(); }
+    }
+
+    /// <summary>
+    /// The <c>State</c> of a persistent or event-sourced actor, or the fields the actor declares.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Those two base classes keep the interesting part behind a protected <c>State</c>, and
+    /// serializing the actor around it would report the plumbing rather than the data.
+    /// </para>
+    /// <para>
+    /// An actor without one keeps everything in private fields, which no serializer will touch on
+    /// its own - so they are read here by reflection. Only the fields the actor's own class
+    /// declares: walking into the framework's base classes would report a mailbox and a handler
+    /// table to somebody asking what an account is holding.
+    /// </para>
+    /// </remarks>
+    private static object? StateOf(IActor actor)
+    {
+        const System.Reflection.BindingFlags Members =
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic |
+            System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.FlattenHierarchy;
+
+        var property = actor.GetType().GetProperty("State", Members);
+        if (property is not null && property.GetIndexParameters().Length == 0) return property.GetValue(actor);
+
+        var described = new Dictionary<string, object?>(StringComparer.Ordinal);
+        var framework = typeof(IActor).Assembly;
+
+        for (var type = actor.GetType(); type is not null && type.Assembly != framework; type = type.BaseType)
+        {
+            foreach (var field in type.GetFields(System.Reflection.BindingFlags.Instance |
+                                                 System.Reflection.BindingFlags.NonPublic |
+                                                 System.Reflection.BindingFlags.Public |
+                                                 System.Reflection.BindingFlags.DeclaredOnly))
+            {
+                // A property's backing field is reported under the property's name, because that is
+                // the name whoever wrote the actor would recognise.
+                var name = field.Name;
+                if (name.StartsWith('<') && name.Contains(">k__BackingField", StringComparison.Ordinal))
+                    name = name[1..name.IndexOf('>', StringComparison.Ordinal)];
+
+                described.TryAdd(name, field.GetValue(actor));
+            }
+        }
+
+        return described.Count == 0 ? null : described;
+    }
+
+    /// <summary>
+    /// Lenient on purpose: this serializes types nobody wrote for a serializer.
+    /// </summary>
+    private static readonly JsonSerializerOptions InspectionJson = new()
+    {
+        WriteIndented = false,
+        IncludeFields = true,
+        ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles,
+        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
+    };
 
     /// <summary>Replaces the actor instance in place. The address, mailbox and children survive.</summary>
     private async Task<bool> RestartAsync(Exception cause, CancellationToken token)

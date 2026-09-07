@@ -304,6 +304,25 @@ konstruktor diselesaikan dari container. Tanpa itu, actor butuh konstruktor tanp
 
 Inilah perbedaan antara actor yang bisa di-unit-test dan actor yang meraih variabel statis.
 
+## Menanyakan isi sebuah actor
+
+```csharp
+var inspected = await system.InspectAsync(ActorId.For<WalletActor>("acc-1"));
+Console.WriteLine(inspected.State);   // JSON
+```
+
+Tanpa ini, menjawab satu pertanyaan tentang actor yang sedang berjalan berarti menulis pesan
+khusus, menanganinya, lalu mendaftarkan keduanya — masuk akal untuk pertanyaan yang sudah Anda
+duga, tidak berguna pada pukul tiga pagi untuk pertanyaan yang tidak Anda duga.
+
+Ini pesan biasa: dirutekan oleh ring, jadi ia menjawab untuk actor di node mana pun, dan ditangani
+di loop milik actor itu sendiri, jadi ia mengantre di belakang apa pun yang sedang dikerjakan actor
+tersebut dan tidak pernah membaca state yang sedang setengah ditulis sebuah handler. Actor yang
+tidak menjawab berarti sedang sibuk atau macet, dan timeout-nya menyatakan itu.
+
+`IInspectable` membuat actor menentukan sendiri apa yang ditampilkannya — lihat
+[Perkakas](09-perkakas.md#actors) untuk apa yang dilakukan konsol dan endpoint HTTP terhadapnya.
+
 ## Konkurensi, dinyatakan dengan tepat
 
 **Dijamin:** satu aktivasi per alamat per cluster; satu pesan pada satu waktu dalam satu aktivasi;

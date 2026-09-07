@@ -300,6 +300,25 @@ constructor.
 
 This is the difference between an actor you can unit test and one that reaches for a static.
 
+## Asking an actor what it is holding
+
+```csharp
+var inspected = await system.InspectAsync(ActorId.For<WalletActor>("acc-1"));
+Console.WriteLine(inspected.State);   // JSON
+```
+
+Answering a question about a running actor otherwise means writing a message for it, handling it
+and registering both — fine for a question you knew you would ask, useless at three in the morning
+for one you did not.
+
+It is an ordinary message: routed by the ring, so it answers for an actor on any node, and handled
+on the actor's own loop, so it queues behind whatever that actor is doing and never reads state a
+handler is halfway through writing. An actor that does not answer is one that is busy or wedged,
+and the timeout says so.
+
+`IInspectable` lets an actor decide what it shows — see
+[Tooling](09-tooling.md#actors) for what the console and the HTTP endpoint make of it.
+
 ## Concurrency, stated precisely
 
 **Guaranteed:** one activation per address per cluster; one message at a time within an activation;

@@ -135,7 +135,8 @@ works and something automated proves it** — not when the code exists.
 - [x] `ActorNet.AspNetCore`: a cluster-aware health check, read-only diagnostics endpoints, and a
       readiness filter
 - [x] Cross-node metrics aggregation - every peer asked for its own counters, silent ones named
-- [ ] Actor inspector — read an actor's state without writing a query message
+- [x] Actor inspector — read an actor's state without writing a query message; on the actor's own
+      loop, routed by the ring, `IInspectable` for actors that would rather not show everything
 
 ## Clients
 
@@ -189,6 +190,19 @@ works and something automated proves it** — not when the code exists.
 
 Ticking a box means it works, not that it is finished. These are the caveats worth carrying:
 
+- **One intermittent test failure is fixed by reasoning, not by reproduction.**
+  `WarmHandoffTests.TheSuccessorHasTheActorsBeforeTheFirstMessageArrives` failed about one run in
+  five. Measurement ruled out the obvious causes - the warm frames are always sent, always arrive
+  and always activate - and found a defect that explains it: a node whose ring still held the
+  departing node would deactivate the actors it had just inherited as soon as the failure detector
+  marked that node unreachable. That defect is now fixed and covered by
+  `AnActorIsNotHandedToAnOwnerNobodyCanReach`, which fails deterministically without the fix. The
+  flake itself has not recurred in 27 consecutive suite runs, which is evidence and not proof.
+- **A frame queued for a peer can still be dropped at shutdown.** `PeerConnection.DisposeAsync`
+  cancels its writer loop before the loop drains the queue. The leave announcement and the warm
+  handoff are both written straight to a socket to sidestep this, because both are sent moments
+  before the transport closes; everything else still relies on the loop winning the race, which it
+  ordinarily does. The right fix is to drain before cancelling, and it has not been made.
 - **The console's actor list is still one node's.** Counters are now collected from every peer;
   the per-actor table is not, and pulling a row per actor from twenty peers on a refresh would cost
   more than everything else on the wire put together.

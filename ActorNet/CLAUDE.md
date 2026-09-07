@@ -131,6 +131,11 @@ Each of these is now covered by a test. Do not reintroduce them.
 - **The first node of a cluster has no seeds**, so it needs `Cluster.Enabled` set explicitly
   (`--cluster` on the CLI). Without it, clustering stays off and it never gossips, and peers mark a
   healthy seed node unreachable.
+- **Rebalancing must not hand an actor to an owner nobody can reach.** An unreachable member stays
+  on the ring on purpose, so the owner of a key can be a node that is not answering. Deactivating on
+  that membership change handed the actor to nobody: gone here, unreachable there, held by no one
+  until the ring moved again. `OwnerIsReachable` gates it, and it is what made the warm-handoff test
+  fail one run in five.
 - **Razor string component parameters need `@`.** `Value="actor.Id"` passes the literal text;
   `Value="@actor.Id"` passes the value. Non-string parameters are expressions either way, which is
   why this only broke some of them.

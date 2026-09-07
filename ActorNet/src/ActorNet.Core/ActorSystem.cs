@@ -119,6 +119,8 @@ public sealed class ActorSystem : IActorSystem
         Serializer.Types.Register<Terminated>();
         Serializer.Types.Register<NodeStatus>();
         Serializer.Types.Register<Warm>();
+        Serializer.Types.Register<Inspect>();
+        Serializer.Types.Register<Inspected>();
         MetricsCollector = new MetricsCollector(Options.NodeId);
         _cluster = new ClusterMembership(
             Options.NodeId,
@@ -456,6 +458,18 @@ public sealed class ActorSystem : IActorSystem
             _pendingAsks.TryRemove(correlationId, out _);
         }
     }
+
+    /// <summary>
+    /// Asks an actor what it is holding, wherever in the cluster it is.
+    /// </summary>
+    /// <remarks>
+    /// Answering a question about an actor otherwise means writing a message for the purpose,
+    /// handling it and registering both - fine for a question you knew you would ask, useless for
+    /// one you did not. This activates the actor if it is not already running, which is the same
+    /// thing any other message would do.
+    /// </remarks>
+    public Task<Inspected> InspectAsync(ActorId id, TimeSpan? timeout = null, CancellationToken cancellationToken = default) =>
+        AskAsync<Inspected>(id, new Inspect(), timeout, cancellationToken);
 
     /// <inheritdoc />
     public async Task DeactivateAsync(ActorId id, CancellationToken cancellationToken = default) =>
@@ -984,6 +998,13 @@ public sealed class ActorSystem : IActorSystem
         foreach (var (id, lazy) in _cells)
         {
             if (!lazy.IsValueCreated || _cluster.IsLocal(id)) continue;
+
+            // A handoff needs somewhere to hand to. An unreachable owner is still on the ring -
+            // deliberately - so without this the actor is deactivated here and unreachable there,
+            // and nobody holds it until the ring moves again. Keeping it costs nothing and the next
+            // membership change settles it either way.
+            if (!_cluster.OwnerIsReachable(id)) continue;
+
             if (lazy.Value.RequestStop(DeactivationReason.Rebalanced)) moved++;
         }
 

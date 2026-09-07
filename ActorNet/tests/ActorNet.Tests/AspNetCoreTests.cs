@@ -114,6 +114,41 @@ public sealed class AspNetCoreTests
     }
 
     [Fact]
+    public async Task TheInspectEndpointShowsAnActorsState()
+    {
+        var (app, client) = await StartAsync();
+        await using var _ = app;
+
+        var system = app.Services.GetRequiredService<IActorSystem>();
+        var id = ActorId.For<CounterActor>("web-inspect");
+
+        await system.TellAsync(id, new Add(12));
+        await system.AskAsync<Total>(id, new GetTotal(), TimeSpan.FromSeconds(10));
+
+        var body = await client.GetFromJsonAsync<JsonElement>(
+            $"/actornet/actors/{id.Type}/{id.Key}", TestContext.Current.CancellationToken);
+
+        Assert.Equal(id.ToString(), body.GetProperty("actor").GetString());
+
+        // Inline rather than a string of JSON nested inside JSON, which every reader would then
+        // have to undo.
+        Assert.Equal(12, body.GetProperty("state").GetProperty("_total").GetInt32());
+    }
+
+    [Fact]
+    public async Task InspectingAnUnknownActorTypeIs404()
+    {
+        var (app, client) = await StartAsync();
+        await using var _ = app;
+
+        var response = await client.GetAsync("/actornet/actors/NoSuchActor/anything", TestContext.Current.CancellationToken);
+
+        // The caller asked for something that does not exist here, which is a fact about the
+        // request rather than a failure of the node.
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
     public async Task AReadinessFilterLetsTrafficThroughWhileTheNodeIsServing()
     {
         var (app, client) = await StartAsync(a =>

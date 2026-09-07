@@ -112,7 +112,28 @@ against 26 active actors, which is what caught the bug.
 
 ![Console actors](../images/console-actors.png)
 
-Every activation on this node, filterable, with a **Deactivate** button.
+Every activation on this node, filterable, with **Inspect** and **Deactivate** buttons.
+
+**Inspect** asks the actor what it is holding and expands a panel under its row. The answer is
+produced on the actor's own mailbox loop, so it is never state a handler is halfway through
+writing — and an actor that is wedged does not answer at all, which is itself the useful answer.
+
+An actor with a `State` — anything deriving from `PersistentActor` or `EventSourcedActor` — reports
+that. One without reports the fields its own class declares, not the framework's: a mailbox and a
+handler table are not what you asked about. An actor that holds something it would rather not show
+implements `IInspectable` and says what it wants seen instead:
+
+```csharp
+public sealed class SessionActor : ReceiveActor, IInspectable
+{
+    private readonly string _token;
+    private int _requests;
+
+    public object? Inspect() => new { requests = _requests, tokenLength = _token.Length };
+}
+```
+
+Returning `null` from `Inspect()` shows nothing at all.
 
 Deactivating is not destructive: it runs the deactivation hook, where a persistent actor flushes,
 and removes the actor from this node. The address stays valid and the next message activates a
@@ -234,11 +255,17 @@ liveness probe. Three outcomes:
 Unreachable peers are degraded rather than unhealthy on purpose. Unreachable means "missed a few
 beats, still on the ring", and restarting a node over that turns a blip into a rebalance.
 
-**`MapActorNetDiagnostics` exposes two read-only endpoints** — `/actornet/cluster` for the
-membership and each member's share of the keyspace, `/actornet/metrics` for the counters. It is what
-the console shows, for a deployment that has no console. Nothing is authorized by default and it
-exposes node addresses and actor keys, so the returned group takes `RequireAuthorization()` like any
-other.
+**`MapActorNetDiagnostics` exposes read-only endpoints** — `/actornet/cluster` for the membership
+and each member's share of the keyspace, `/actornet/metrics` for the counters, and
+`/actornet/actors/{type}/{key}` for one actor's state. It is what the console shows, for a
+deployment that has no console. Nothing is authorized by default and it exposes node addresses and
+actor keys, so the returned group takes `RequireAuthorization()` like any other.
+
+The actor endpoint is the console's **Inspect** over HTTP, routed by the ring like any other
+message, so it answers for an actor on any node. It activates the actor if it is not already
+running — the same thing any message would do. An unregistered actor type is a `404`; an actor that
+does not answer within five seconds is a `504`, which usually means it is busy rather than gone,
+because an inspection queues behind whatever it is handling.
 
 **`RequireActorNetReady()` answers 503 with a `Retry-After`** while the node is off the ring, for
 the window between it deciding it is done and the load balancer noticing.

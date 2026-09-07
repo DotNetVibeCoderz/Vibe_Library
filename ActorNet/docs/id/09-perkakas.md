@@ -115,7 +115,30 @@ node pemilik key-nya tidak sedang berjalan di sini. Salah menangani itu membuat 
 
 ![Halaman actors](../images/console-actors.png)
 
-Setiap aktivasi di node ini, bisa disaring, dengan tombol **Deactivate**.
+Setiap aktivasi di node ini, bisa disaring, dengan tombol **Inspect** dan **Deactivate**.
+
+**Inspect** menanyakan kepada actor apa yang sedang dipegangnya, lalu membuka panel di bawah
+barisnya. Jawabannya dihasilkan di mailbox loop milik actor itu sendiri, jadi ia tidak pernah
+membaca state yang sedang setengah ditulis sebuah handler — dan actor yang macet tidak menjawab sama
+sekali, yang justru merupakan jawaban yang berguna.
+
+Actor yang punya `State` — apa pun turunan `PersistentActor` atau `EventSourcedActor` — melaporkan
+state itu. Yang tidak punya melaporkan field yang dideklarasikan kelasnya sendiri, bukan milik
+framework: mailbox dan tabel handler bukan yang Anda tanyakan. Actor yang memegang sesuatu yang tidak
+ingin ditampilkannya mengimplementasikan `IInspectable` dan menyebutkan sendiri apa yang boleh
+dilihat:
+
+```csharp
+public sealed class SessionActor : ReceiveActor, IInspectable
+{
+    private readonly string _token;
+    private int _requests;
+
+    public object? Inspect() => new { requests = _requests, tokenLength = _token.Length };
+}
+```
+
+Mengembalikan `null` dari `Inspect()` berarti tidak menampilkan apa pun.
 
 Menonaktifkan bukan tindakan destruktif: ia menjalankan hook deaktivasi, tempat actor persisten
 menuliskan state-nya, lalu menghapus actor itu dari node ini. Alamatnya tetap sah dan pesan berikutnya
@@ -241,11 +264,18 @@ Peer yang tak terjangkau sengaja dinilai degraded, bukan unhealthy. Tak terjangk
 beberapa denyut, masih di ring", dan me-restart node karena itu mengubah gangguan sesaat menjadi
 rebalance.
 
-**`MapActorNetDiagnostics` membuka dua endpoint baca-saja** — `/actornet/cluster` untuk keanggotaan
-dan porsi keyspace tiap anggota, `/actornet/metrics` untuk pencacahnya. Isinya sama dengan yang
-ditampilkan konsol, untuk penerapan yang tidak punya konsol. Tidak ada otorisasi bawaan dan ia
-memaparkan alamat node serta kunci actor, jadi grup yang dikembalikannya menerima
-`RequireAuthorization()` seperti grup mana pun.
+**`MapActorNetDiagnostics` membuka beberapa endpoint baca-saja** — `/actornet/cluster` untuk
+keanggotaan dan porsi keyspace tiap anggota, `/actornet/metrics` untuk pencacahnya, dan
+`/actornet/actors/{type}/{key}` untuk state satu actor. Isinya sama dengan yang ditampilkan konsol,
+untuk penerapan yang tidak punya konsol. Tidak ada otorisasi bawaan dan ia memaparkan alamat node
+serta kunci actor, jadi grup yang dikembalikannya menerima `RequireAuthorization()` seperti grup
+mana pun.
+
+Endpoint actor itu adalah **Inspect** milik konsol lewat HTTP, dirutekan oleh ring seperti pesan
+lain, jadi ia menjawab untuk actor di node mana pun. Ia mengaktifkan actor itu bila belum berjalan —
+persis yang dilakukan pesan apa pun. Tipe actor yang tidak terdaftar menghasilkan `404`; actor yang
+tidak menjawab dalam lima detik menghasilkan `504`, yang biasanya berarti ia sibuk dan bukan hilang,
+karena inspeksi mengantre di belakang apa pun yang sedang ditanganinya.
 
 **`RequireActorNetReady()` menjawab 503 dengan `Retry-After`** selama node berada di luar ring, untuk
 jeda antara node memutuskan ia sudah selesai dan load balancer menyadarinya.

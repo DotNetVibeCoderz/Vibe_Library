@@ -1,5 +1,6 @@
 // Dibuat oleh Gravicode Studios, dipimpin oleh Kang Fadhil.
 
+using ActorNet.Client;
 using ActorNet.Cluster;
 
 namespace ActorNet.Tests;
@@ -21,6 +22,46 @@ public sealed class NodeLossTests
         Assert.NotNull(system.Transport);
         await system.Transport.StopAsync(CancellationToken.None);
         await system.Transport.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task AnActorIsNotHandedToAnOwnerNobodyCanReach()
+    {
+        await using var harness = new TestHarness();
+
+        var holder = await harness.NetworkedAsync("hold-a", seeds: []);
+        var doomed = await harness.NetworkedAsync("hold-b", seeds: [$"127.0.0.1:{holder.BoundPort}"]);
+
+        await TestHarness.AssertEventuallyAsync(
+            () => holder.Cluster.Members.Count == 2 && doomed.Cluster.Members.Count == 2,
+            "the cluster should converge", TimeSpan.FromSeconds(15));
+
+        await TestHarness.AssertRingsAgreeAsync(holder, doomed);
+
+        var theirs = Enumerable.Range(0, 2000)
+            .Select(i => ActorId.For<CounterActor>($"hold-{i}"))
+            .First(id => holder.Cluster.OwnerOf(id) == "hold-b");
+
+        // Through a client, because a client writes to the node it is connected to and that node
+        // delivers locally rather than forwarding. That is how an actor comes to be running on a
+        // node the ring says does not own it - the same way a warm handoff leaves them.
+        await using var client = new ActorNetClient("127.0.0.1", holder.BoundPort);
+        client.RegisterMessage<Add>();
+        await client.TellAsync(theirs, new Add(3));
+
+        await TestHarness.AssertEventuallyAsync(() => holder.LocalActors.Contains(theirs),
+            "the client's message should have activated the actor where it was sent");
+
+        await KillAsync(doomed);
+
+        // Unreachable, not Down: still on the ring, still the owner, and nobody can talk to it.
+        await TestHarness.AssertEventuallyAsync(
+            () => holder.Cluster.Members.Single(m => m.NodeId == "hold-b").Status == MemberStatus.Unreachable,
+            "the holder should notice the owner has gone quiet", TimeSpan.FromSeconds(15));
+
+        // Rebalancing on that change used to deactivate this actor, handing it to a node nobody can
+        // reach: gone here, unreachable there, held by nobody.
+        Assert.Contains(theirs, holder.LocalActors);
     }
 
     [Fact]
