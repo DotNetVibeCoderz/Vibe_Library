@@ -160,6 +160,36 @@ public sealed class ActorSystemOptions
     /// </remarks>
     public int WarmHandoffLimit { get; set; } = 1000;
 
+    /// <summary>
+    /// Most keys a node tells each successor it is holding, so an unplanned loss can be warmed too.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <see cref="WarmHandoffLimit"/> only covers a node that leaves politely, because only that
+    /// node knows what it was holding. When a node is lost without warning, the survivors inherit
+    /// its keys and have no idea which of them were live - so every one of them pays a read at the
+    /// moment traffic arrives, which is exactly when the cluster is already one node short.
+    /// </para>
+    /// <para>
+    /// Telling each successor in advance fixes that, at the cost of a periodic message naming keys.
+    /// Off by default for that reason: unlike the warm handoff, which costs nothing until a
+    /// shutdown, this is traffic a healthy cluster pays all the time. Zero turns it off.
+    /// </para>
+    /// <para>
+    /// The digest is advice, not a directory. It is a snapshot of what one node held when it last
+    /// spoke, so it can name an actor that has since deactivated - warming that one costs a read
+    /// and nothing else - and it can miss one activated since. It is never consulted for routing.
+    /// </para>
+    /// </remarks>
+    public int InheritanceDigestLimit { get; set; }
+
+    /// <summary>How often a node tells its successors what it is holding.</summary>
+    /// <remarks>
+    /// The cost of being wrong is one cold activation, so this is deliberately slow. It trades
+    /// freshness for bandwidth, and freshness is the cheaper of the two to lose.
+    /// </remarks>
+    public TimeSpan InheritanceDigestInterval { get; set; } = TimeSpan.FromSeconds(15);
+
     /// <summary>Cluster membership and placement settings.</summary>
     public ClusterOptions Cluster { get; set; } = new();
 
@@ -198,6 +228,10 @@ public sealed class ActorSystemOptions
     {
         if (string.IsNullOrWhiteSpace(NodeId))
             throw new ArgumentException("NodeId must be set; it is the cluster's identity for this process.", nameof(NodeId));
+        if (InheritanceDigestLimit < 0)
+            throw new ArgumentOutOfRangeException(nameof(InheritanceDigestLimit), InheritanceDigestLimit, "Use zero to turn the digest off, not a negative number.");
+        if (InheritanceDigestLimit > 0 && InheritanceDigestInterval <= TimeSpan.Zero)
+            throw new ArgumentOutOfRangeException(nameof(InheritanceDigestInterval), InheritanceDigestInterval, "An interval of zero publishes the digest in a tight loop.");
         if (Port is < 0 or > 65535)
             throw new ArgumentOutOfRangeException(nameof(Port), Port, "Port must be between 0 and 65535.");
         if (AdvertisedPort is < 1 or > 65535)

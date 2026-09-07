@@ -339,6 +339,33 @@ rest activate on demand.
 
 That makes a rolling restart both safe and warm.
 
+### When a node is lost instead
+
+None of that helps when a node is killed outright, because only that node knew what it was holding.
+The survivors inherit its keys and have no idea which were live, so every one of them pays a read at
+the moment traffic arrives — which is exactly when the cluster is already one node short.
+
+The only way to know is to have been told in advance:
+
+```csharp
+options.InheritanceDigestLimit    = 1000;                      // 0 is the default: off
+options.InheritanceDigestInterval = TimeSpan.FromSeconds(15);
+```
+
+Each node periodically tells each *successor* which of its keys that successor would inherit — per
+successor, not broadcast, so a peer hears only about the keys it would actually take. When a node
+drops off the ring, whoever holds a digest for it activates the keys that are now theirs.
+
+Off by default, and for a reason worth stating: unlike the warm handoff, which costs nothing until a
+shutdown, this is traffic a healthy cluster pays continuously, in proportion to how many actors it
+holds. The cap is per successor rather than in total, so one busy successor cannot crowd the others
+out of the digest.
+
+**It is advice, not a directory.** A digest is a snapshot of what one node held when it last spoke,
+so it can name an actor that has since deactivated — warming that one costs a read and nothing else
+— and it can miss one activated since. Nothing routes by it. The ring decides ownership, and a
+second opinion about ownership is the last thing a cluster needs.
+
 ### One node at a time
 
 Nothing above stops two nodes stopping at the same moment. The keys of the first move to the second

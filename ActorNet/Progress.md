@@ -75,8 +75,9 @@ works and something automated proves it** — not when the code exists.
 - [x] A denominator both halves share: the agreed membership is gossiped with an epoch, raised
       only by a node that can see the whole cluster, so two sides cannot both be a majority
 - [x] `PreferenceList` has a user: a departing node finds each key's successor with it
-- [ ] Eagerly activating inherited keys after an unplanned loss; the survivors do not know
-      which keys the dead node held
+- [x] Eagerly activating inherited keys after an unplanned loss: each node tells its successors
+      which of its keys they would inherit, capped per successor and opt-in
+      (`InheritanceDigestLimit`), because it is traffic a healthy cluster pays continuously
 - [x] Seed names resolved to every address behind them, for a Kubernetes headless service
 - [ ] Watching the Kubernetes API for members, rather than resolving a name each attempt
 

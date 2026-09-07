@@ -350,6 +350,36 @@ banyak; melewati batas itu, sisanya aktif saat diminta.
 
 Dengan begitu restart bergilir jadi aman sekaligus hangat.
 
+### Ketika sebuah node justru hilang
+
+Semua itu tidak menolong ketika sebuah node mati mendadak, karena hanya node itu yang tahu apa yang
+sedang dipegangnya. Node-node yang selamat mewarisi kunci-kuncinya tanpa tahu mana yang tadinya
+hidup, jadi setiap kunci membayar satu pembacaan tepat saat lalu lintas datang — persis ketika
+cluster sudah kekurangan satu node.
+
+Satu-satunya cara untuk tahu adalah diberi tahu sebelumnya:
+
+```csharp
+options.InheritanceDigestLimit    = 1000;                      // 0 adalah bawaan: mati
+options.InheritanceDigestInterval = TimeSpan.FromSeconds(15);
+```
+
+Setiap node secara berkala memberi tahu tiap *penerusnya* kunci mana miliknya yang akan diwarisi
+penerus itu — per penerus, bukan disiarkan, jadi sebuah peer hanya mendengar kunci yang memang akan
+diambilnya. Ketika sebuah node lepas dari ring, siapa pun yang memegang digest-nya mengaktifkan
+kunci-kunci yang kini menjadi miliknya.
+
+Mati secara bawaan, dan alasannya perlu disebut: tidak seperti warm handoff yang tidak berbiaya
+sampai ada shutdown, ini adalah lalu lintas yang dibayar cluster sehat terus-menerus, sebanding
+dengan jumlah aktor yang ditahannya. Batasnya per penerus, bukan total, supaya satu penerus yang
+sibuk tidak menggusur penerus lain dari digest.
+
+**Ini nasihat, bukan direktori.** Digest adalah potret apa yang dipegang sebuah node saat terakhir
+berbicara, jadi ia bisa menyebut aktor yang sejak itu sudah dinonaktifkan — menghangatkan yang satu
+itu hanya berbiaya satu pembacaan — dan bisa melewatkan aktor yang baru aktif sesudahnya. Tidak ada
+yang dirutekan berdasarkan digest. Ring yang menentukan kepemilikan, dan pendapat kedua tentang
+kepemilikan adalah hal terakhir yang dibutuhkan sebuah cluster.
+
 ### Satu node pada satu waktu
 
 Tidak ada satu pun di atas yang mencegah dua node berhenti pada saat bersamaan. Kunci milik node

@@ -50,6 +50,16 @@ public enum WireKind : byte
     /// <see cref="NodeStatusRequest"/>. The payload says which of the two it is.
     /// </remarks>
     LeaveTokenRequest = 10,
+
+    /// <summary>
+    /// Tells one node which keys this node is holding that it would inherit. Never answered.
+    /// </summary>
+    /// <remarks>
+    /// Addressed to a node rather than an actor, like the two above. It is advice about what to
+    /// warm if this node disappears, and is never consulted for routing - the ring decides that,
+    /// and a second opinion about ownership is the last thing a cluster needs.
+    /// </remarks>
+    KeyDigest = 11,
 }
 
 /// <summary>One frame, as it travels between nodes.</summary>

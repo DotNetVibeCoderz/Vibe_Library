@@ -59,6 +59,11 @@ public sealed class ActorSystem : IActorSystem
     /// </remarks>
     internal ITransport? Transport => _transport;
     private Task? _sweeper;
+    private Task? _digests;
+
+    // What each peer last said it was holding that this node would inherit. Advice only: nothing
+    // here is consulted for routing, and an entry is dropped the moment its node is gone.
+    private readonly ConcurrentDictionary<string, IReadOnlyList<string>> _inheritable = new(StringComparer.Ordinal);
     private int _started;
 
     /// <summary>Options this node was built with. Mutating them after start has no effect.</summary>
@@ -119,6 +124,7 @@ public sealed class ActorSystem : IActorSystem
         Serializer.Types.Register<Terminated>();
         Serializer.Types.Register<NodeStatus>();
         Serializer.Types.Register<Warm>();
+        Serializer.Types.Register<KeyDigest>();
         Serializer.Types.Register<LeaveRequest>();
         Serializer.Types.Register<LeaveDecision>();
         Serializer.Types.Register<Inspect>();
@@ -184,6 +190,9 @@ public sealed class ActorSystem : IActorSystem
         }
 
         _sweeper = Task.Run(() => SweepLoopAsync(_shutdown.Token), CancellationToken.None);
+
+        if (Options.InheritanceDigestLimit > 0 && Options.Cluster.Enabled)
+            _digests = Task.Run(() => DigestLoopAsync(_shutdown.Token), CancellationToken.None);
         _logger.LogInformation("Node {NodeId} started on {Host}:{Port}.", NodeId, Options.Host, BoundPort);
     }
 
@@ -925,6 +934,19 @@ public sealed class ActorSystem : IActorSystem
                 return;
             }
 
+            case WireKind.KeyDigest:
+            {
+                var digest = frame.Body as KeyDigest
+                    ?? (frame.MessageAlias is { } digestAlias && frame.Payload is { } digestPayload
+                        ? Serializer.Deserialize(digestAlias, digestPayload) as KeyDigest
+                        : null);
+
+                // Kept under the name the sender gave rather than the frame's, because the digest
+                // is about that node's keys and nothing else makes it addressable later.
+                if (digest is { Node.Length: > 0 }) _inheritable[digest.Node] = digest.Keys;
+                return;
+            }
+
             case WireKind.LeaveTokenRequest:
             {
                 if (frame.CorrelationId is not { } correlation || frame.FromNode is not { Length: > 0 } asker || _transport is null)
@@ -1087,6 +1109,107 @@ public sealed class ActorSystem : IActorSystem
         _logger.LogWarning("Dead letter for {Target} ({MessageType}): {Reason} - {Detail}", target, messageType, reason, detail);
     }
 
+    /// <summary>
+    /// Tells each successor which of this node's keys it would inherit.
+    /// </summary>
+    /// <remarks>
+    /// Sent per successor rather than broadcast, so a peer hears only about the keys it would
+    /// actually take. In a cluster of many nodes that is most of the saving: the whole directory
+    /// broadcast to everybody would be the same information N times over, and useful once.
+    /// </remarks>
+    private async Task DigestLoopAsync(CancellationToken cancellationToken)
+    {
+        using var timer = new PeriodicTimer(Options.InheritanceDigestInterval);
+        while (true)
+        {
+            try
+            {
+                if (!await timer.WaitForNextTickAsync(cancellationToken).ConfigureAwait(false)) return;
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
+
+            try { await PublishKeyDigestsAsync(cancellationToken).ConfigureAwait(false); }
+            catch (Exception ex) { _logger.LogDebug(ex, "Publishing the key digest failed."); }
+        }
+    }
+
+    private async Task PublishKeyDigestsAsync(CancellationToken cancellationToken)
+    {
+        if (_transport is null || _cluster.Ring.Nodes.Count <= 1) return;
+
+        var ring = _cluster.Ring;
+        var limit = Options.InheritanceDigestLimit;
+        var bySuccessor = new Dictionary<string, List<string>>(StringComparer.Ordinal);
+
+        foreach (var (id, lazy) in _cells)
+        {
+            if (!lazy.IsValueCreated) continue;
+
+            var successor = ring.PreferenceList(id.ToString(), 2)
+                .FirstOrDefault(node => !string.Equals(node, NodeId, StringComparison.Ordinal));
+
+            if (successor is null) continue;
+
+            var keys = bySuccessor.TryGetValue(successor, out var existing) ? existing : bySuccessor[successor] = [];
+
+            // Capped per successor rather than in total, so one busy successor cannot crowd the
+            // others out of the digest entirely.
+            if (keys.Count < limit) keys.Add(id.ToString());
+        }
+
+        foreach (var (successor, keys) in bySuccessor)
+        {
+            var (alias, payload) = Serializer.Serialize(new KeyDigest(NodeId, keys));
+            var frame = new WireEnvelope
+            {
+                Kind = WireKind.KeyDigest,
+                FromNode = NodeId,
+                MessageAlias = alias,
+                Payload = payload,
+            };
+
+            try { await _transport.SendAsync(successor, frame, cancellationToken).ConfigureAwait(false); }
+            catch (Exception ex) { _logger.LogDebug(ex, "Could not send a key digest to {NodeId}.", successor); }
+        }
+    }
+
+    /// <summary>
+    /// Activates the keys a node that has gone was holding, without waiting for traffic.
+    /// </summary>
+    /// <remarks>
+    /// Only the keys that now belong here, and only ones not already running. A key that has moved
+    /// somewhere else is that node's to warm, and it heard the same digest.
+    /// </remarks>
+    private void InheritFrom(string node)
+    {
+        if (!_inheritable.TryRemove(node, out var keys)) return;
+
+        var warmed = 0;
+        foreach (var key in keys)
+        {
+            if (!ActorId.TryParse(key, out var id) || !_cluster.IsLocal(id) || _cells.ContainsKey(id)) continue;
+
+            // Through the ordinary send path, so an unregistered type fails the way it always does
+            // rather than being swallowed by a background loop. Fire and forget: this is warming,
+            // and a failure costs a cold activation later rather than anything worse.
+            _ = TellAsync(id, new Warm(), cancellationToken: CancellationToken.None).AsTask().ContinueWith(
+                static (task, state) =>
+                {
+                    var (logger, actor) = ((ILogger, ActorId))state!;
+                    logger.LogDebug(task.Exception, "Could not warm {ActorId} inherited from a lost node.", actor);
+                },
+                (_logger, id), CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
+
+            warmed++;
+        }
+
+        if (warmed > 0)
+            _logger.LogInformation("Activating {Count} actor(s) inherited from {NodeId}, which was lost.", warmed, node);
+    }
+
     private async Task SweepLoopAsync(CancellationToken cancellationToken)
     {
         using var timer = new PeriodicTimer(Options.SweepInterval);
@@ -1142,7 +1265,19 @@ public sealed class ActorSystem : IActorSystem
 
     private void OnMembershipChanged(IReadOnlyList<ClusterMember> members)
     {
-        if (!Options.Cluster.RebalanceOnMembershipChange || _shutdown.IsCancellationRequested) return;
+        if (_shutdown.IsCancellationRequested) return;
+
+        // A node this one holds a digest for that is no longer on the ring has been lost, or has
+        // left. Either way its keys are somebody's now, and this node knows which of them are its
+        // own - which is the whole point of having been told in advance.
+        if (Options.InheritanceDigestLimit > 0)
+        {
+            var ring = _cluster.Ring.Nodes;
+            foreach (var node in _inheritable.Keys)
+                if (!ring.Contains(node, StringComparer.Ordinal)) InheritFrom(node);
+        }
+
+        if (!Options.Cluster.RebalanceOnMembershipChange) return;
 
         var moved = 0;
         foreach (var (id, lazy) in _cells)
