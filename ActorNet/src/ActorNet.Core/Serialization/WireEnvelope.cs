@@ -107,6 +107,30 @@ public sealed class WireEnvelope
     public List<WireMember>? Members { get; set; }
 
     /// <summary>
+    /// The membership every node last agreed on, and how many times it has been restated.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Carried on gossip so that both halves of a future partition measure themselves against the
+    /// same denominator. Each node used to freeze its own snapshot of "everyone was healthy when I
+    /// last looked", and two nodes can take that snapshot at different moments - so a cluster that
+    /// grew shortly before a partition could have one side counting four members and the other
+    /// five, and both sides then finding themselves a majority.
+    /// </para>
+    /// <para>
+    /// The epoch is what settles a disagreement: higher wins, and only a node that can see the
+    /// whole cluster raises it. During a partition nobody can, so neither side moves and both keep
+    /// measuring against the last set they held in common.
+    /// </para>
+    /// </remarks>
+    [JsonPropertyName("ae")]
+    public long AgreedEpoch { get; set; }
+
+    /// <inheritdoc cref="AgreedEpoch" />
+    [JsonPropertyName("am")]
+    public List<string>? AgreedMembers { get; set; }
+
+    /// <summary>
     /// W3C <c>traceparent</c> of the span that sent this frame, when one was active.
     /// </summary>
     /// <remarks>

@@ -45,6 +45,7 @@ public sealed class ClusterMembership : IClusterView, IAsyncDisposable
     private readonly HashSet<string> _departed = new(StringComparer.Ordinal);
     private readonly LeaveTokenHolder _leaveToken = new(TimeProvider.System);
     private string[] _lastAgreedMembership = [];
+    private long _agreedEpoch;
     private string _partitionSignature = string.Empty;
     private DateTimeOffset _partitionSince;
     private bool _selfDowned;
@@ -133,6 +134,39 @@ public sealed class ClusterMembership : IClusterView, IAsyncDisposable
 
     /// <summary>Whether this node is the one that hands out the leave token.</summary>
     public bool IsCoordinator => string.Equals(Coordinator, SelfNodeId, StringComparison.Ordinal);
+
+    /// <summary>The membership every node last agreed on, and how many times it has been restated.</summary>
+    /// <remarks>
+    /// Exposed for the frames that carry it and for the tests that assert two nodes converged on
+    /// the same one. It is only meaningful next to its epoch, which is why they travel together.
+    /// </remarks>
+    internal (long Epoch, string[] Members) AgreedMembership => (_agreedEpoch, _lastAgreedMembership);
+
+    /// <summary>
+    /// Takes the agreed membership from a peer when the peer's is newer.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Higher epoch wins, and nothing else does - not a longer list, not a more recent frame. The
+    /// epoch is only ever raised by a node that can see every member it knows of, so a higher one
+    /// is evidence somebody had a complete view more recently than this node did.
+    /// </para>
+    /// <para>
+    /// This is the whole of the protocol between two halves of a partition, and it runs entirely
+    /// before the partition starts. Once the halves are cut off, neither can see a complete cluster
+    /// and neither raises the epoch, so both keep measuring against the last set they held in
+    /// common - which is what stops them both concluding they are the majority.
+    /// </para>
+    /// </remarks>
+    private void AdoptAgreed(long epoch, List<string>? members)
+    {
+        if (epoch <= _agreedEpoch || members is not { Count: > 0 }) return;
+
+        _agreedEpoch = epoch;
+        _lastAgreedMembership = members.OrderBy(id => id, StringComparer.Ordinal).ToArray();
+
+        _logger.LogDebug("Adopted agreed membership {Epoch}: {Members}.", epoch, string.Join(", ", _lastAgreedMembership));
+    }
 
     /// <summary>Answers a leave request, as the coordinator.</summary>
     public LeaveDecision DecideLeave(LeaveRequest request) => _leaveToken.Decide(request, _options.LeaveTokenLease);
@@ -414,6 +448,8 @@ public sealed class ClusterMembership : IClusterView, IAsyncDisposable
             Kind = WireKind.Gossip,
             FromNode = SelfNodeId,
             Members = _members.Values.Select(ToWire).ToList(),
+            AgreedEpoch = _agreedEpoch,
+            AgreedMembers = _lastAgreedMembership.Length == 0 ? null : [.. _lastAgreedMembership],
         };
 
         if (_selfDowned) return;
@@ -563,7 +599,18 @@ public sealed class ClusterMembership : IClusterView, IAsyncDisposable
             // Everything in sight is healthy, so this is the membership to measure a future
             // partition against. Measuring against what a side can currently see would let each
             // side call itself a majority of itself.
-            _lastAgreedMembership = reachable;
+            //
+            // Raised rather than simply assigned, and only when the set actually changes: the
+            // epoch is what lets a peer tell a newer agreement from an older one, and restating
+            // the same membership every beat would make every node's epoch a clock rather than a
+            // version.
+            if (!_lastAgreedMembership.SequenceEqual(reachable, StringComparer.Ordinal))
+            {
+                _lastAgreedMembership = reachable;
+                _agreedEpoch++;
+                _logger.LogInformation("Agreed membership {Epoch}: {Members}.", _agreedEpoch, string.Join(", ", reachable));
+            }
+
             _partitionSignature = string.Empty;
             return;
         }
@@ -658,11 +705,17 @@ public sealed class ClusterMembership : IClusterView, IAsyncDisposable
                     Kind = WireKind.JoinAck,
                     FromNode = SelfNodeId,
                     Members = _members.Values.Select(ToWire).ToList(),
+
+                    // A joining node starts with no agreed membership at all, which would let it
+                    // survive any partition until it had seen one full round. It is told here.
+                    AgreedEpoch = _agreedEpoch,
+                    AgreedMembers = _lastAgreedMembership.Length == 0 ? null : [.. _lastAgreedMembership],
                 };
 
             case WireKind.JoinAck:
             case WireKind.Gossip:
                 MergeMembers(frame.Members);
+                AdoptAgreed(frame.AgreedEpoch, frame.AgreedMembers);
                 return null;
 
             case WireKind.Leave:

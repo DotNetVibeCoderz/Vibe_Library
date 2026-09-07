@@ -77,6 +77,14 @@ public static class BinaryWireFormat
     /// </remarks>
     private const byte TagBinaryPayload = 13;
 
+    /// <summary>The agreed membership and its epoch, as one length-prefixed block.</summary>
+    /// <remarks>
+    /// One block rather than two fields, because the reader can only skip a field it does not know
+    /// if that field carries its own length. A pair of bare varints would be read as something else
+    /// entirely by a peer one version behind.
+    /// </remarks>
+    private const byte TagAgreed = 14;
+
     /// <summary>Encodes message bodies. Shared, because its per-type plans are worth keeping.</summary>
     private static readonly BinaryMessageCodec Codec = new();
 
@@ -147,6 +155,17 @@ public static class BinaryWireFormat
             }
         }
 
+        if (envelope.AgreedEpoch > 0 && envelope.AgreedMembers is { Count: > 0 } agreed)
+        {
+            var inner = new ArrayBufferWriter<byte>(64);
+            Varint(inner, (ulong)envelope.AgreedEpoch);
+            Varint(inner, (uint)agreed.Count);
+            foreach (var member in agreed) Text(inner, member);
+
+            Byte(buffer, TagAgreed);
+            Bytes(buffer, inner.WrittenSpan);
+        }
+
         Byte(buffer, EndOfFrame);
         return buffer.WrittenSpan.ToArray();
     }
@@ -203,6 +222,20 @@ public static class BinaryWireFormat
                 case TagError: envelope.Error = ReadText(source, ref at); break;
                 case TagTraceParent: envelope.TraceParent = ReadText(source, ref at); break;
                 case TagTraceState: envelope.TraceState = ReadText(source, ref at); break;
+                case TagAgreed:
+                {
+                    var block = ReadBytes(source, ref at);
+                    var inner = 0;
+                    envelope.AgreedEpoch = (long)ReadVarint(block, ref inner);
+
+                    var agreedCount = (int)ReadVarint(block, ref inner);
+                    var agreed = new List<string>(agreedCount);
+                    for (var i = 0; i < agreedCount; i++) agreed.Add(ReadText(block, ref inner) ?? string.Empty);
+
+                    envelope.AgreedMembers = agreed;
+                    break;
+                }
+
                 case TagMembers:
                     var count = (int)ReadVarint(source, ref at);
                     var members = new List<WireMember>(count);

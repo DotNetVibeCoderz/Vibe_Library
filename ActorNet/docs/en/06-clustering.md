@@ -225,6 +225,28 @@ actornet run --node-id b --host 10.0.1.6 --port 9000 --seed 10.0.1.5:9000 \
              --split-brain static-quorum --quorum 3
 ```
 
+#### The denominator both sides use
+
+A majority is a majority of something, and the something has to be the same on both sides of the
+cut. Each node keeps the membership the cluster last agreed on, and that agreement is gossiped with
+an **epoch**:
+
+```
+node-a: agreed 7 = [a, b, c, d, e]
+node-b: agreed 7 = [a, b, c, d, e]     higher epoch wins; nothing else does
+```
+
+Only a node that can see every member it knows of raises the epoch. That is the whole protocol
+between the halves, and all of it runs *before* the partition: once the cut is made, neither side
+can see a complete cluster, so neither raises the epoch and both keep the last set they held in
+common. A node that joins is told the current agreement in its join acknowledgement, because a node
+that has agreed nothing survives every partition.
+
+Without it the two sides can be asked different questions. A cluster that grew from four to five
+shortly before a partition could leave one side measuring two of four - an exact half, awarded to it
+by the lowest-node-id tiebreak - while the other measured three of five. Both sides win, and that is
+the split brain the strategy exists to prevent.
+
 The losing side takes itself off the ring and **stops**. That is not a failure to handle: a node
 that keeps serving actors it no longer owns is the thing the strategy exists to prevent. Rejoining
 means starting the node again.
@@ -656,9 +678,9 @@ cluster is carrying more than a peer can take.
 
 ## Known limits
 
-- **Split-brain resolution is off by default, and one-sided.** `KeepMajority` and `StaticQuorum`
-  are there, but each node decides alone from its own view; there is no protocol between the halves
-  to agree on who lost.
+- **Split-brain resolution is off by default.** `KeepMajority` and `StaticQuorum` are there and
+  each node still decides alone once the cut is made - but they now measure against a denominator
+  the whole cluster agreed on beforehand, so two sides cannot both find themselves a majority.
 - **Suspicion is per-node, and nothing reconciles two nodes that disagree.** Phi is measured
   against each peer's own history, so one node may call a peer unreachable while another does not.
   That is honest — reachability is not symmetric — but there is no protocol for settling it.

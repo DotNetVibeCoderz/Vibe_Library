@@ -233,6 +233,29 @@ actornet run --node-id b --host 10.0.1.6 --port 9000 --seed 10.0.1.5:9000 \
              --split-brain static-quorum --quorum 3
 ```
 
+#### Penyebut yang dipakai kedua sisi
+
+Mayoritas selalu mayoritas *dari sesuatu*, dan sesuatu itu harus sama di kedua sisi pemotongan.
+Setiap node menyimpan keanggotaan yang terakhir disepakati cluster, dan kesepakatan itu digosipkan
+bersama sebuah **epoch**:
+
+```
+node-a: agreed 7 = [a, b, c, d, e]
+node-b: agreed 7 = [a, b, c, d, e]     epoch lebih tinggi menang; tidak ada yang lain
+```
+
+Hanya node yang bisa melihat setiap anggota yang diketahuinya yang menaikkan epoch. Itulah seluruh
+protokol antar belahan, dan semuanya berjalan *sebelum* partisi: begitu pemotongan terjadi, tidak
+ada sisi yang bisa melihat cluster utuh, jadi tidak ada yang menaikkan epoch dan keduanya menyimpan
+himpunan terakhir yang mereka pegang bersama. Node yang baru bergabung diberi tahu kesepakatan
+terkini di dalam balasan join-nya, karena node yang belum menyepakati apa pun akan selamat dari
+partisi mana pun.
+
+Tanpa itu, kedua sisi bisa ditanyai pertanyaan yang berbeda. Cluster yang tumbuh dari empat menjadi
+lima tepat sebelum partisi bisa membuat satu sisi mengukur dua dari empat — tepat separuh, yang lalu
+dimenangkannya lewat tiebreak id terendah — sementara sisi lain mengukur tiga dari lima. Kedua sisi
+menang, dan itulah split brain yang justru ingin dicegah strategi ini.
+
 Sisi yang kalah mengeluarkan dirinya dari ring lalu **berhenti**. Itu bukan kegagalan menangani:
 node yang terus melayani aktor yang bukan lagi miliknya adalah hal yang justru ingin dicegah
 strategi ini. Untuk bergabung lagi, nyalakan ulang node-nya.
@@ -675,9 +698,10 @@ berarti cluster-nya membawa lebih banyak daripada yang sanggup diterima sebuah p
 
 ## Batas yang diketahui
 
-- **Resolusi split-brain mati secara bawaan, dan sepihak.** `KeepMajority` dan `StaticQuorum`
-  tersedia, tapi tiap node memutuskan sendiri dari pandangannya; tidak ada protokol antar belahan
-  untuk menyepakati siapa yang kalah.
+- **Resolusi split-brain mati secara bawaan.** `KeepMajority` dan `StaticQuorum` tersedia dan tiap
+  node tetap memutuskan sendiri setelah pemotongan terjadi — tapi kini keduanya diukur terhadap
+  penyebut yang sudah disepakati seluruh cluster sebelumnya, jadi dua sisi tidak bisa sama-sama
+  merasa jadi mayoritas.
 - **Kecurigaan bersifat per-node, dan tidak ada yang mendamaikan dua node yang berbeda pendapat.**
   Phi diukur terhadap riwayat masing-masing peer, jadi satu node bisa menyebut sebuah peer tidak
   terjangkau sementara node lain tidak. Itu jujur — keterjangkauan memang tidak simetris — tapi

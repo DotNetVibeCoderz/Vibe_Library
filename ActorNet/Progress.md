@@ -72,7 +72,8 @@ works and something automated proves it** — not when the code exists.
 - [x] Gossip fanout, taken in rotation so the interval between two nodes stays learnable
 - [x] Split-brain resolution - `KeepMajority` and `StaticQuorum`, opt-in, the losing side stops
 - [x] `--split-brain` and `--quorum` on the CLI
-- [ ] A protocol between the halves, so two sides cannot both decide they are the majority
+- [x] A denominator both halves share: the agreed membership is gossiped with an epoch, raised
+      only by a node that can see the whole cluster, so two sides cannot both be a majority
 - [x] `PreferenceList` has a user: a departing node finds each key's successor with it
 - [ ] Eagerly activating inherited keys after an unplanned loss; the survivors do not know
       which keys the dead node held
