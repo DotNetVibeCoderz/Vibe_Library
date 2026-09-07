@@ -315,9 +315,43 @@ what would have happened anyway, and a node on its way out is the wrong place to
 The cap is there because it is one message per actor and a node can hold a great many; past it the
 rest activate on demand.
 
-That makes a rolling restart both safe and warm. What is still missing is a *rolling upgrade* in the
-larger sense: nothing coordinates the order nodes go down in, so taking two out at once is still
-something an operator has to avoid rather than something the cluster refuses.
+That makes a rolling restart both safe and warm.
+
+### One node at a time
+
+Nothing above stops two nodes stopping at the same moment. The keys of the first move to the second
+while the second is on its way out, so they move twice; with a quorum configured, the pair can take
+the cluster below it in a single step. Turn the coordination on and each node asks before it goes:
+
+```csharp
+options.Cluster.CoordinatedLeave = true;                          // off by default
+options.Cluster.LeaveTokenWait  = TimeSpan.FromSeconds(30);       // then leave anyway
+options.Cluster.LeaveTokenLease = TimeSpan.FromMinutes(1);        // a killed holder expires
+```
+
+`--coordinated-leave` on the CLI does the same.
+
+One node holds the token at a time. The member with the lowest id hands it out — the same tiebreak
+the split-brain resolver uses — and every node works that out from its own member table rather than
+being told, so there is nothing to elect and nothing to fail over. When the coordinator is itself
+the node leaving, it asks itself, which is the case an elected coordinator would have needed a
+protocol for.
+
+Two deliberate limits, both of which are the point rather than an oversight:
+
+**A shutdown never blocks forever.** A node that cannot get the token within `LeaveTokenWait` leaves
+without it and says so in its log. Whatever asked it to stop will kill it otherwise, and a killed
+node flushes nothing and announces nothing — strictly worse than an uncoordinated departure.
+
+**It is not a distributed lock.** The token lives in the coordinator's memory, so a change of
+coordinator forgets who held it, and in a partition each side has a coordinator and each will grant.
+It orders the shutdowns of a healthy cluster, which is exactly what a rolling restart is. Use
+[split-brain resolution](#membership) for the partition case; these solve different problems.
+
+The lease is the backstop for a holder that is killed midway and never hands the token back. Set it
+comfortably above how long one node's shutdown takes — a drain, an announcement and the warm handoff
+— because a lease that expires while the holder is still leaving lets a second node in and gives up
+the one thing this buys.
 
 ## Sending across nodes
 
@@ -628,9 +662,13 @@ cluster is carrying more than a peer can take.
 - **Suspicion is per-node, and nothing reconciles two nodes that disagree.** Phi is measured
   against each peer's own history, so one node may call a peer unreachable while another does not.
   That is honest — reachability is not symmetric — but there is no protocol for settling it.
-- **`PreferenceList` exists and nothing uses it.** Replica placement is not implemented.
+- **The leave token is not a distributed lock.** It lives in the coordinator's memory, so a change
+  of coordinator forgets who held it, and in a partition each side has a coordinator and each will
+  grant. It orders the shutdowns of a healthy cluster and nothing more.
+- **`PreferenceList` has one user and it is not replication.** The warm handoff uses it to find each
+  key's successor. Replica placement is still not implemented.
 
-All three are in the [roadmap](../../Plan.md).
+All four are in the [roadmap](../../Plan.md).
 
 ## Next
 

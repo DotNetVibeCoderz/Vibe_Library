@@ -50,6 +50,10 @@ public class NodeSettings : Spectre.Console.Cli.CommandSettings
     [System.ComponentModel.Description("Members a side must see to survive, for --split-brain static-quorum. Set it above half the intended cluster size.")]
     public int? Quorum { get; init; }
 
+    [Spectre.Console.Cli.CommandOption("--coordinated-leave")]
+    [System.ComponentModel.Description("Ask the cluster for permission before leaving, so a rolling restart takes the nodes one at a time. Off by default.")]
+    public bool CoordinatedLeave { get; init; }
+
     [Spectre.Console.Cli.CommandOption("--secret <SECRET>")]
     [System.ComponentModel.Description("Shared secret every node must know. Turns on a challenge-response handshake; the secret itself is never sent.")]
     public string? SharedSecret { get; init; }
@@ -125,6 +129,7 @@ internal static class NodeFactory
             options.Cluster.Seeds = settings.Seeds.ToList();
             options.Cluster.SplitBrainStrategy = ParseSplitBrain(settings.SplitBrain);
             if (settings.Quorum is { } quorum) options.Cluster.StaticQuorumSize = quorum;
+            options.Cluster.CoordinatedLeave = settings.CoordinatedLeave;
         }
 
         if (settings.DataDirectory is { Length: > 0 } directory)

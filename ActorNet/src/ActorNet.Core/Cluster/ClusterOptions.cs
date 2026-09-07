@@ -81,6 +81,54 @@ public sealed class ClusterOptions
     /// </remarks>
     public SplitBrainStrategy SplitBrainStrategy { get; set; } = SplitBrainStrategy.None;
 
+    /// <summary>
+    /// Whether a node asks the cluster for permission before it leaves gracefully.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Off by default, and worth turning on for a rolling restart. Nothing otherwise stops two
+    /// nodes stopping at the same moment: the keys of the first move to the second while the second
+    /// is on its way out, so they move twice, and with a quorum configured the pair can take the
+    /// cluster below it in one step.
+    /// </para>
+    /// <para>
+    /// One node holds the token at a time. The member with the lowest id hands it out - the same
+    /// tiebreak the split-brain resolver uses - and every node works that out from its own member
+    /// table rather than being told, so there is no election to run and nothing to fail over.
+    /// </para>
+    /// <para>
+    /// This is not consensus, and it is not a distributed lock. While the member table is in flux
+    /// two nodes can briefly disagree about who the coordinator is, and then both can be granted.
+    /// It orders the shutdowns of a healthy cluster, which is what a rolling restart is; it does
+    /// not defend against a partition. <see cref="SplitBrainStrategy"/> is what does that.
+    /// </para>
+    /// </remarks>
+    public bool CoordinatedLeave { get; set; }
+
+    /// <summary>How long a node waits for the leave token before going anyway.</summary>
+    /// <remarks>
+    /// A shutdown that blocks forever is worse than an uncoordinated one: an orchestrator that
+    /// asked a pod to stop will kill it instead, and a killed node leaves without flushing or
+    /// announcing anything. So the wait is bounded, and a node that runs out of budget leaves and
+    /// says in its log that it did.
+    /// </remarks>
+    public TimeSpan LeaveTokenWait { get; set; } = TimeSpan.FromSeconds(30);
+
+    /// <summary>How long a granted leave token stays granted without being released.</summary>
+    /// <remarks>
+    /// The holder releases the token once it has announced its departure. This is the backstop for
+    /// the holder that never does - it was killed midway - because a token nobody can release stops
+    /// every other node from leaving until the coordinator itself restarts.
+    /// </remarks>
+    /// <remarks>
+    /// It has to comfortably exceed how long one node's shutdown takes, which is a drain plus an
+    /// announcement plus the warm handoff. Set it below that and the lease expires while the holder
+    /// is still leaving, which lets a second node in and gives up the one thing this buys. It is
+    /// deliberately not checked against <see cref="LeaveTokenWait"/>: how long a node is prepared
+    /// to queue says nothing about how long a shutdown takes.
+    /// </remarks>
+    public TimeSpan LeaveTokenLease { get; set; } = TimeSpan.FromMinutes(1);
+
     /// <summary>Members a side must be able to see to survive, under <see cref="SplitBrainStrategy.StaticQuorum"/>.</summary>
     /// <remarks>
     /// Set it above half the intended cluster size, or two sides can both reach it and the strategy
@@ -239,6 +287,10 @@ public sealed class ClusterOptions
             throw new ArgumentOutOfRangeException(nameof(StaticQuorumSize), StaticQuorumSize, "A static quorum needs a size; without one every side survives and the strategy protects nothing.");
         if (SplitBrainStabilityWindow <= TimeSpan.Zero)
             throw new ArgumentOutOfRangeException(nameof(SplitBrainStabilityWindow), SplitBrainStabilityWindow, "Deciding with no settling time decides against a membership that is still moving.");
+        if (CoordinatedLeave && LeaveTokenWait <= TimeSpan.Zero)
+            throw new ArgumentOutOfRangeException(nameof(LeaveTokenWait), LeaveTokenWait, "A wait of zero asks for the token and gives up before any answer could arrive; turn CoordinatedLeave off instead.");
+        if (CoordinatedLeave && LeaveTokenLease <= TimeSpan.Zero)
+            throw new ArgumentOutOfRangeException(nameof(LeaveTokenLease), LeaveTokenLease, "A lease of zero expires the instant it is granted, so every node holds the token at once.");
         if (GossipFanout < 0)
             throw new ArgumentOutOfRangeException(nameof(GossipFanout), GossipFanout, "Use zero for every peer, not a negative number.");
         if (JoinTimeout <= TimeSpan.Zero)

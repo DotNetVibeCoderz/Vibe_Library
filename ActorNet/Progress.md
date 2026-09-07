@@ -55,7 +55,10 @@ works and something automated proves it** — not when the code exists.
 - [x] Automatic rebalancing on membership change
 - [x] Graceful leave, flushing state before the departure is announced
 - [x] Warm handoff: a leaving node asks each successor to activate the keys it inherits
-- [ ] Coordinating a rolling restart, so two nodes cannot leave at once
+- [x] Coordinating a rolling restart: one leave token, handed out by the lowest node id, with a
+      lease so a killed holder does not wedge the cluster and a bounded wait so a shutdown cannot
+      hang. Opt-in (`--coordinated-leave`); orders shutdowns in a healthy cluster, and is not
+      consensus - see the gaps below
 - [x] `--cluster` for the first node, which has no seeds of its own
 - [x] Nodes across machines, bound to a routable address - three machines, two operating systems
       and two processor architectures in one cluster
@@ -207,6 +210,10 @@ Ticking a box means it works, not that it is finished. These are the caveats wor
   handoff are both written straight to a socket to sidestep this, because both are sent moments
   before the transport closes; everything else still relies on the loop winning the race, which it
   ordinarily does. The right fix is to drain before cancelling, and it has not been made.
+- **The leave token is not a distributed lock.** It lives in the coordinator's memory, so a change
+  of coordinator forgets who held it, and in a partition each side has a coordinator and each will
+  grant. It orders the shutdowns of a healthy cluster, which is what a rolling restart is. Nothing
+  here defends against a partition; `SplitBrainStrategy` is what does that.
 - **The console's actor list is still one node's.** Counters are now collected from every peer;
   the per-actor table is not, and pulling a row per actor from twenty peers on a refresh would cost
   more than everything else on the wire put together.

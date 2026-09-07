@@ -40,6 +40,16 @@ public enum WireKind : byte
     /// ring routes by key, and there is no key that means "whichever node I am asking".
     /// </remarks>
     NodeStatusRequest = 9,
+
+    /// <summary>
+    /// Asks the coordinator for the leave token, or hands it back. Answered with an ordinary
+    /// <see cref="AskReply"/>.
+    /// </summary>
+    /// <remarks>
+    /// Addressed to a node rather than an actor, for the same reason as
+    /// <see cref="NodeStatusRequest"/>. The payload says which of the two it is.
+    /// </remarks>
+    LeaveTokenRequest = 10,
 }
 
 /// <summary>One frame, as it travels between nodes.</summary>

@@ -43,6 +43,7 @@ public sealed class ClusterMembership : IClusterView, IAsyncDisposable
 
     private int _gossipCursor;
     private readonly HashSet<string> _departed = new(StringComparer.Ordinal);
+    private readonly LeaveTokenHolder _leaveToken = new(TimeProvider.System);
     private string[] _lastAgreedMembership = [];
     private string _partitionSignature = string.Empty;
     private DateTimeOffset _partitionSince;
@@ -113,6 +114,31 @@ public sealed class ClusterMembership : IClusterView, IAsyncDisposable
 
     /// <inheritdoc />
     public bool IsLocal(ActorId id) => string.Equals(OwnerOf(id), SelfNodeId, StringComparison.Ordinal);
+
+    /// <summary>
+    /// The member that hands out the leave token: the lowest routable node id.
+    /// </summary>
+    /// <remarks>
+    /// Computed rather than elected, so every node reaches the same answer from its own member
+    /// table without a round trip, and a coordinator that leaves is replaced by the arithmetic
+    /// rather than by a protocol. Ordinal comparison, because the answer has to be the same on
+    /// every machine and a culture-aware one is not.
+    /// </remarks>
+    public string? Coordinator =>
+        _members.Values
+            .Where(m => m.IsRoutable && !_departed.Contains(m.NodeId))
+            .Select(m => m.NodeId)
+            .DefaultIfEmpty(SelfNodeId)
+            .Min(StringComparer.Ordinal);
+
+    /// <summary>Whether this node is the one that hands out the leave token.</summary>
+    public bool IsCoordinator => string.Equals(Coordinator, SelfNodeId, StringComparison.Ordinal);
+
+    /// <summary>Answers a leave request, as the coordinator.</summary>
+    public LeaveDecision DecideLeave(LeaveRequest request) => _leaveToken.Decide(request, _options.LeaveTokenLease);
+
+    /// <summary>The node holding the leave token, when this node is the coordinator.</summary>
+    public string? LeaveTokenHeldBy => _leaveToken.Holder;
 
     /// <summary>Whether the node that owns <paramref name="id"/> is currently answering.</summary>
     /// <remarks>

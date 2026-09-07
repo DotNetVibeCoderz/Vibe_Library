@@ -134,8 +134,9 @@ Each of these is now covered by a test. Do not reintroduce them.
 - **Rebalancing must not hand an actor to an owner nobody can reach.** An unreachable member stays
   on the ring on purpose, so the owner of a key can be a node that is not answering. Deactivating on
   that membership change handed the actor to nobody: gone here, unreachable there, held by no one
-  until the ring moved again. `OwnerIsReachable` gates it, and it is what made the warm-handoff test
-  fail one run in five.
+  until the ring moved again. `OwnerIsReachable` gates it. It was found while hunting an
+  intermittent warm-handoff failure, but it is not the cause of it - that flake recurred after this
+  was fixed and is still unexplained.
 - **Razor string component parameters need `@`.** `Value="actor.Id"` passes the literal text;
   `Value="@actor.Id"` passes the value. Non-string parameters are expressions either way, which is
   why this only broke some of them.

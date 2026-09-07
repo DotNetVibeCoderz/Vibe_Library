@@ -119,6 +119,8 @@ public sealed class ActorSystem : IActorSystem
         Serializer.Types.Register<Terminated>();
         Serializer.Types.Register<NodeStatus>();
         Serializer.Types.Register<Warm>();
+        Serializer.Types.Register<LeaveRequest>();
+        Serializer.Types.Register<LeaveDecision>();
         Serializer.Types.Register<Inspect>();
         Serializer.Types.Register<Inspected>();
         MetricsCollector = new MetricsCollector(Options.NodeId);
@@ -195,6 +197,10 @@ public sealed class ActorSystem : IActorSystem
         // Noted before the drain empties the directory. These are the keys that are about to move.
         var moving = _cells.Keys.ToArray();
 
+        // Before the drain, not after: the point is that the keys of two nodes do not move at the
+        // same time, and they start moving the moment a departure is announced.
+        await AcquireLeaveTokenAsync(cancellationToken).ConfigureAwait(false);
+
         // Flush before announcing, not after. A peer that hears the leave rebuilds its ring at once
         // and the first message to a key that moved reactivates that actor from the store - so if
         // this node's state has not landed yet, the new activation starts from a stale version and
@@ -210,6 +216,10 @@ public sealed class ActorSystem : IActorSystem
 
         // After the announce, because the successors only own these keys once they have heard.
         await WarmSuccessorsAsync(moving).ConfigureAwait(false);
+
+        // Handed back once the departure is announced and the handover is done, which is the point
+        // at which the next node can start without the two overlapping.
+        await ReleaseLeaveTokenAsync(cancellationToken).ConfigureAwait(false);
 
         await _shutdown.CancelAsync().ConfigureAwait(false);
 
@@ -416,6 +426,115 @@ public sealed class ActorSystem : IActorSystem
             DateTimeOffset.UtcNow,
             nodes.OrderBy(n => n.NodeId, StringComparer.Ordinal).ToArray(),
             silent);
+    }
+
+    /// <summary>
+    /// Waits for permission to leave, so a rolling restart takes the nodes one at a time.
+    /// </summary>
+    /// <remarks>
+    /// Returns false when the budget runs out, and the caller leaves anyway - a shutdown that
+    /// blocks forever is worse than an uncoordinated one, because whatever asked this node to stop
+    /// will kill it instead, and a killed node announces nothing at all.
+    /// </remarks>
+    private async Task<bool> AcquireLeaveTokenAsync(CancellationToken cancellationToken)
+    {
+        if (!Options.Cluster.CoordinatedLeave || !Options.Cluster.Enabled || _cluster.IsSingleNode) return true;
+
+        var deadline = DateTimeOffset.UtcNow + Options.Cluster.LeaveTokenWait;
+
+        while (true)
+        {
+            var decision = await AskToLeaveAsync(releasing: false, cancellationToken).ConfigureAwait(false);
+
+            if (decision is { Granted: true })
+            {
+                _logger.LogInformation("Node {NodeId} holds the leave token.", NodeId);
+                return true;
+            }
+
+            var left = deadline - DateTimeOffset.UtcNow;
+            if (left <= TimeSpan.Zero)
+            {
+                _logger.LogWarning(
+                    "Node {NodeId} waited {Wait} for the leave token (held by {Holder}) and is leaving without it.",
+                    NodeId, Options.Cluster.LeaveTokenWait, decision?.HeldBy ?? "nobody that answered");
+                return false;
+            }
+
+            // A coordinator that does not answer at all is retried on the cadence a refusal asks
+            // for rather than hammered: it is most often one that is itself shutting down.
+            var retry = decision?.RetryAfter ?? TimeSpan.FromMilliseconds(500);
+            if (retry > left) retry = left;
+            if (retry < TimeSpan.FromMilliseconds(50)) retry = TimeSpan.FromMilliseconds(50);
+
+            try { await Task.Delay(retry, cancellationToken).ConfigureAwait(false); }
+            catch (OperationCanceledException) { return false; }
+        }
+    }
+
+    /// <summary>Hands the leave token back, so the next node does not wait out the lease.</summary>
+    private async Task ReleaseLeaveTokenAsync(CancellationToken cancellationToken)
+    {
+        if (!Options.Cluster.CoordinatedLeave || !Options.Cluster.Enabled) return;
+
+        try { await AskToLeaveAsync(releasing: true, cancellationToken).ConfigureAwait(false); }
+        catch (Exception ex)
+        {
+            // Best effort by design: the lease expiring is the backstop, and failing to hand a
+            // token back is not a reason to fail a shutdown that has otherwise finished.
+            _logger.LogDebug(ex, "Could not hand the leave token back.");
+        }
+    }
+
+    /// <summary>Puts one leave request to the coordinator, or answers it here when this node is it.</summary>
+    private async Task<LeaveDecision?> AskToLeaveAsync(bool releasing, CancellationToken cancellationToken)
+    {
+        if (_cluster.Coordinator is not { } coordinator) return null;
+
+        // No round trip to ask yourself. This is also the case where the coordinator is the node
+        // that is leaving, which is the one a protocol would have had to handle specially.
+        if (string.Equals(coordinator, NodeId, StringComparison.Ordinal))
+            return _cluster.DecideLeave(new LeaveRequest(NodeId, releasing));
+
+        var correlationId = Guid.NewGuid().ToString("N");
+        var pending = new PendingAsk();
+        _pendingAsks[correlationId] = pending;
+
+        using var timeoutSource = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutSource.Token);
+        await using var registration = linked.Token.Register(static state =>
+        {
+            var (asks, id) = ((ConcurrentDictionary<string, PendingAsk>, string))state!;
+            if (asks.TryRemove(id, out var waiting)) waiting.Cancel();
+        }, (_pendingAsks, correlationId)).ConfigureAwait(false);
+
+        try
+        {
+            var (alias, payload) = Serializer.Serialize(new LeaveRequest(NodeId, releasing));
+            var frame = new WireEnvelope
+            {
+                Kind = WireKind.LeaveTokenRequest,
+                CorrelationId = correlationId,
+                ReplyToNode = NodeId,
+                FromNode = NodeId,
+                MessageAlias = alias,
+                Payload = payload,
+            };
+
+            await SendRemoteFrameAsync(coordinator, frame, null, cancellationToken).ConfigureAwait(false);
+            return await pending.Task.ConfigureAwait(false) as LeaveDecision;
+        }
+        catch (Exception ex)
+        {
+            // Silence from the coordinator is an ordinary outcome - it may be leaving itself - and
+            // is reported as no answer, so the caller can retry within its budget.
+            _logger.LogDebug(ex, "No leave decision from {NodeId}.", coordinator);
+            return null;
+        }
+        finally
+        {
+            _pendingAsks.TryRemove(correlationId, out _);
+        }
     }
 
     /// <summary>One peer's counters, or null when it did not answer in time.</summary>
@@ -802,6 +921,37 @@ public sealed class ActorSystem : IActorSystem
 
                 try { await _transport.SendAsync(asker, reply, _shutdown.Token).ConfigureAwait(false); }
                 catch (Exception ex) { _logger.LogDebug(ex, "Could not answer a status request from {NodeId}.", asker); }
+
+                return;
+            }
+
+            case WireKind.LeaveTokenRequest:
+            {
+                if (frame.CorrelationId is not { } correlation || frame.FromNode is not { Length: > 0 } asker || _transport is null)
+                    return;
+
+                var request = frame.Body as LeaveRequest
+                    ?? (frame.MessageAlias is { } requestAlias && frame.Payload is { } requestPayload
+                        ? Serializer.Deserialize(requestAlias, requestPayload) as LeaveRequest
+                        : null);
+
+                if (request is null) return;
+
+                // Answered even when this node no longer believes it is the coordinator. The asker
+                // decided who to ask from its own member table; disagreeing by staying silent would
+                // make it wait out its whole budget to learn nothing.
+                var (alias, payload) = Serializer.Serialize(_cluster.DecideLeave(request));
+                var reply = new WireEnvelope
+                {
+                    Kind = WireKind.AskReply,
+                    CorrelationId = correlation,
+                    FromNode = NodeId,
+                    MessageAlias = alias,
+                    Payload = payload,
+                };
+
+                try { await _transport.SendAsync(asker, reply, _shutdown.Token).ConfigureAwait(false); }
+                catch (Exception ex) { _logger.LogDebug(ex, "Could not answer a leave request from {NodeId}.", asker); }
 
                 return;
             }

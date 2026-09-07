@@ -325,9 +325,46 @@ persis yang akan terjadi tanpa fitur ini — dan node yang sedang pergi bukan te
 memaksakan apa pun. Batasnya ada karena ini satu pesan per aktor dan sebuah node bisa menahan sangat
 banyak; melewati batas itu, sisanya aktif saat diminta.
 
-Dengan begitu restart bergilir jadi aman sekaligus hangat. Yang masih kurang adalah *upgrade*
-bergilir dalam arti yang lebih besar: tidak ada yang mengatur urutan node dimatikan, jadi menarik dua
-node sekaligus masih hal yang harus dihindari operator, bukan hal yang ditolak cluster.
+Dengan begitu restart bergilir jadi aman sekaligus hangat.
+
+### Satu node pada satu waktu
+
+Tidak ada satu pun di atas yang mencegah dua node berhenti pada saat bersamaan. Kunci milik node
+pertama berpindah ke node kedua justru ketika node kedua sedang bersiap pergi, jadi kunci itu
+berpindah dua kali; dengan kuorum yang dikonfigurasi, pasangan itu bisa menjatuhkan cluster ke bawah
+kuorum dalam satu langkah. Nyalakan koordinasinya dan setiap node meminta izin sebelum pergi:
+
+```csharp
+options.Cluster.CoordinatedLeave = true;                          // mati secara bawaan
+options.Cluster.LeaveTokenWait  = TimeSpan.FromSeconds(30);       // lalu pergi juga
+options.Cluster.LeaveTokenLease = TimeSpan.FromMinutes(1);        // pemegang yang mati kedaluwarsa
+```
+
+`--coordinated-leave` di CLI melakukan hal yang sama.
+
+Satu node memegang token pada satu waktu. Anggota dengan id terendah yang membagikannya — tiebreak
+yang sama dipakai penyelesai split-brain — dan setiap node menghitungnya dari tabel anggotanya
+sendiri, bukan diberi tahu, jadi tidak ada pemilihan yang perlu dijalankan dan tidak ada yang perlu
+di-failover. Ketika koordinatornya sendiri yang pergi, ia meminta pada dirinya sendiri — kasus yang
+justru membutuhkan protokol khusus bila koordinatornya dipilih lewat pemilihan.
+
+Dua batas yang disengaja, dan keduanya memang inti rancangannya, bukan kelalaian:
+
+**Shutdown tidak pernah menggantung selamanya.** Node yang tidak mendapat token dalam
+`LeaveTokenWait` akan pergi tanpa token dan mencatatnya di log. Kalau tidak, apa pun yang menyuruhnya
+berhenti akan membunuhnya, dan node yang dibunuh tidak menuliskan state maupun mengumumkan apa pun —
+jelas lebih buruk daripada kepergian yang tak terkoordinasi.
+
+**Ini bukan kunci terdistribusi.** Token itu hidup di memori koordinator, jadi pergantian koordinator
+melupakan siapa pemegangnya, dan dalam partisi setiap sisi punya koordinator dan masing-masing akan
+memberi izin. Ia mengurutkan shutdown pada cluster yang sehat — persis itulah restart bergilir.
+Gunakan [penyelesaian split-brain](#keanggotaan) untuk kasus partisi; keduanya menyelesaikan masalah
+yang berbeda.
+
+Lease adalah jaring pengaman untuk pemegang yang mati di tengah jalan dan tidak pernah mengembalikan
+token. Setel jauh di atas lama shutdown satu node — drain, pengumuman, dan warm handoff — karena
+lease yang habis saat pemegangnya masih pergi akan meloloskan node kedua dan menggugurkan satu-satunya
+hal yang dibeli fitur ini.
 
 ## Mengirim antar node
 
@@ -645,9 +682,13 @@ berarti cluster-nya membawa lebih banyak daripada yang sanggup diterima sebuah p
   Phi diukur terhadap riwayat masing-masing peer, jadi satu node bisa menyebut sebuah peer tidak
   terjangkau sementara node lain tidak. Itu jujur — keterjangkauan memang tidak simetris — tapi
   belum ada protokol untuk menyelesaikannya.
-- **`PreferenceList` ada dan tidak dipakai apa pun.** Penempatan replika belum diimplementasikan.
+- **Token kepergian bukan kunci terdistribusi.** Ia hidup di memori koordinator, jadi pergantian
+  koordinator melupakan siapa pemegangnya, dan dalam partisi tiap sisi punya koordinator dan
+  masing-masing akan memberi izin. Ia mengurutkan shutdown pada cluster yang sehat, tidak lebih.
+- **`PreferenceList` punya satu pengguna, dan itu bukan replikasi.** Warm handoff memakainya untuk
+  menemukan penerus tiap kunci. Penempatan replika tetap belum diimplementasikan.
 
-Ketiganya ada di [roadmap](../../Plan.md).
+Keempatnya ada di [roadmap](../../Plan.md).
 
 ## Selanjutnya
 
