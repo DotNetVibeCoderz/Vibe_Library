@@ -150,6 +150,11 @@ actor, which is ordered behind everything already queued.
 Run-to-run variance is 3.2–3.6M msg/s and 160–180 B/msg on the reference machine — larger than most
 micro-optimisations. Measure several runs before believing an improvement.
 
+**That range did not reproduce on 2026-09-07**: the same command measured about 1.9M msg/s drained
+and 270 B/msg, and an unmodified build measured the same, so it is not a recent regression. Until
+somebody explains the gap, compare a change against a build you measure yourself in the same
+sitting — alternating between the two — rather than against the number written here.
+
 Any figure quoted in the docs was measured on an Intel i7-8650U, .NET 10.0.11, Windows 11. If you
 change something that moves a number, re-measure rather than adjusting the prose.
 

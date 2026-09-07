@@ -319,13 +319,41 @@ and the timeout says so.
 `IInspectable` lets an actor decide what it shows — see
 [Tooling](09-tooling.md#actors) for what the console and the HTTP endpoint make of it.
 
+## A message that cannot wait its turn
+
+A mailbox is a queue, and an actor that has fallen behind hands out the backlog in order. Sometimes
+one message should not wait for it — a cancellation, a shutdown signal, a health probe. Mark the
+type:
+
+```csharp
+[Urgent]
+public sealed record CancelBatch(string Reason);
+```
+
+It is declared on the message rather than passed at the send, because a type that sometimes
+overtakes and sometimes does not is one nothing at the receiving end can explain. Both ends read the
+same declaration, and a message that arrived over the wire behaves the same way — the receiving node
+resolves the alias to the type before it posts, and nothing in the protocol carries priority.
+
+What you give up is stated exactly: **ordering between the lanes**. An urgent message has no
+ordering relationship with an ordinary one from the same sender. Ordering *within* a lane still
+holds — two urgent messages arrive in order, and so do two ordinary ones.
+
+Urgent messages do not starve the ordinary lane. After eight in a row the actor takes one ordinary
+message even with urgent ones still queued, so a sender producing them faster than the actor handles
+them slows the ordinary lane down instead of stopping it forever.
+
+An actor that never receives an urgent message is unaffected: the second lane is created the first
+time one is posted, and never exists otherwise.
+
 ## Concurrency, stated precisely
 
 **Guaranteed:** one activation per address per cluster; one message at a time within an activation;
 messages from a single sender to a single actor arrive in order.
 
 **Not guaranteed:** ordering between different senders; ordering across a deactivation boundary
-(see [Architecture](02-architecture.md)); delivery at all, if the process dies.
+(see [Architecture](02-architecture.md)); ordering between an `[Urgent]` message and an ordinary
+one; delivery at all, if the process dies.
 
 ## Next
 

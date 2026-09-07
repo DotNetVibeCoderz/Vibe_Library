@@ -323,13 +323,41 @@ tidak menjawab berarti sedang sibuk atau macet, dan timeout-nya menyatakan itu.
 `IInspectable` membuat actor menentukan sendiri apa yang ditampilkannya — lihat
 [Perkakas](09-perkakas.md#actors) untuk apa yang dilakukan konsol dan endpoint HTTP terhadapnya.
 
+## Pesan yang tidak bisa menunggu giliran
+
+Mailbox adalah antrean, dan actor yang tertinggal membagikan tumpukannya secara berurutan. Kadang
+ada satu pesan yang tidak boleh ikut menunggu — pembatalan, sinyal shutdown, probe kesehatan. Tandai
+tipenya:
+
+```csharp
+[Urgent]
+public sealed record CancelBatch(string Reason);
+```
+
+Ini dideklarasikan pada pesannya, bukan diberikan saat mengirim, karena tipe yang kadang menyalip dan
+kadang tidak adalah tipe yang tak bisa dijelaskan oleh sisi penerima. Kedua ujung membaca deklarasi
+yang sama, dan pesan yang datang lewat jaringan berperilaku sama — node penerima menerjemahkan alias
+menjadi tipe sebelum memasukkannya ke mailbox, dan tidak ada prioritas yang dibawa protokol.
+
+Yang Anda lepaskan dinyatakan dengan tepat: **urutan antar jalur**. Pesan urgent tidak punya
+hubungan urutan dengan pesan biasa dari pengirim yang sama. Urutan *di dalam* satu jalur tetap
+berlaku — dua pesan urgent tiba berurutan, begitu pula dua pesan biasa.
+
+Pesan urgent tidak membuat jalur biasa kelaparan. Setelah delapan berturut-turut, actor mengambil
+satu pesan biasa meski masih ada yang urgent mengantre, jadi pengirim yang memproduksinya lebih cepat
+daripada kemampuan actor menanganinya memperlambat jalur biasa, bukan menghentikannya selamanya.
+
+Actor yang tidak pernah menerima pesan urgent tidak terpengaruh: jalur kedua baru dibuat saat pesan
+urgent pertama masuk, dan tidak pernah ada bila tidak.
+
 ## Konkurensi, dinyatakan dengan tepat
 
 **Dijamin:** satu aktivasi per alamat per cluster; satu pesan pada satu waktu dalam satu aktivasi;
 pesan dari satu pengirim ke satu actor tiba berurutan.
 
 **Tidak dijamin:** urutan antar pengirim berbeda; urutan melintasi batas deaktivasi (lihat
-[Arsitektur](02-arsitektur.md)); pengiriman sama sekali, bila prosesnya mati.
+[Arsitektur](02-arsitektur.md)); urutan antara pesan `[Urgent]` dan pesan biasa; pengiriman sama
+sekali, bila prosesnya mati.
 
 ## Selanjutnya
 

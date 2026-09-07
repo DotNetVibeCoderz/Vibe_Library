@@ -29,7 +29,8 @@ works and something automated proves it** — not when the code exists.
 - [x] Dead-letter queue for undeliverable messages, bounded, with a subscription
 - [x] `[ActorInterface]`: request and reply records, a proxy and an actor base, generated and
       checked at compile time
-- [ ] Message priority or a second mailbox lane
+- [x] Message priority: `[Urgent]` on a message type, a second mailbox lane created on demand,
+      with a burst limit so urgent traffic cannot starve the ordinary lane
 
 ## Supervision
 
@@ -190,14 +191,17 @@ works and something automated proves it** — not when the code exists.
 
 Ticking a box means it works, not that it is finished. These are the caveats worth carrying:
 
-- **One intermittent test failure is fixed by reasoning, not by reproduction.**
-  `WarmHandoffTests.TheSuccessorHasTheActorsBeforeTheFirstMessageArrives` failed about one run in
-  five. Measurement ruled out the obvious causes - the warm frames are always sent, always arrive
-  and always activate - and found a defect that explains it: a node whose ring still held the
-  departing node would deactivate the actors it had just inherited as soon as the failure detector
-  marked that node unreachable. That defect is now fixed and covered by
-  `AnActorIsNotHandedToAnOwnerNobodyCanReach`, which fails deterministically without the fix. The
-  flake itself has not recurred in 27 consecutive suite runs, which is evidence and not proof.
+- **One intermittent test failure is still unexplained.**
+  `WarmHandoffTests.TheSuccessorHasTheActorsBeforeTheFirstMessageArrives` fails roughly one run in
+  twenty, always by exhausting the fifteen-second wait for the successor to hold the actors it
+  inherited. Measurement has ruled out the obvious causes: the warm frames are always sent, always
+  arrive, and always activate on the successor. Hunting it did turn up a real defect - a node whose
+  ring still held the departing node would deactivate the actors it had just inherited the moment
+  the failure detector marked that node unreachable - and that is fixed, and covered by
+  `AnActorIsNotHandedToAnOwnerNobodyCanReach`, which fails deterministically without the fix. But
+  the flake recurred after that fix, so the two are not the same thing. The assertion now names the
+  actors that were missing, so the next occurrence says whether a warm frame never arrived or an
+  arrived one was deactivated again.
 - **A frame queued for a peer can still be dropped at shutdown.** `PeerConnection.DisposeAsync`
   cancels its writer loop before the loop drains the queue. The leave announcement and the warm
   handoff are both written straight to a socket to sidestep this, because both are sent moments
@@ -217,6 +221,12 @@ Ticking a box means it works, not that it is finished. These are the caveats wor
   nodes, which is below the fanout and therefore still a full mesh.
 - **The Go client has never run** on the machine it was written on. CI compiles it and drives it
   against a node; that is the only evidence it works.
+- **The throughput figures in the docs no longer match this machine.** Measured 2026-09-07 with
+  `bench -n 2000000`, alternating between builds: about 1.9M msg/s drained and 270 B/msg, against
+  the 3.2-3.6M msg/s and 160-180 B/msg the docs quote. The unmodified build measures the same, so
+  it is not from any recent change; whether the machine has changed underneath the number or
+  something regressed earlier has not been established, and the prose has deliberately not been
+  edited to match a figure nobody has explained.
 - **The benchmark is in-process.** No network hop, no persistence, and the handler does nothing
   but increment. It measures the runtime's floor, not an application's throughput.
 - **Rebalancing deactivates rather than migrates.** An actor whose key moves is flushed and
