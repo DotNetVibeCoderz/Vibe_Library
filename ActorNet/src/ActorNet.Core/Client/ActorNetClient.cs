@@ -357,7 +357,7 @@ public sealed class ActorNetClient : IAsyncDisposable
         var host = endpoint[..separator];
         var port = int.Parse(endpoint[(separator + 1)..], System.Globalization.CultureInfo.InvariantCulture);
 
-        var link = new NodeLink(endpoint, _pending, _shutdown.Token);
+        var link = new NodeLink(endpoint, _pending, _shutdown.Token, Forget);
         try
         {
             await link.ConnectAsync(host, port, cancellationToken).ConfigureAwait(false);
@@ -410,6 +410,17 @@ public sealed class ActorNetClient : IAsyncDisposable
     }
 
     private void Invalidate() => _routesTakenAt = DateTimeOffset.MinValue;
+
+    /// <summary>Drops a link that has died, so the next send routes afresh.</summary>
+    /// <remarks>
+    /// The view is invalidated too. A link usually dies because the node behind it went away, and
+    /// that is exactly when the member table this client is routing by has stopped being true.
+    /// </remarks>
+    private void Forget(NodeLink link)
+    {
+        _direct.TryRemove(new KeyValuePair<string, NodeLink>(link.Endpoint, link));
+        Invalidate();
+    }
 
     /// <summary>Asks the node this client is connected to for the member table.</summary>
     private async Task<ClusterView?> AskClusterViewAsync(CancellationToken cancellationToken)
@@ -523,9 +534,15 @@ public sealed class ActorNetClient : IAsyncDisposable
     private sealed class NodeLink(
         string endpoint,
         ConcurrentDictionary<string, TaskCompletionSource<WireEnvelope>> pending,
-        CancellationToken shutdown)
+        CancellationToken shutdown,
+        Action<NodeLink> died)
     {
         private readonly SemaphoreSlim _gate = new(1, 1);
+
+        // The asks that went out on this link and have not been answered. Needed because the
+        // pending table is shared with every other link, and a link that dies must fail its own
+        // asks and nobody else's.
+        private readonly ConcurrentDictionary<string, byte> _outstanding = new(StringComparer.Ordinal);
 
         private TcpClient? _client;
         private NetworkStream? _stream;
@@ -548,6 +565,9 @@ public sealed class ActorNetClient : IAsyncDisposable
 
         public async Task SendAsync(WireEnvelope frame, CancellationToken cancellationToken)
         {
+            // Recorded before the write, because a reply can arrive before the write returns.
+            if (frame.CorrelationId is { Length: > 0 } correlation) _outstanding[correlation] = 0;
+
             await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
             try
             {
@@ -573,8 +593,11 @@ public sealed class ActorNetClient : IAsyncDisposable
                     var frame = await FrameCodec.ReadAsync(_stream!, cancellationToken).ConfigureAwait(false);
                     if (frame is null) break;
 
-                    if (frame.CorrelationId is { } id && pending.TryRemove(id, out var waiting))
-                        waiting.TrySetResult(frame);
+                    if (frame.CorrelationId is { } id)
+                    {
+                        _outstanding.TryRemove(id, out _);
+                        if (pending.TryRemove(id, out var waiting)) waiting.TrySetResult(frame);
+                    }
                 }
             }
             catch (Exception)
@@ -583,16 +606,28 @@ public sealed class ActorNetClient : IAsyncDisposable
             }
 
             _alive = false;
+            Fail(new ActorNetException($"The connection to {Endpoint} closed before a reply arrived."));
 
-            // Deliberately not failing the pending asks. They are shared with every other link, and
-            // there is nothing here that says which of them went out on this one - failing them all
-            // would take down asks travelling on connections that are perfectly healthy. An ask
-            // whose reply was lost with this link times out instead, which is slower and true.
+            // The client is told, so the next send re-routes rather than writing into this socket
+            // again - which on some platforms succeeds and then simply goes nowhere.
+            died(this);
+        }
+
+        /// <summary>Fails every ask still waiting on this link, and only those.</summary>
+        private void Fail(Exception cause)
+        {
+            foreach (var correlation in _outstanding.Keys)
+            {
+                _outstanding.TryRemove(correlation, out _);
+                if (pending.TryRemove(correlation, out var waiting)) waiting.TrySetException(cause);
+            }
         }
 
         public async ValueTask DisposeAsync()
         {
             _alive = false;
+            Fail(new ActorNetException($"The connection to {Endpoint} was closed before a reply arrived."));
+
             _stream?.Dispose();
             _client?.Dispose();
 

@@ -69,8 +69,13 @@ addresses. The view is refreshed every `RoutesRefreshAfter` (30 seconds by defau
 connection to a node named by it fails.
 
 Routing degrades rather than fails. A client that cannot get a view, or whose view names a node that
-will not answer, sends to the node it is already connected to and is forwarded from there. Nothing
-here can make a send fail that would otherwise have succeeded.
+will not answer, sends to the node it is already connected to and is forwarded from there.
+
+The one case that does surface an error is an ask whose answer was on a connection that died — the
+node it was talking to went away while the question was in flight. That fails **promptly** rather
+than waiting out the timeout, and the client drops the connection and throws its view away, so the
+caller's next attempt routes afresh. It is the same contract a client with no routing at all has
+when an endpoint disappears.
 
 **The Node.js, Python and Go clients do not route.** They are correct without it and pay the hop.
 

@@ -70,7 +70,13 @@ secara bawaan) dan setiap kali koneksi ke node yang disebutnya gagal.
 
 Routing-nya menurun kualitasnya, bukan gagal. Klien yang tidak bisa memperoleh pandangan, atau yang
 pandangannya menyebut node yang tidak menjawab, akan mengirim ke node yang sudah terhubung dengannya
-dan diteruskan dari sana. Tidak ada di sini yang bisa menggagalkan pengiriman yang tadinya berhasil.
+dan diteruskan dari sana.
+
+Satu kasus yang memang memunculkan error adalah ask yang jawabannya ada di koneksi yang mati — node
+lawan bicaranya pergi saat pertanyaan masih melayang. Itu gagal **segera**, bukan menunggu habisnya
+timeout, dan klien membuang koneksi itu beserta pandangannya, sehingga percobaan berikutnya
+dirutekan ulang. Kontraknya sama dengan klien tanpa routing sama sekali ketika sebuah endpoint
+menghilang.
 
 **Klien Node.js, Python, dan Go tidak merutekan.** Mereka tetap benar tanpa itu, dan membayar
 hop-nya.

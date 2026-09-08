@@ -182,10 +182,31 @@ public sealed class ClusterAwareClientTests
             () => first.Cluster.IsSingleNode,
             "the survivor should own the whole ring", TimeSpan.FromSeconds(20));
 
-        // The view still names a node that has gone. Routing by it is an optimisation, so this has
-        // to fall back rather than fail: the survivor owns the key now and answers for it.
-        var total = await client.AskAsync<Total>(theirs, new GetTotal(), TimeSpan.FromSeconds(20));
-        Assert.True(total.Value >= 0);
+        // The client's view still names the node that has gone, and it may already have written to
+        // that connection. What it must not do is wait: a link that dies fails the asks that went
+        // out on it, promptly, rather than leaving them to time out.
+        var started = DateTimeOffset.UtcNow;
+        var attempts = 0;
+        Total? total = null;
+
+        while (total is null && attempts < 3)
+        {
+            attempts++;
+            try
+            {
+                total = await client.AskAsync<Total>(theirs, new GetTotal(), TimeSpan.FromSeconds(20));
+            }
+            catch (ActorNetException ex) when (ex is not AskTimeoutException)
+            {
+                // The connection went away with the answer on it. The client has dropped that link
+                // and thrown its view away, so the next attempt routes afresh - which is the same
+                // contract the failover tests pin for a client with no routing at all.
+            }
+        }
+
+        Assert.NotNull(total);
+        Assert.True(DateTimeOffset.UtcNow - started < TimeSpan.FromSeconds(20),
+            "recovering should not have cost an ask timeout");
     }
 
     [Fact]
