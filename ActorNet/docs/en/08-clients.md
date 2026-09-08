@@ -47,16 +47,17 @@ case-insensitively.
 
 ## Routing in a cluster
 
-A node delivers an inbound message to a local actor and **never forwards it**. That is deliberate -
-bouncing a peer's message onward risks a loop between two nodes that disagree during a rebalance -
-but it has a consequence for clients that is easy to miss:
+Any node is a valid entry point. A frame that arrives from something which is not a cluster member -
+a client - for a key that node does not own is **forwarded once** to the node that does, and the
+reply is carried back through the node the client asked. So every client is correct in a cluster
+whether it knows the ring or not.
 
-> A client that sends to a node which does not own the key activates that actor **on the node it
-> sent to**. A node routing by the ring reaches a different activation of the same address, and
-> "one activation per address per cluster" no longer holds.
+That forwarding is deliberately not symmetric. A frame from a *member* is always handled where it
+arrives, because a peer routed with its own view and bouncing its message onward is what risks a
+loop between two nodes disagreeing during a rebalance. Only a sender absent from the member table is
+treated as unrouted.
 
-Against a single node this cannot happen. Against a cluster, the C# client can work out the owner
-itself:
+What it costs is a hop. The C# client can avoid it:
 
 ```csharp
 var client = new ActorNetClient(["10.0.0.1:9000", "10.0.0.2:9000"]) { ClusterAware = true };
@@ -68,11 +69,14 @@ addresses. The view is refreshed every `RoutesRefreshAfter` (30 seconds by defau
 connection to a node named by it fails.
 
 Routing degrades rather than fails. A client that cannot get a view, or whose view names a node that
-will not answer, sends to the node it is already connected to — the old behaviour, with the old
-caveat above. Nothing here can make a send fail that would otherwise have succeeded.
+will not answer, sends to the node it is already connected to and is forwarded from there. Nothing
+here can make a send fail that would otherwise have succeeded.
 
-**The Node.js, Python and Go clients do not route yet.** In a cluster they should address one node,
-or be handed the owner's address by whatever configures them.
+**The Node.js, Python and Go clients do not route.** They are correct without it and pay the hop.
+
+One thing to know about the hop: the node that forwarded an ask holds the correlation until the
+answer arrives, in memory. If that node restarts while a question is in flight, the client sees a
+timeout rather than an answer from elsewhere.
 
 ## The wire protocol
 

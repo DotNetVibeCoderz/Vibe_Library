@@ -158,10 +158,12 @@ works and something automated proves it** — not when the code exists.
 - [x] Reconnect and failover to another node - C# client, several endpoints tried in rotation
 - [x] The same for the Node.js, Python and Go clients, each checked in CI against a dead
       endpoint ahead of a live one
+- [x] A node forwards a client's frame to the owner, once, and carries the reply back - so every
+      client is correct in a cluster whether or not it routes
 - [x] Cluster-aware routing in the C# client (`ClusterAware = true`): it asks a node for the member
-      table, builds the same ring, and opens a connection per node it addresses. Not the
-      optimisation the old roadmap line assumed - see the gaps below
-- [ ] The same for the Node.js, Python and Go clients, which still send to one node
+      table, builds the same ring, and opens a connection per node it addresses, which saves the
+      forwarding hop
+- [ ] The same for the Node.js, Python and Go clients, which pay the hop instead
 
 ## Testing
 
@@ -229,16 +231,10 @@ Ticking a box means it works, not that it is finished. These are the caveats wor
 - **The soak has been run for minutes, not days.** Three minutes on the development machine: 4.1M
   messages, throughput flat at about 24,000/s, live heap 3 MiB to 6 MiB, no dead letters. That is
   long enough to catch something growing fast and far too short to catch something growing slowly.
-- **A node never forwards an inbound frame, so a client that does not route breaks the single
-  activation guarantee.** A node delivers an inbound message to a local actor whatever the ring
-  says - deliberately, because bouncing a peer's message onward risks a loop between two nodes that
-  disagree during a rebalance. The consequence, which the roadmap line for this item had backwards,
-  is that a client sending to a node that does not own the key activates that actor *there*, and a
-  node routing by the ring then reaches a different activation of the same address. The C# client
-  avoids it with `ClusterAware = true`; the Node.js, Python and Go clients cannot yet, so in a
-  cluster they should address one node only, or be given the owner's address by the caller.
-  Forwarding a client's frame would be the other fix, and it needs the forwarding node to proxy the
-  reply - the client's ask names itself as the reply address, and the owner has no connection to it.
+- **A forwarded ask is proxied in memory.** The node that forwarded a client's question holds the
+  correlation id until the answer comes back, so an ask in flight when that node restarts is lost
+  rather than re-routed - the client sees a timeout. A client that routes for itself
+  (`ClusterAware`) does not go through this at all.
 - **A projection reads one stream, not all of them.** Sequences are per persistence id, so there
   is no position that means "everything before this, everywhere". Giving the journal a total order
   means a column in every provider's schema - a migration for anyone already storing events - and a

@@ -10,15 +10,14 @@ namespace ActorNet.Tests;
 /// </summary>
 /// <remarks>
 /// <para>
-/// Not an optimisation. A node delivers an inbound frame to a local actor and never forwards it -
-/// deliberately, because bouncing a peer's message onward risks a loop between two nodes that
-/// disagree during a rebalance. The consequence for a client is that a message sent to a node that
-/// does not own the key activates that actor <em>there</em>, and the cluster then has two
-/// activations of one address.
+/// A node forwards a frame that arrived from something that is not a member, once, to the node that
+/// owns the key - so every client is correct in a cluster whether it routes or not. Routing saves
+/// the hop, which is all it saves.
 /// </para>
 /// <para>
-/// So a client in a cluster has to route, and these are about it doing so - and about it degrading
-/// to the old behaviour rather than failing when it cannot.
+/// The forwarding is not symmetric with a peer's frame, and deliberately so: a peer routed with its
+/// own view of the ring, and bouncing that onward is what risks a loop between two nodes mid
+/// rebalance. Only a sender absent from the member table is treated as unrouted.
 /// </para>
 /// </remarks>
 public sealed class ClusterAwareClientTests
@@ -68,7 +67,7 @@ public sealed class ClusterAwareClientTests
     }
 
     [Fact]
-    public async Task AClientThatDoesNotRouteActivatesTheActorOnTheWrongNode()
+    public async Task AClientThatDoesNotRouteIsForwardedToTheOwner()
     {
         await using var harness = new TestHarness();
         var (first, second) = await PairAsync(harness, "plain");
@@ -81,19 +80,64 @@ public sealed class ClusterAwareClientTests
 
         await client.TellAsync(theirs, new Add(3));
 
-        // This is what actually happens, written down rather than assumed. A node delivers an
-        // inbound frame locally and never forwards it, so the actor is activated on the node the
-        // client happened to reach - not on the node that owns its key.
+        // The node the client reached does not own this key, and a client cannot route - so the
+        // node forwards rather than activating the actor in the wrong place. Delivering it here
+        // would leave the cluster holding two activations of one address.
         await TestHarness.AssertEventuallyAsync(
-            () => first.LocalActors.Contains(theirs),
-            "the message is handled where it was sent", TimeSpan.FromSeconds(15));
+            () => second.LocalActors.Contains(theirs),
+            "the owner should have been given the message", TimeSpan.FromSeconds(15));
 
-        Assert.DoesNotContain(theirs, second.LocalActors);
+        Assert.DoesNotContain(theirs, first.LocalActors);
+
+        // Without routing there is still only one connection. The forwarding is what costs the hop
+        // that ClusterAware exists to save.
         Assert.Single(client.ConnectedNodes);
+    }
 
-        // Which is the whole problem: a node routing by the ring reaches a different activation of
-        // the same address, and "one activation per address per cluster" no longer holds.
-        Assert.Equal("plain-b", first.Cluster.OwnerOf(theirs));
+    [Fact]
+    public async Task AnAskFromAnUnroutedClientComesBackThroughTheNodeItAsked()
+    {
+        await using var harness = new TestHarness();
+        var (first, second) = await PairAsync(harness, "proxy");
+
+        await using var client = ClientFor(clusterAware: false, first);
+
+        var theirs = Enumerable.Range(0, 2000)
+            .Select(i => ActorId.For<CounterActor>($"proxy-{i}"))
+            .First(id => first.Cluster.OwnerOf(id) == "proxy-b");
+
+        await client.TellAsync(theirs, new Add(6));
+
+        // The harder half of forwarding. The owner has never heard of this client and has no
+        // connection to answer on, so the node that forwarded the question has to carry the answer
+        // back - which it can only do by having named itself as the reply address.
+        var total = await client.AskAsync<Total>(theirs, new GetTotal(), TimeSpan.FromSeconds(15));
+
+        Assert.Equal(6, total.Value);
+        Assert.Contains(theirs, second.LocalActors);
+    }
+
+    [Fact]
+    public async Task APeersMessageIsStillHandledWhereItArrives()
+    {
+        await using var harness = new TestHarness();
+        var (first, second) = await PairAsync(harness, "peer");
+
+        var theirs = Enumerable.Range(0, 2000)
+            .Select(i => ActorId.For<CounterActor>($"peer-{i}"))
+            .First(id => first.Cluster.OwnerOf(id) == "peer-b");
+
+        // Sent from a node rather than a client, so it arrives already routed. Forwarding a peer's
+        // message is the thing that risks a loop between two nodes disagreeing mid-rebalance, and
+        // only a sender that is not a member is treated as unrouted.
+        await first.TellAsync(theirs, new Add(4));
+
+        await TestHarness.AssertEventuallyAsync(
+            () => second.LocalActors.Contains(theirs),
+            "a peer routes for itself", TimeSpan.FromSeconds(15));
+
+        var total = await first.AskAsync<Total>(theirs, new GetTotal(), TimeSpan.FromSeconds(15));
+        Assert.Equal(4, total.Value);
     }
 
     [Fact]

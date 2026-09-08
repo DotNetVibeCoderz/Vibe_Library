@@ -147,12 +147,18 @@ Each of these is now covered by a test. Do not reintroduce them.
   until the ring moved again. `OwnerIsReachable` gates it. It was found while hunting an
   intermittent warm-handoff failure, but it is not the cause of it - that flake recurred after this
   was fixed and is still unexplained.
-- **A node never forwards an inbound frame.** It delivers to a local actor whatever the ring says,
-  on purpose - bouncing a peer's message onward risks a loop during a rebalance. The consequence is
-  that an external client sending to a node that does not own the key gets a second activation of
-  that address. `ActorNetClient.ClusterAware` is the fix for the C# client; the SDK clients cannot
-  route yet. Do not "fix" this by forwarding without also proxying the reply - a client's ask names
-  itself as the reply address, and the owner has no connection to it.
+- **A peer's frame is handled where it arrives; a client's is forwarded once.** Bouncing a peer's
+  message onward risks a loop between two nodes disagreeing mid-rebalance, so a frame from a member
+  is always delivered locally. A client is not a member and cannot route - it sends to whichever
+  node it holds a connection to - so delivering that one locally would activate the actor on a node
+  that does not own its key and leave the cluster with two activations of one address.
+  `TryForwardForClientAsync` is the difference, and the test that it must *not* apply to a peer is
+  `APeersMessageIsStillHandledWhereItArrives`.
+- **A forwarded ask must be recorded before it is sent, not after.** The owner replies to this node,
+  because this node named itself as the reply address, and on a loopback cluster it can answer
+  before `SendAsync` has returned. A reply arriving with nothing in `_proxiedAsks` to say who it was
+  for is dropped, and the client waits out its whole timeout. This passed in isolation and failed
+  every full-suite run.
 - **Razor string component parameters need `@`.** `Value="actor.Id"` passes the literal text;
   `Value="@actor.Id"` passes the value. Non-string parameters are expressions either way, which is
   why this only broke some of them.

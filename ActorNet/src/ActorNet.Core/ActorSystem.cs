@@ -64,6 +64,11 @@ public sealed class ActorSystem : IActorSystem
     // What each peer last said it was holding that this node would inherit. Advice only: nothing
     // here is consulted for routing, and an entry is dropped the moment its node is gone.
     private readonly ConcurrentDictionary<string, IReadOnlyList<string>> _inheritable = new(StringComparer.Ordinal);
+
+    // Asks this node forwarded on behalf of a client, so the reply can be sent back to it. The
+    // owner replies here because this node named itself as the reply address; without this map
+    // there would be nothing to say who the reply was really for.
+    private readonly ConcurrentDictionary<string, (string Client, DateTimeOffset At)> _proxiedAsks = new(StringComparer.Ordinal);
     private int _started;
 
     /// <summary>Options this node was built with. Mutating them after start has no effect.</summary>
@@ -1012,6 +1017,10 @@ public sealed class ActorSystem : IActorSystem
             {
                 if (frame.CorrelationId is not { } id) return;
 
+                // Somebody else's reply, travelling back through this node because this node put
+                // the question on their behalf.
+                if (await TryReturnToClientAsync(frame, id).ConfigureAwait(false)) return;
+
                 if (frame.Body is { } decoded)
                 {
                     CompleteAsk(id, decoded);
@@ -1026,6 +1035,8 @@ public sealed class ActorSystem : IActorSystem
 
             case WireKind.AskFailure:
             {
+                if (frame.CorrelationId is { } failed && await TryReturnToClientAsync(frame, failed).ConfigureAwait(false)) return;
+
                 if (frame.CorrelationId is { } id && _pendingAsks.TryRemove(id, out var pending))
                     pending.Fail(new ActorNetException(frame.Error ?? "The remote actor failed while handling the request."));
                 return;
@@ -1068,6 +1079,13 @@ public sealed class ActorSystem : IActorSystem
 
                 ActorId.TryParse(frame.Sender, out var sender);
 
+                // A client's frame, for a key this node does not own, is forwarded once. A client
+                // is not a member and cannot route - it sends to whichever node it reached - so
+                // delivering here would activate the actor on the wrong node and leave the cluster
+                // with two activations of one address. The loop this guards against is between
+                // peers, and a peer is exactly what the sender is not here.
+                if (await TryForwardForClientAsync(frame, target).ConfigureAwait(false)) return;
+
                 // Delivered locally even if the ring has since moved this key elsewhere. The
                 // sender routed with the view it had, and bouncing the message onward risks a
                 // loop between two nodes that disagree during a rebalance.
@@ -1077,6 +1095,96 @@ public sealed class ActorSystem : IActorSystem
                 return;
             }
         }
+    }
+
+    /// <summary>
+    /// Sends a client's misrouted frame to the node that owns the key, once.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Only for a sender that is not a cluster member. A peer routed with its own view of the ring,
+    /// and bouncing its message onward is what risks a loop between two nodes mid-rebalance; a
+    /// client has no view at all and sends to whichever node it happens to hold a connection to.
+    /// Delivering that here would activate the actor on a node that does not own its key, and the
+    /// cluster would hold two activations of one address.
+    /// </para>
+    /// <para>
+    /// One hop, by construction: the forwarded frame is stamped with this node's id, so the node
+    /// that receives it sees a member and delivers locally.
+    /// </para>
+    /// </remarks>
+    private async Task<bool> TryForwardForClientAsync(WireEnvelope frame, ActorId target)
+    {
+        if (_transport is null || !Options.Cluster.Enabled) return false;
+        if (frame.FromNode is not { Length: > 0 } from || _cluster.IsMember(from)) return false;
+
+        var owner = _cluster.OwnerOf(target);
+        if (string.Equals(owner, NodeId, StringComparison.Ordinal)) return false;
+
+        // An owner nobody can reach is no better than this node. Handling it here at least gets the
+        // message to an actor, which is what the client asked for.
+        if (!_cluster.OwnerIsReachable(target)) return false;
+
+        var forwarded = new WireEnvelope
+        {
+            Kind = frame.Kind,
+            Target = frame.Target,
+            Sender = frame.Sender,
+            MessageAlias = frame.MessageAlias,
+
+            // Cloned, because a JsonElement is a window onto the document it was parsed from and
+            // that document belongs to the frame this node is about to finish with. Passing the
+            // window on and writing through it later reads whatever the buffer has become.
+            Payload = frame.Payload?.Clone(),
+            Body = frame.Body,
+            CorrelationId = frame.CorrelationId,
+            TraceParent = frame.TraceParent,
+            TraceState = frame.TraceState,
+
+            // This node answers for the client from here on, in both fields: the owner replies to
+            // whoever asked, and it has no connection to a client it has never heard from.
+            FromNode = NodeId,
+            ReplyToNode = frame.Kind == WireKind.AskRequest ? NodeId : null,
+        };
+
+        // Recorded before the send, not after. The owner can answer before SendAsync has returned
+        // here - it does, often, on a loopback cluster - and a reply that arrives with nothing to
+        // say who it was for is dropped, leaving the client to wait out its whole timeout.
+        var proxied = frame.Kind == WireKind.AskRequest && frame.CorrelationId is { Length: > 0 };
+        if (proxied) _proxiedAsks[frame.CorrelationId!] = (from, DateTimeOffset.UtcNow);
+
+        try
+        {
+            await _transport.SendAsync(owner, forwarded, _shutdown.Token).ConfigureAwait(false);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            // The owner could not be reached after all. Falling through to local delivery is the
+            // lesser wrong: the actor runs in the wrong place rather than the message being lost.
+            if (proxied) _proxiedAsks.TryRemove(frame.CorrelationId!, out _);
+
+            _logger.LogDebug(ex, "Could not forward a client frame to {NodeId}; handling it here.", owner);
+            return false;
+        }
+    }
+
+    /// <summary>Sends a reply back to the client this node asked on behalf of.</summary>
+    private async Task<bool> TryReturnToClientAsync(WireEnvelope frame, string correlationId)
+    {
+        if (!_proxiedAsks.TryRemove(correlationId, out var proxied) || _transport is null) return false;
+
+        try
+        {
+            await _transport.SendAsync(proxied.Client, frame, _shutdown.Token).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            // The client hung up while its answer was in flight. Nothing to do and nobody to tell.
+            _logger.LogDebug(ex, "Could not return a reply to client {ClientId}.", proxied.Client);
+        }
+
+        return true;
     }
 
     /// <summary>
@@ -1262,6 +1370,12 @@ public sealed class ActorSystem : IActorSystem
             }
 
             if (swept > 0) _logger.LogDebug("Idle sweep deactivated {Count} actor(s).", swept);
+
+            // A forwarded ask whose reply never came. Without this the map grows for the life of
+            // the process, one entry per client ask that timed out anywhere in the cluster.
+            var stale = DateTimeOffset.UtcNow - Options.DefaultAskTimeout - TimeSpan.FromMinutes(1);
+            foreach (var (correlation, proxied) in _proxiedAsks)
+                if (proxied.At < stale) _proxiedAsks.TryRemove(correlation, out _);
         }
     }
 

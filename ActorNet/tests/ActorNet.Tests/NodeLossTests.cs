@@ -2,6 +2,7 @@
 
 using ActorNet.Client;
 using ActorNet.Cluster;
+using ActorNet.Serialization;
 
 namespace ActorNet.Tests;
 
@@ -42,15 +43,27 @@ public sealed class NodeLossTests
             .Select(i => ActorId.For<CounterActor>($"hold-{i}"))
             .First(id => holder.Cluster.OwnerOf(id) == "hold-b");
 
-        // Through a client, because a client writes to the node it is connected to and that node
-        // delivers locally rather than forwarding. That is how an actor comes to be running on a
-        // node the ring says does not own it - the same way a warm handoff leaves them.
-        await using var client = new ActorNetClient("127.0.0.1", holder.BoundPort);
-        client.RegisterMessage<Add>();
-        await client.TellAsync(theirs, new Add(3));
+        // Sent from one node to the other, stamped as coming from a member, which is what makes it
+        // arrive already routed and therefore handled where it lands. That is a peer sending with a
+        // stale view of the ring, and it is one of the ways an actor comes to be running on a node
+        // the ring says does not own it - a warm handoff is the other.
+        //
+        // A client cannot be used for this any more: a node forwards a non-member's frame to the
+        // owner precisely so this does not happen by accident.
+        Assert.NotNull(doomed.Transport);
+
+        var (alias, payload) = doomed.Serializer.Serialize(new Add(3));
+        await doomed.Transport.SendAsync("hold-a", new WireEnvelope
+        {
+            Kind = WireKind.Message,
+            Target = theirs.ToString(),
+            MessageAlias = alias,
+            Payload = payload,
+            FromNode = "hold-b",
+        }, TestContext.Current.CancellationToken);
 
         await TestHarness.AssertEventuallyAsync(() => holder.LocalActors.Contains(theirs),
-            "the client's message should have activated the actor where it was sent");
+            "a frame from a peer is handled where it arrives");
 
         await KillAsync(doomed);
 

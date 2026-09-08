@@ -28,6 +28,6 @@ neither replaces the other.
 | [ActorNet.Serialization](actornet-serialization.md) | 9 |
 | [ActorNet.Streams](actornet-streams.md) | 7 |
 
-149 types, 785 members.
+149 types, 788 members.
 
 [Back to the documentation](../README.md)

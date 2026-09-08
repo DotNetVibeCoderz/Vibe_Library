@@ -132,6 +132,14 @@ public sealed class ClusterMembership : IClusterView, IAsyncDisposable
             .DefaultIfEmpty(SelfNodeId)
             .Min(StringComparer.Ordinal);
 
+    /// <summary>Whether <paramref name="nodeId"/> is a member of this cluster.</summary>
+    /// <remarks>
+    /// Used to tell a peer's frame from a client's. A client stamps its own id on every frame and is
+    /// never in the member table, which is the only thing that distinguishes the two at the point a
+    /// frame arrives.
+    /// </remarks>
+    public bool IsMember(string nodeId) => _members.ContainsKey(nodeId);
+
     /// <summary>Whether this node is the one that hands out the leave token.</summary>
     public bool IsCoordinator => string.Equals(Coordinator, SelfNodeId, StringComparison.Ordinal);
 

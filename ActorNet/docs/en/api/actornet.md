@@ -267,6 +267,18 @@ This node's transport, for tests that need to pull the network out from under it
 
 Internal on purpose. An abrupt node loss is the case failure detection exists for and the one a graceful `StopAsync` cannot produce - it announces a departure, which peers act on immediately and which therefore proves nothing about detection. Closing the transport is the closest an in-process test can get to unplugging a cable.
 
+### method `TryForwardForClientAsync(WireEnvelope, ActorId)`
+
+Sends a client's misrouted frame to the node that owns the key, once.
+
+Only for a sender that is not a cluster member. A peer routed with its own view of the ring, and bouncing its message onward is what risks a loop between two nodes mid-rebalance; a client has no view at all and sends to whichever node it happens to hold a connection to. Delivering that here would activate the actor on a node that does not own its key, and the cluster would hold two activations of one address.
+
+One hop, by construction: the forwarded frame is stamped with this node's id, so the node that receives it sees a member and delivers locally.
+
+### method `TryReturnToClientAsync(WireEnvelope, String)`
+
+Sends a reply back to the client this node asked on behalf of.
+
 ### method `WarmSuccessorsAsync(IReadOnlyCollection<ActorId>)`
 
 Tells whoever inherits these keys to activate them now rather than on the first message.

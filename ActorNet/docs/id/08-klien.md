@@ -47,16 +47,17 @@ huruf besar-kecil.
 
 ## Routing di dalam cluster
 
-Sebuah node mengirimkan pesan masuk ke actor lokal dan **tidak pernah meneruskannya**. Itu disengaja
-— memantulkan pesan sebuah peer ke node lain berisiko menciptakan loop di antara dua node yang
-berbeda pendapat saat rebalance — tapi konsekuensinya bagi klien mudah terlewat:
+Node mana pun adalah titik masuk yang sah. Frame yang datang dari sesuatu yang bukan anggota cluster
+— yaitu klien — untuk kunci yang bukan miliknya akan **diteruskan sekali** ke node pemiliknya, dan
+balasannya dibawa kembali lewat node yang ditanya klien tadi. Jadi setiap klien benar di dalam
+cluster, tahu ring atau tidak.
 
-> Klien yang mengirim ke node yang bukan pemilik kunci akan mengaktifkan actor itu **di node tempat
-> ia mengirim**. Node lain yang merutekan lewat ring akan mencapai aktivasi lain dari alamat yang
-> sama, dan "satu aktivasi per alamat per cluster" tidak lagi berlaku.
+Penerusan itu sengaja tidak simetris. Frame dari *anggota* selalu ditangani di tempat ia tiba, karena
+peer sudah merutekan dengan pandangannya sendiri, dan memantulkan pesannya justru berisiko
+menciptakan loop di antara dua node yang berbeda pendapat saat rebalance. Hanya pengirim yang tidak
+ada di tabel anggota yang diperlakukan sebagai belum dirutekan.
 
-Terhadap satu node saja, ini tidak mungkin terjadi. Terhadap cluster, klien C# bisa menghitung
-sendiri siapa pemiliknya:
+Yang dibayar adalah satu hop. Klien C# bisa menghindarinya:
 
 ```csharp
 var client = new ActorNetClient(["10.0.0.1:9000", "10.0.0.2:9000"]) { ClusterAware = true };
@@ -69,11 +70,14 @@ secara bawaan) dan setiap kali koneksi ke node yang disebutnya gagal.
 
 Routing-nya menurun kualitasnya, bukan gagal. Klien yang tidak bisa memperoleh pandangan, atau yang
 pandangannya menyebut node yang tidak menjawab, akan mengirim ke node yang sudah terhubung dengannya
-— perilaku lama, dengan peringatan lama di atas. Tidak ada di sini yang bisa menggagalkan pengiriman
-yang tadinya akan berhasil.
+dan diteruskan dari sana. Tidak ada di sini yang bisa menggagalkan pengiriman yang tadinya berhasil.
 
-**Klien Node.js, Python, dan Go belum merutekan.** Di dalam cluster, mereka sebaiknya menghubungi
-satu node saja, atau diberi alamat pemiliknya oleh apa pun yang mengonfigurasi mereka.
+**Klien Node.js, Python, dan Go tidak merutekan.** Mereka tetap benar tanpa itu, dan membayar
+hop-nya.
+
+Satu hal yang perlu diketahui tentang hop itu: node yang meneruskan sebuah ask menyimpan korelasinya
+di memori sampai jawabannya tiba. Bila node itu restart saat pertanyaan sedang melayang, klien
+melihat timeout, bukan jawaban dari tempat lain.
 
 ## Protokol wire
 

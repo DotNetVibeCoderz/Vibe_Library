@@ -131,6 +131,12 @@ Whether this node is the one that hands out the leave token.
 
 ### method `IsLocal(ActorId)`
 
+### method `IsMember(String)`
+
+Whether `nodeId` is a member of this cluster.
+
+Used to tell a peer's frame from a client's. A client stamps its own id on every frame and is never in the member table, which is the only thing that distinguishes the two at the point a frame arrives.
+
 ### property `IsSingleNode`
 
 ### method `JoinOneSeedAsync(String, String, Int32, Int32, WireEnvelope, CancellationToken)`
