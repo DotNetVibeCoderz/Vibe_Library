@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>ActorNet.Soak</RootNamespace>
+    <AssemblyName>ActorNet.Soak</AssemblyName>
+    <IsPackable>false</IsPackable>
+
+    <!--
+      Not a test project. The runner is built to start, assert and stop; this is built to keep
+      going for hours and report what drifted - two different jobs, and a test runner is the wrong
+      shape for the second.
+    -->
+    <IsTestProject>false</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/ActorNet.Core/ActorNet.Core.csproj" />
+  </ItemGroup>
+
+</Project>

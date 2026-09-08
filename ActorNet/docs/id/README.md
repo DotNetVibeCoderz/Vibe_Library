@@ -16,6 +16,7 @@
 | [9. Perkakas](09-perkakas.md) | CLI, konsol, dan sample |
 | [10. Performa](10-performa.md) | Apa yang diukur, dan apa yang tidak ditunjukkannya |
 | [11. Pemecahan masalah](11-pemecahan-masalah.md) | Kegagalan yang benar-benar sering terjadi |
+| [Referensi API](../en/api/README.md) | Dihasilkan dari sumbernya, satu halaman per namespace (bahasa Inggris) |
 
 Layak dibaca juga:
 

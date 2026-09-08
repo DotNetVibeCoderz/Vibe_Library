@@ -19,6 +19,8 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/ActorNet.Tests/ActorNet.Tests.csproj" />
+    <Project Path="tests/ActorNet.Soak/ActorNet.Soak.csproj" />
+    <Project Path="tools/ActorNet.ApiDocs/ActorNet.ApiDocs.csproj" />
   </Folder>
   <Folder Name="/benchmarks/">
     <Project Path="benchmarks/ActorNet.Benchmarks/ActorNet.Benchmarks.csproj" />

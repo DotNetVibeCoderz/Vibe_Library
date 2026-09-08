@@ -16,6 +16,7 @@
 | [9. Tooling](09-tooling.md) | The CLI, the console, the samples |
 | [10. Performance](10-performance.md) | What was measured, and what it does not show |
 | [11. Troubleshooting](11-troubleshooting.md) | The failures people actually hit |
+| [API reference](api/README.md) | Generated from the source, one page per namespace |
 
 Also worth reading:
 

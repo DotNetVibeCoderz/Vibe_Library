@@ -24,7 +24,17 @@ dotnet run --project src/ActorNet.Dashboard                             # the we
 dotnet run --project samples/ActorNet.Samples.Avalonia                  # desktop samples
 dotnet run -c Release --project benchmarks/ActorNet.Benchmarks -- --filter '*RoutingBenchmarks*'
 dotnet pack ActorNet.slnx -c Release -o artifacts
+dotnet run --project tests/ActorNet.Soak -c Release -- --minutes 30    # drift, not correctness
+dotnet run --project tools/ActorNet.ApiDocs -c Release -- docs/en/api src/*/bin/Release/net10.0/*.xml
 ```
+
+The soak exits non-zero and says which of heap, activations, dead letters, failure rate or
+throughput drifted. Its heap check reads the **lowest** sample in a window, not the last one: the
+managed heap is a sawtooth, and a run with no leak at all swung between 2 and 11 MiB every twenty
+seconds. Comparing two instantaneous readings compares GC timing.
+
+`docs/en/api/` is generated and committed. Nothing regenerates it automatically, so after changing a
+`///` comment worth publishing, run the generator and commit the result.
 
 **`dotnet test` does not work here.** The .NET 10 SDK dropped the VSTest bridge that xunit.v3's
 Microsoft.Testing.Platform runner needs, and it fails with MSB4025 before running anything. The test

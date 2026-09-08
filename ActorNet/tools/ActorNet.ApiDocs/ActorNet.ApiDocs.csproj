@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>ActorNet.ApiDocs</RootNamespace>
+    <AssemblyName>ActorNet.ApiDocs</AssemblyName>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <!--
+    No reference to ActorNet itself, and no DocFX. The compiler already writes every summary and
+    remark to an XML file next to the assembly; this reads that file. Loading the assembly as well
+    would give better signatures and would mean the documentation could only be built for the
+    framework the tool happens to target.
+  -->
+
+</Project>
