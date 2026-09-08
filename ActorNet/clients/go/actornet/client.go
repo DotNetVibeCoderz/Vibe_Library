@@ -94,6 +94,18 @@ type Client struct {
 	pending   map[string]chan frame
 	closeOnce sync.Once
 	closed    chan struct{}
+
+	// Cluster-aware routing. The first connection stays what it was - somewhere to ask for the
+	// member table, and somewhere to fall back to - and these are opened on demand.
+	clusterAware  bool
+	routesRefresh time.Duration
+
+	routesMu      sync.Mutex
+	direct        map[string]*nodeLink
+	ring          *HashRing
+	nodeEndpoints map[string]string
+	routesTakenAt time.Time
+	routing       bool
 }
 
 // Option configures a Client.
@@ -126,6 +138,10 @@ func NewCluster(addrs []string, options ...Option) *Client {
 		askTimeout: 10 * time.Second,
 		pending:    make(map[string]chan frame),
 		closed:     make(chan struct{}),
+
+		routesRefresh: 30 * time.Second,
+		direct:        make(map[string]*nodeLink),
+		nodeEndpoints: make(map[string]string),
 	}
 
 	for _, option := range options {
@@ -215,7 +231,7 @@ func (c *Client) Tell(ctx context.Context, target, alias string, payload any) er
 		return fmt.Errorf("actornet: encoding %s: %w", alias, err)
 	}
 
-	return c.write(frame{
+	return c.send(ctx, target, frame{
 		Kind:         kindMessage,
 		Target:       target,
 		MessageAlias: alias,
@@ -248,7 +264,7 @@ func (c *Client) Ask(ctx context.Context, target, alias string, payload any) (Re
 		c.pendingMu.Unlock()
 	}()
 
-	err = c.write(frame{
+	err = c.send(ctx, target, frame{
 		Kind:          kindAskRequest,
 		Target:        target,
 		MessageAlias:  alias,
@@ -295,6 +311,7 @@ func (c *Client) Close() error {
 	var err error
 	c.closeOnce.Do(func() {
 		close(c.closed)
+		c.closeLinks()
 		c.connectMu.Lock()
 		defer c.connectMu.Unlock()
 		if c.conn != nil {
@@ -362,16 +379,26 @@ func (c *Client) readLoop(conn net.Conn) {
 			continue
 		}
 
-		c.pendingMu.Lock()
-		waiting, ok := c.pending[f.CorrelationID]
-		c.pendingMu.Unlock()
+		c.deliver(f)
+	}
+}
 
-		if ok {
-			select {
-			case waiting <- f:
-			default:
-			}
-		}
+// deliver hands a frame to whoever is waiting for it, from any connection.
+//
+// Shared by the first connection and by every routed link, because a reply comes back on whichever
+// one its question went out on and the pending table does not care which that was.
+func (c *Client) deliver(f frame) {
+	c.pendingMu.Lock()
+	waiting, ok := c.pending[f.CorrelationID]
+	c.pendingMu.Unlock()
+
+	if !ok {
+		return
+	}
+
+	select {
+	case waiting <- f:
+	default:
 	}
 }
 

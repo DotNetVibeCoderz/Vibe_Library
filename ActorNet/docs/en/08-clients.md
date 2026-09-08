@@ -57,16 +57,35 @@ arrives, because a peer routed with its own view and bouncing its message onward
 loop between two nodes disagreeing during a rebalance. Only a sender absent from the member table is
 treated as unrouted.
 
-What it costs is a hop. The C# client can avoid it:
+What it costs is a hop. Every client can avoid it:
 
 ```csharp
 var client = new ActorNetClient(["10.0.0.1:9000", "10.0.0.2:9000"]) { ClusterAware = true };
 ```
 
-It asks a node for the member table, builds the same ring the cluster uses — the same hash, the same
-virtual-node count, so it reaches the same answer — and opens a connection per node it actually
-addresses. The view is refreshed every `RoutesRefreshAfter` (30 seconds by default) and whenever a
-connection to a node named by it fails.
+```js
+const client = new ActorNetClient({ endpoints: ['10.0.0.1:9000', '10.0.0.2:9000'], clusterAware: true });
+```
+
+```python
+client = ActorNetClient(endpoints=["10.0.0.1:9000", "10.0.0.2:9000"], cluster_aware=True)
+```
+
+```go
+client := actornet.NewCluster(addrs, actornet.WithClusterAwareRouting())
+```
+
+Each asks a node for the member table, builds the same ring the cluster uses — the same hash, the
+same virtual-node count, so it reaches the same answer — and opens a connection per node it actually
+addresses. The view is refreshed every 30 seconds by default, and whenever a connection to a node
+named by it fails.
+
+**Four implementations of one ring, and only arithmetic keeps them agreeing.** A divergence would
+fail nothing at runtime: the client would route to a node that does not own the key, the node would
+forward it, and everything would work while quietly paying the hop the routing exists to avoid. So
+the same hash vectors and the same ten-key owner table are pinned in all four, and CI runs them —
+`clients/nodejs/ring.test.js`, `clients/python/ring_check.py`, `clients/go/actornet/ring_test.go`,
+and `HashRingTests.TheRingItselfIsPinned`, which is the copy the others were taken from.
 
 Routing degrades rather than fails. A client that cannot get a view, or whose view names a node that
 will not answer, sends to the node it is already connected to and is forwarded from there.
@@ -76,8 +95,6 @@ node it was talking to went away while the question was in flight. That fails **
 than waiting out the timeout, and the client drops the connection and throws its view away, so the
 caller's next attempt routes afresh. It is the same contract a client with no routing at all has
 when an endpoint disappears.
-
-**The Node.js, Python and Go clients do not route.** They are correct without it and pay the hop.
 
 One thing to know about the hop: the node that forwarded an ask holds the correlation until the
 answer arrives, in memory. If that node restarts while a question is in flight, the client sees a

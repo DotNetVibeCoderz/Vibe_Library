@@ -163,7 +163,8 @@ works and something automated proves it** — not when the code exists.
 - [x] Cluster-aware routing in the C# client (`ClusterAware = true`): it asks a node for the member
       table, builds the same ring, and opens a connection per node it addresses, which saves the
       forwarding hop
-- [ ] The same for the Node.js, Python and Go clients, which pay the hop instead
+- [x] The same for the Node.js, Python and Go clients: each builds the ring itself, and all four
+      implementations are pinned against one table of hash vectors and owners, checked in CI
 
 ## Testing
 
@@ -231,6 +232,10 @@ Ticking a box means it works, not that it is finished. These are the caveats wor
 - **The soak has been run for minutes, not days.** Three minutes on the development machine: 4.1M
   messages, throughput flat at about 24,000/s, live heap 3 MiB to 6 MiB, no dead letters. That is
   long enough to catch something growing fast and far too short to catch something growing slowly.
+- **The Go client's routing has never run outside CI.** There is no Go toolchain on the machine it
+  was written on. CI vets it, builds it, and runs its ring tests against the same pinned table as
+  the other three - which covers the half that can silently diverge - but the connection handling
+  is exercised by nothing but a single-node example.
 - **A forwarded ask is proxied in memory.** The node that forwarded a client's question holds the
   correlation id until the answer comes back, so an ask in flight when that node restarts is lost
   rather than re-routed - the client sees a timeout. A client that routes for itself

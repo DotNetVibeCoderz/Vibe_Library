@@ -210,13 +210,29 @@ jobs:
           go vet ./...
           go build ./...
 
+      # Four implementations of one hash ring, and only arithmetic keeps them agreeing. A
+      # divergence fails nothing at runtime - the client routes to the wrong node, the node
+      # forwards, and everything works while paying the hop the routing exists to avoid. The same
+      # vectors and the same owner table are pinned in each, against the .NET copy.
+      - name: The Go client agrees with .NET about the ring
+        working-directory: ActorNet/clients/go
+        run: go test ./...
+
       - name: Check the Node client parses
         working-directory: ActorNet/clients/nodejs
-        run: node --check actornet.js && node --check examples/banking.js
+        run: node --check actornet.js && node --check ring.js && node --check examples/banking.js
+
+      - name: The Node client agrees with .NET about the ring
+        working-directory: ActorNet/clients/nodejs
+        run: node ring.test.js
 
       - name: Check the Python client compiles
         working-directory: ActorNet/clients/python
         run: python -m compileall -q actornet examples
+
+      - name: The Python client agrees with .NET about the ring
+        working-directory: ActorNet/clients/python
+        run: python ring_check.py
 
       # Each client is then run against a real node, which is the only way to catch a protocol
       # drift between them and the runtime - a parse check would not.

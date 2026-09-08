@@ -31,6 +31,31 @@ public sealed class HashRingTests
     }
 
     [Fact]
+    public void TheRingItselfIsPinned()
+    {
+        // The hash is not the whole ring. Virtual node placement, the sort and the wrap all have to
+        // match too, and three client libraries now build this ring for themselves to send straight
+        // to an owner. A divergence would not fail anything at runtime - the client would route to
+        // the wrong node, the node would forward, and everything would work while quietly paying
+        // the hop the routing exists to avoid.
+        //
+        // The same table is asserted in clients/nodejs/ring.test.js, clients/python/ring_check.py
+        // and clients/go/actornet/ring_test.go. This is the copy the others were taken from.
+        var ring = new HashRing(["node-1", "node-2", "node-3"]);
+
+        Assert.Equal("node-2", ring.OwnerOf("CounterActor/a"));
+        Assert.Equal("node-2", ring.OwnerOf("CounterActor/b"));
+        Assert.Equal("node-2", ring.OwnerOf("CounterActor/c"));
+        Assert.Equal("node-2", ring.OwnerOf("Wallet/1"));
+        Assert.Equal("node-1", ring.OwnerOf("Wallet/2"));
+        Assert.Equal("node-3", ring.OwnerOf("Order/xyz"));
+        Assert.Equal("node-1", ring.OwnerOf("Order/abc"));
+        Assert.Equal("node-2", ring.OwnerOf("x"));
+        Assert.Equal("node-3", ring.OwnerOf(""));
+        Assert.Equal("node-3", ring.OwnerOf("Type/Key"));
+    }
+
+    [Fact]
     public void AddingANodeMovesRoughlyOneOverNOfTheKeyspace()
     {
         var keys = Keys(20_000);

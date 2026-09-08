@@ -14,9 +14,17 @@ in sync with the runtime.
 ## What a client can and cannot do
 
 A client is **not** a cluster member. It connects to one node, and that node forwards to whichever
-node owns the target actor, so any node is a valid entry point. What a client does not get is a
-membership view of its own: it cannot tell you where an actor lives, and if the node it is
-connected to goes down, it must reconnect somewhere else rather than failing over on its own.
+node owns the target actor, so any node is a valid entry point. If the node it is connected to goes
+down, it reconnects somewhere else rather than failing over on its own.
+
+It can ask for a membership view, though, and every client now does on request. With cluster-aware
+routing on — `ClusterAware` in C#, `clusterAware` in Node.js, `cluster_aware` in Python,
+`WithClusterAwareRouting()` in Go — the client asks a node for the member table, builds the same
+hash ring the cluster uses, and opens a connection per node it actually addresses. That saves the
+forwarding hop and nothing else: a client with a stale view, or none, still reaches the right actor.
+
+The four rings are kept in step by pinning the same hash vectors and owner table in each, run by CI.
+A divergence would fail nothing at runtime, which is exactly why it needs a test.
 
 Because a client has no address the cluster can dial, the node answers on the connection the client
 opened. That is why every client keeps one long-lived socket and keeps reading it even when it is

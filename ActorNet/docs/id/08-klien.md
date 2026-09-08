@@ -57,16 +57,36 @@ peer sudah merutekan dengan pandangannya sendiri, dan memantulkan pesannya justr
 menciptakan loop di antara dua node yang berbeda pendapat saat rebalance. Hanya pengirim yang tidak
 ada di tabel anggota yang diperlakukan sebagai belum dirutekan.
 
-Yang dibayar adalah satu hop. Klien C# bisa menghindarinya:
+Yang dibayar adalah satu hop. Semua klien bisa menghindarinya:
 
 ```csharp
 var client = new ActorNetClient(["10.0.0.1:9000", "10.0.0.2:9000"]) { ClusterAware = true };
 ```
 
-Ia meminta tabel anggota kepada sebuah node, membangun ring yang sama dengan yang dipakai cluster —
-hash yang sama, jumlah virtual node yang sama, sehingga hasilnya pun sama — lalu membuka satu koneksi
-per node yang benar-benar dihubunginya. Pandangannya disegarkan setiap `RoutesRefreshAfter` (30 detik
-secara bawaan) dan setiap kali koneksi ke node yang disebutnya gagal.
+```js
+const client = new ActorNetClient({ endpoints: ['10.0.0.1:9000', '10.0.0.2:9000'], clusterAware: true });
+```
+
+```python
+client = ActorNetClient(endpoints=["10.0.0.1:9000", "10.0.0.2:9000"], cluster_aware=True)
+```
+
+```go
+client := actornet.NewCluster(addrs, actornet.WithClusterAwareRouting())
+```
+
+Masing-masing meminta tabel anggota kepada sebuah node, membangun ring yang sama dengan yang dipakai
+cluster — hash yang sama, jumlah virtual node yang sama, sehingga hasilnya pun sama — lalu membuka
+satu koneksi per node yang benar-benar dihubunginya. Pandangannya disegarkan setiap 30 detik secara
+bawaan, dan setiap kali koneksi ke node yang disebutnya gagal.
+
+**Empat implementasi satu ring, dan hanya aritmetika yang menjaga mereka sepakat.** Divergensi tidak
+akan menggagalkan apa pun saat berjalan: klien akan merutekan ke node yang bukan pemilik kunci, node
+itu meneruskannya, dan semuanya bekerja sambil diam-diam membayar hop yang justru ingin dihindari
+routing ini. Karena itu vektor hash dan tabel sepuluh kunci yang sama dipatok di keempatnya, dan CI
+menjalankannya — `clients/nodejs/ring.test.js`, `clients/python/ring_check.py`,
+`clients/go/actornet/ring_test.go`, serta `HashRingTests.TheRingItselfIsPinned`, yang menjadi sumber
+salinan ketiganya.
 
 Routing-nya menurun kualitasnya, bukan gagal. Klien yang tidak bisa memperoleh pandangan, atau yang
 pandangannya menyebut node yang tidak menjawab, akan mengirim ke node yang sudah terhubung dengannya
@@ -77,9 +97,6 @@ lawan bicaranya pergi saat pertanyaan masih melayang. Itu gagal **segera**, buka
 timeout, dan klien membuang koneksi itu beserta pandangannya, sehingga percobaan berikutnya
 dirutekan ulang. Kontraknya sama dengan klien tanpa routing sama sekali ketika sebuah endpoint
 menghilang.
-
-**Klien Node.js, Python, dan Go tidak merutekan.** Mereka tetap benar tanpa itu, dan membayar
-hop-nya.
 
 Satu hal yang perlu diketahui tentang hop itu: node yang meneruskan sebuah ask menyimpan korelasinya
 di memori sampai jawabannya tiba. Bila node itu restart saat pertanyaan sedang melayang, klien
