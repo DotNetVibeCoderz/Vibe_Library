@@ -123,10 +123,65 @@ when it goes over temperature, and is swept when it stops reporting.
 
 ![Telemetry: a stream into one actor per device](../images/samples-telemetry.png)
 
-## Not built yet
+## Changing a pipeline's shape
 
-- Merge, split and fan-in operators
-- Durable stream positions across a restart
+Everything on `ActorStream<T>` itself is one-in, one-out, which is what an async enumerable is.
+`StreamShapes` has the two that are not:
+
+```csharp
+// Several sources read at once, in whatever order they arrive.
+var merged = StreamShapes.Merge(fromKafka, fromTimer, fromHttp);
+
+// One source into named branches.
+var byKind = StreamShapes.Split(events, e => e.Kind, ["order", "payment", "refund"]);
+await Task.WhenAll(byKind.Select(b => b.Value.ToActorsAsync(system, Route)));
+
+// The common reason to merge: several sources into one actor.
+await StreamShapes.FanInAsync(system, auditor, [fromKafka, fromHttp]);
+```
+
+A merge is interleaved, not concatenated: every source is read concurrently, so a source with
+nothing to say does not hold up the others — and the order of the result is not the order of the
+arguments. A source that fails fails the merge, because a merge that swallowed it would report a
+short stream as a complete one.
+
+A split's branches must be named in advance. A split that invented a branch on first sight would
+have to buffer everything for a branch nobody is reading yet, and the buffer would be unbounded
+because nothing can say how long "yet" is. An item whose key names no branch is dropped — failing a
+whole pipeline over one unroutable item is the worse of the two answers for what this is usually
+doing. **Every branch must be consumed, concurrently**: they share one reader of the source, so a
+branch nobody reads fills its buffer and stops the source, which stops the others.
+
+Both buffer, and both bound the buffer, for the same reason the mailboxes do: a fast producer is
+made to wait for a slow reader instead of filling the heap.
+
+## Resuming where a run left off
+
+```csharp
+var positions = new StoredStreamPositions(system.Options.StateStore);
+
+await journalEntries
+    .Resume(positions, "audit-view", offsetOf: entry => entry.Sequence)
+    .ToActorAsync(system, auditor);
+```
+
+The position lives in the ordinary state store, so it lasts exactly as long as everything else does
+and needs no second thing to configure or back up.
+
+Two things to be clear about:
+
+**Only for a source that replays** — the same items, in the same order, on the next run. A journal
+read does that. A socket, a timer and a queue that acknowledges do not, and skipping the first *n*
+items of one of those skips whatever happened to arrive first.
+
+**Delivery is at least once.** The position is written after an item has been handled, so an
+interruption replays that item rather than losing it, and a handler behind this has to be
+idempotent. Writing the position first would make it at most once and lose the item instead.
+
+`checkpointEvery` trades writes against replay: the position lags by up to that many items while the
+run is going, and a run that ends — cleanly, early, or by throwing — flushes what it got to. An item
+delivered to a consumer that then stopped the enumeration is *not* counted as handled, because the
+producer never got control back to learn that it was; it replays, which is the safe direction.
 
 See the [roadmap](../../Plan.md).
 

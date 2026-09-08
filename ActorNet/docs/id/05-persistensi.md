@@ -122,6 +122,85 @@ benar, hanya lebih lambat.
 `TruncateOnSnapshot` mati secara bawaan karena jejak audit biasanya justru inti dari event sourcing,
 dan snapshot bukan jejak audit.
 
+## Memadatkan journal
+
+Snapshot membuat peristiwa sebelumnya tidak lagi diperlukan untuk pemulihan. `DeleteToAsync` akan
+menghapusnya — dan akan menghapus apa pun yang Anda perintahkan. Ia tidak punya cara untuk tahu
+apakah ada snapshot di nomor urut itu, jadi angka yang salah menghilangkan state actor secara
+diam-diam, dan kehilangan itu baru terlihat saat actor tersebut dipulihkan berikutnya, yang bisa
+berminggu-minggu kemudian di node yang tidak diawasi siapa pun.
+
+`JournalCompactor` memeriksa lebih dulu:
+
+```csharp
+var compactor = new JournalCompactor(system.Options.EventJournal, system.Options.SnapshotStore);
+
+// Snapshot dulu, baru dipotong - selalu urutan ini.
+var result = await compactor.SnapshotAndCompactAsync(persistenceId, state, sequence,
+    CompactionPolicy.KeepRecent);
+
+if (!result.Compacted) Console.WriteLine(result.Reason);
+```
+
+Ia menolak menghapus apa pun yang tidak dicakup snapshot, dan menyebutkan *alasannya* alih-alih diam
+saja. Ia tidak bisa membuat snapshot dan pemotongan menjadi atomik — keduanya store terpisah, dan
+journal tidak punya transaksi yang membentang di antaranya — tapi ia gagal ke arah yang aman:
+interupsi di antara keduanya menyisakan lebih banyak riwayat daripada yang dibutuhkan, tidak pernah
+lebih sedikit.
+
+Kebijakan menentukan berapa banyak riwayat yang bertahan setelah snapshot:
+
+| Kebijakan | Menyimpan |
+|---|---|
+| `CompactionPolicy.Aggressive` | Tidak ada yang dicakup snapshot. Sama seperti `DeleteToAsync`. |
+| `CompactionPolicy.KeepRecent` | Seribu peristiwa terakhir. |
+| `CompactionPolicy.KeepAWeek` | Semua yang lebih muda dari tujuh hari. |
+| `new CompactionPolicy(KeepEvents: n, KeepFor: t)` | Milik Anda sendiri. |
+
+Menyisakan ekor lebih penting daripada kelihatannya: peristiwa-peristiwa itu adalah jejak audit,
+masukan bagi proyeksi yang belum mengejar ketertinggalan, dan satu-satunya cara menjawab pertanyaan
+tentang apa yang terjadi yang tak terpikir untuk ditanyakan waktu itu.
+
+## Proyeksi
+
+Read model adalah lipatan atas sebuah journal. Peristiwanya yang menjadi catatan, jadi pandangannya
+selalu bisa dibuang dan dibangun ulang — dan justru sifat itulah yang membuatnya layak dimiliki.
+
+```csharp
+public sealed class Balances : IProjection
+{
+    public string Name => "balances";
+
+    public Task ApplyAsync(JournalEntry entry, CancellationToken cancellationToken)
+    {
+        if (entry.Event is Deposited d) _totals[entry.PersistenceId] += d.Amount;
+        return Task.CompletedTask;
+    }
+}
+
+var runner = new ProjectionRunner(
+    system.Options.EventJournal,
+    new StoredStreamPositions(system.Options.StateStore));
+
+await runner.CatchUpAsync(view, persistenceId);     // hanya melipat yang baru
+await runner.RewindAsync(view, persistenceId);      // run berikutnya mulai dari awal
+```
+
+Posisinya disimpan per proyeksi *dan* per stream, jadi satu proyeksi atas beberapa stream menyimpan
+posisi untuk masing-masing — satu posisi bersama akan benar untuk stream terakhir yang dijalankan dan
+diam-diam salah untuk yang lain.
+
+`ApplyAsync` dipanggil **paling sedikit sekali** per peristiwa. Posisinya ditulis setelah sebuah
+peristiwa ditangani, bukan sebelumnya, jadi interupsi mengulang alih-alih melewati — arah yang aman,
+sekaligus alasan sebuah proyeksi harus tahan melihat peristiwa yang sama dua kali.
+
+**Satu stream pada satu waktu.** Nomor urut bersifat per persistence id, jadi tidak ada posisi yang
+berarti "semua sebelum ini, di mana pun", padahal proyeksi atas seluruh journal membutuhkannya.
+Memberi journal sebuah urutan total berarti satu kolom di skema setiap provider dan satu pembaca yang
+tahan terhadap celah yang ditinggalkan auto-increment ketika dua penulis melakukan commit tak
+berurutan. Sampai itu ada, pemanggil yang tahu stream mana yang dipedulikannya menjalankan satu
+runner per stream.
+
 ## Store
 
 Tiga sambungan, ditukar lewat options. Setiap provider lulus suite konformans yang sama, jadi mereka

@@ -119,6 +119,82 @@ just slower.
 `TruncateOnSnapshot` is off by default because the audit trail is usually the point of event
 sourcing, and a snapshot is not one.
 
+## Compacting a journal
+
+A snapshot makes the events before it unnecessary for recovery. `DeleteToAsync` will remove them,
+and it will remove whatever else you tell it to — it has no way to know whether a snapshot exists at
+that sequence, so a wrong number loses the actor's state silently, and the loss only surfaces the
+next time that actor recovers, which can be weeks later on a node nobody is watching.
+
+`JournalCompactor` checks first:
+
+```csharp
+var compactor = new JournalCompactor(system.Options.EventJournal, system.Options.SnapshotStore);
+
+// Snapshot, then truncate - in that order, always.
+var result = await compactor.SnapshotAndCompactAsync(persistenceId, state, sequence,
+    CompactionPolicy.KeepRecent);
+
+if (!result.Compacted) Console.WriteLine(result.Reason);
+```
+
+It refuses to delete anything the snapshot does not cover, and reports *why* rather than quietly
+doing nothing. It cannot make the snapshot and the truncation atomic — they are separate stores, and
+the journal has no transaction spanning them — but it fails in the safe direction: an interruption
+between the two leaves more history than needed, never less.
+
+A policy decides how much history survives the snapshot:
+
+| Policy | Keeps |
+|---|---|
+| `CompactionPolicy.Aggressive` | Nothing the snapshot covers. What `DeleteToAsync` already did. |
+| `CompactionPolicy.KeepRecent` | The last thousand events. |
+| `CompactionPolicy.KeepAWeek` | Everything younger than seven days. |
+| `new CompactionPolicy(KeepEvents: n, KeepFor: t)` | Your own. |
+
+Keeping a tail matters more than it looks: those events are the audit trail, the input to a
+projection that has not caught up, and the only way to answer a question about what happened that
+nobody thought to ask at the time.
+
+## Projections
+
+A read model is a fold over a journal. The events are the record, so the view can always be thrown
+away and rebuilt — which is the property that makes it worth having.
+
+```csharp
+public sealed class Balances : IProjection
+{
+    public string Name => "balances";
+
+    public Task ApplyAsync(JournalEntry entry, CancellationToken cancellationToken)
+    {
+        if (entry.Event is Deposited d) _totals[entry.PersistenceId] += d.Amount;
+        return Task.CompletedTask;
+    }
+}
+
+var runner = new ProjectionRunner(
+    system.Options.EventJournal,
+    new StoredStreamPositions(system.Options.StateStore));
+
+await runner.CatchUpAsync(view, persistenceId);     // folds only what is new
+await runner.RewindAsync(view, persistenceId);      // next run starts from the beginning
+```
+
+The position is stored per projection *and* per stream, so one projection over several streams keeps
+a position for each — a single shared one would be right for the last stream to run and silently
+wrong for the others.
+
+`ApplyAsync` is called **at least once** per event. The position is written after an event has been
+handled rather than before, so an interruption replays rather than skips, which is the safe
+direction — and the reason a projection has to tolerate seeing the same event twice.
+
+**One stream at a time.** Sequences are per persistence id, so there is no position that means
+"everything before this, everywhere", and a projection over the whole journal would need one. Giving
+the journal a total order means a column in every provider's schema and a reader that tolerates the
+gaps an auto-increment leaves when two writers commit out of order. Until that exists, a caller that
+knows which streams it cares about runs one runner per stream.
+
 ## The stores
 
 Three seams, swapped through options. Every provider passes the same conformance suite, so they are

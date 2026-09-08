@@ -98,8 +98,10 @@ works and something automated proves it** — not when the code exists.
 - [x] MySQL / MariaDB provider - verified in CI against a real server
 - [x] Redis provider - verified in CI against a real server
 - [x] Schema exposed for a migration tool instead of auto-creation
-- [ ] Journal compaction beyond `DeleteToAsync`
-- [ ] Projections / read-model subscriptions off the journal
+- [x] Journal compaction: `JournalCompactor` checks the snapshot before truncating and applies a
+      retention policy, so a wrong number cannot silently lose an actor's state
+- [x] Projections / read-model subscriptions off the journal, one stream at a time - see the gaps
+      below for why it is not every stream at once
 
 ## Networking
 
@@ -120,8 +122,9 @@ works and something automated proves it** — not when the code exists.
 - [x] `Where`, `Select`, `SelectAsync`, `Take`, `Batch`, `Buffer`, `Tap`
 - [x] Routing into actors by key
 - [x] Producer failures propagate through a buffer
-- [ ] Merge, split, and fan-in operators
-- [ ] Durable stream positions across a restart
+- [x] Merge, split, and fan-in operators, each bounded so a fast producer waits for a slow reader
+- [x] Durable stream positions across a restart, kept in the ordinary state store; at least once,
+      because the position is written after an item is handled rather than before
 
 ## Diagnostics
 
@@ -214,6 +217,13 @@ Ticking a box means it works, not that it is finished. These are the caveats wor
   handoff are both written straight to a socket to sidestep this, because both are sent moments
   before the transport closes; everything else still relies on the loop winning the race, which it
   ordinarily does. The right fix is to drain before cancelling, and it has not been made.
+- **A projection reads one stream, not all of them.** Sequences are per persistence id, so there
+  is no position that means "everything before this, everywhere". Giving the journal a total order
+  means a column in every provider's schema - a migration for anyone already storing events - and a
+  reader that tolerates the gaps an auto-increment leaves when two writers commit out of order.
+  That is a correctness problem to solve against four database engines, three of which have never
+  run on this machine, not an afternoon's work. A caller that knows which streams it cares about
+  runs one runner per stream today.
 - **The Kubernetes seed source has never run in Kubernetes.** There is no cluster on the machine
   this was written on. It is covered by tests against a local HTTP server serving recorded API
   responses - the request shape, the streaming of a watch, and what each event does - and not at

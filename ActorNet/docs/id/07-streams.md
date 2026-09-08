@@ -125,10 +125,67 @@ meja alarm saat suhunya berlebih, dan disapu saat berhenti melapor.
 
 ![Telemetri: satu stream ke satu actor per perangkat](../images/samples-telemetry.png)
 
-## Belum dibangun
+## Mengubah bentuk pipeline
 
-- Operator merge, split, dan fan-in
-- Posisi stream yang tahan restart
+Semua yang ada pada `ActorStream<T>` sendiri bersifat satu-masuk satu-keluar, dan memang itulah
+async enumerable. `StreamShapes` memuat dua bentuk yang bukan:
+
+```csharp
+// Beberapa sumber dibaca sekaligus, sesuai urutan kedatangan.
+var merged = StreamShapes.Merge(fromKafka, fromTimer, fromHttp);
+
+// Satu sumber menjadi beberapa cabang bernama.
+var byKind = StreamShapes.Split(events, e => e.Kind, ["order", "payment", "refund"]);
+await Task.WhenAll(byKind.Select(b => b.Value.ToActorsAsync(system, Route)));
+
+// Alasan paling umum untuk merge: beberapa sumber menuju satu actor.
+await StreamShapes.FanInAsync(system, auditor, [fromKafka, fromHttp]);
+```
+
+Merge bersifat berselang-seling, bukan berurutan: setiap sumber dibaca bersamaan, jadi sumber yang
+sedang tidak punya apa-apa tidak menahan yang lain — dan urutan hasilnya bukan urutan argumennya.
+Sumber yang gagal menggagalkan merge-nya, karena merge yang menelan kegagalan itu akan melaporkan
+stream yang terpotong sebagai stream yang utuh.
+
+Cabang sebuah split harus disebutkan di muka. Split yang menciptakan cabang begitu melihat kunci baru
+harus menyangga semuanya untuk cabang yang belum dibaca siapa pun, dan sangganya tak akan berbatas
+karena tak ada yang bisa memastikan berapa lama "belum" itu. Item yang kuncinya tidak menyebut cabang
+mana pun akan dibuang — menggagalkan seluruh pipeline gara-gara satu item tanpa tujuan adalah jawaban
+yang lebih buruk untuk hal yang biasanya dikerjakannya. **Setiap cabang harus dikonsumsi, dan
+bersamaan**: mereka berbagi satu pembaca sumber, jadi cabang yang tak dibaca siapa pun akan memenuhi
+sangganya lalu menghentikan sumber, yang menghentikan cabang lain.
+
+Keduanya menyangga, dan keduanya membatasi sangga itu, dengan alasan yang sama seperti mailbox:
+produsen cepat dibuat menunggu pembaca lambat, bukan memenuhi heap.
+
+## Melanjutkan dari tempat run sebelumnya berhenti
+
+```csharp
+var positions = new StoredStreamPositions(system.Options.StateStore);
+
+await journalEntries
+    .Resume(positions, "audit-view", offsetOf: entry => entry.Sequence)
+    .ToActorAsync(system, auditor);
+```
+
+Posisinya disimpan di state store biasa, jadi ia bertahan persis selama apa pun yang lain bertahan
+dan tidak menambah satu pun hal baru untuk dikonfigurasi atau dicadangkan.
+
+Dua hal yang perlu ditegaskan:
+
+**Hanya untuk sumber yang mengulang** — item yang sama, dalam urutan yang sama, pada run berikutnya.
+Pembacaan journal seperti itu. Socket, timer, dan antrean yang memakai acknowledgement tidak, dan
+melewati *n* item pertama dari salah satunya berarti melewati apa pun yang kebetulan datang duluan.
+
+**Pengirimannya paling sedikit sekali.** Posisi ditulis setelah sebuah item ditangani, jadi interupsi
+mengulang item itu alih-alih kehilangannya, dan handler di baliknya harus idempoten. Menulis posisi
+lebih dulu akan menjadikannya paling banyak sekali, dan justru menghilangkan itemnya.
+
+`checkpointEvery` menukar jumlah penulisan dengan jumlah pengulangan: posisinya tertinggal hingga
+sebanyak itu selama run berjalan, dan run yang berakhir — dengan bersih, lebih awal, atau karena
+melempar — menuliskan capaian terakhirnya. Item yang sudah sampai ke konsumen yang lalu menghentikan
+enumerasinya **tidak** dihitung tertangani, karena produsennya tak pernah mendapat kendali kembali
+untuk mengetahuinya; item itu diulang, dan itu arah yang aman.
 
 Lihat [roadmap](../../Plan.md).
 
