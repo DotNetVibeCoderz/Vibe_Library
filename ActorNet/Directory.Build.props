@@ -40,7 +40,7 @@
       0.2, 0.3 and 0.4 all landed since 0.1.0 was published, and versioning them 0.1.1, 0.1.2 would
       say less than nothing about what changed.
     -->
-    <Version>0.4.0</Version>
+    <Version>0.5.0</Version>
   </PropertyGroup>
 
   <ItemGroup>
