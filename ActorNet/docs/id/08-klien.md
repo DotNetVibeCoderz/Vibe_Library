@@ -45,6 +45,36 @@ di Go dan di C#, dan tidak ada pihak yang perlu tahu nama tipe pihak lain.
 Nama field payload adalah nama properti .NET (`Amount`, `Reference`), dicocokkan tanpa membedakan
 huruf besar-kecil.
 
+## Routing di dalam cluster
+
+Sebuah node mengirimkan pesan masuk ke actor lokal dan **tidak pernah meneruskannya**. Itu disengaja
+— memantulkan pesan sebuah peer ke node lain berisiko menciptakan loop di antara dua node yang
+berbeda pendapat saat rebalance — tapi konsekuensinya bagi klien mudah terlewat:
+
+> Klien yang mengirim ke node yang bukan pemilik kunci akan mengaktifkan actor itu **di node tempat
+> ia mengirim**. Node lain yang merutekan lewat ring akan mencapai aktivasi lain dari alamat yang
+> sama, dan "satu aktivasi per alamat per cluster" tidak lagi berlaku.
+
+Terhadap satu node saja, ini tidak mungkin terjadi. Terhadap cluster, klien C# bisa menghitung
+sendiri siapa pemiliknya:
+
+```csharp
+var client = new ActorNetClient(["10.0.0.1:9000", "10.0.0.2:9000"]) { ClusterAware = true };
+```
+
+Ia meminta tabel anggota kepada sebuah node, membangun ring yang sama dengan yang dipakai cluster —
+hash yang sama, jumlah virtual node yang sama, sehingga hasilnya pun sama — lalu membuka satu koneksi
+per node yang benar-benar dihubunginya. Pandangannya disegarkan setiap `RoutesRefreshAfter` (30 detik
+secara bawaan) dan setiap kali koneksi ke node yang disebutnya gagal.
+
+Routing-nya menurun kualitasnya, bukan gagal. Klien yang tidak bisa memperoleh pandangan, atau yang
+pandangannya menyebut node yang tidak menjawab, akan mengirim ke node yang sudah terhubung dengannya
+— perilaku lama, dengan peringatan lama di atas. Tidak ada di sini yang bisa menggagalkan pengiriman
+yang tadinya akan berhasil.
+
+**Klien Node.js, Python, dan Go belum merutekan.** Di dalam cluster, mereka sebaiknya menghubungi
+satu node saja, atau diberi alamat pemiliknya oleh apa pun yang mengonfigurasi mereka.
+
 ## Protokol wire
 
 Sebuah frame adalah empat byte panjang big-endian, lalu sebanyak itu byte JSON UTF-8. Nama field-nya

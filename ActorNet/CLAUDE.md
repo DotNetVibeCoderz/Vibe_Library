@@ -137,6 +137,12 @@ Each of these is now covered by a test. Do not reintroduce them.
   until the ring moved again. `OwnerIsReachable` gates it. It was found while hunting an
   intermittent warm-handoff failure, but it is not the cause of it - that flake recurred after this
   was fixed and is still unexplained.
+- **A node never forwards an inbound frame.** It delivers to a local actor whatever the ring says,
+  on purpose - bouncing a peer's message onward risks a loop during a rebalance. The consequence is
+  that an external client sending to a node that does not own the key gets a second activation of
+  that address. `ActorNetClient.ClusterAware` is the fix for the C# client; the SDK clients cannot
+  route yet. Do not "fix" this by forwarding without also proxying the reply - a client's ask names
+  itself as the reply address, and the owner has no connection to it.
 - **Razor string component parameters need `@`.** `Value="actor.Id"` passes the literal text;
   `Value="@actor.Id"` passes the value. Non-string parameters are expressions either way, which is
   why this only broke some of them.

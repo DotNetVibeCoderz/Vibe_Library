@@ -158,7 +158,10 @@ works and something automated proves it** — not when the code exists.
 - [x] Reconnect and failover to another node - C# client, several endpoints tried in rotation
 - [x] The same for the Node.js, Python and Go clients, each checked in CI against a dead
       endpoint ahead of a live one
-- [ ] Cluster-aware routing in clients (they connect to one node and let it forward)
+- [x] Cluster-aware routing in the C# client (`ClusterAware = true`): it asks a node for the member
+      table, builds the same ring, and opens a connection per node it addresses. Not the
+      optimisation the old roadmap line assumed - see the gaps below
+- [ ] The same for the Node.js, Python and Go clients, which still send to one node
 
 ## Testing
 
@@ -217,6 +220,16 @@ Ticking a box means it works, not that it is finished. These are the caveats wor
   handoff are both written straight to a socket to sidestep this, because both are sent moments
   before the transport closes; everything else still relies on the loop winning the race, which it
   ordinarily does. The right fix is to drain before cancelling, and it has not been made.
+- **A node never forwards an inbound frame, so a client that does not route breaks the single
+  activation guarantee.** A node delivers an inbound message to a local actor whatever the ring
+  says - deliberately, because bouncing a peer's message onward risks a loop between two nodes that
+  disagree during a rebalance. The consequence, which the roadmap line for this item had backwards,
+  is that a client sending to a node that does not own the key activates that actor *there*, and a
+  node routing by the ring then reaches a different activation of the same address. The C# client
+  avoids it with `ClusterAware = true`; the Node.js, Python and Go clients cannot yet, so in a
+  cluster they should address one node only, or be given the owner's address by the caller.
+  Forwarding a client's frame would be the other fix, and it needs the forwarding node to proxy the
+  reply - the client's ask names itself as the reply address, and the owner has no connection to it.
 - **A projection reads one stream, not all of them.** Sequences are per persistence id, so there
   is no position that means "everything before this, everywhere". Giving the journal a total order
   means a column in every provider's schema - a migration for anyone already storing events - and a

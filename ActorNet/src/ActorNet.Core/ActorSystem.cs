@@ -125,6 +125,8 @@ public sealed class ActorSystem : IActorSystem
         Serializer.Types.Register<NodeStatus>();
         Serializer.Types.Register<Warm>();
         Serializer.Types.Register<KeyDigest>();
+        Serializer.Types.Register<ClusterView>();
+        Serializer.Types.Register<ClusterViewMember>();
         Serializer.Types.Register<LeaveRequest>();
         Serializer.Types.Register<LeaveDecision>();
         Serializer.Types.Register<Inspect>();
@@ -944,6 +946,34 @@ public sealed class ActorSystem : IActorSystem
                 // Kept under the name the sender gave rather than the frame's, because the digest
                 // is about that node's keys and nothing else makes it addressable later.
                 if (digest is { Node.Length: > 0 }) _inheritable[digest.Node] = digest.Keys;
+                return;
+            }
+
+            case WireKind.ClusterViewRequest:
+            {
+                if (frame.CorrelationId is not { } viewCorrelation || frame.FromNode is not { Length: > 0 } viewAsker || _transport is null)
+                    return;
+
+                // Only what a client needs to compute ownership. Incarnations, statuses and
+                // last-seen times would give it an idea of membership that could drift from the
+                // cluster's own and still be believed.
+                var view = new ClusterView(
+                    [.. _cluster.Members.Select(m => new ClusterViewMember(m.NodeId, m.Host, m.Port))],
+                    Options.Cluster.VirtualNodesPerMember);
+
+                var (viewAlias, viewPayload) = Serializer.Serialize(view);
+                var viewReply = new WireEnvelope
+                {
+                    Kind = WireKind.AskReply,
+                    CorrelationId = viewCorrelation,
+                    FromNode = NodeId,
+                    MessageAlias = viewAlias,
+                    Payload = viewPayload,
+                };
+
+                try { await _transport.SendAsync(viewAsker, viewReply, _shutdown.Token).ConfigureAwait(false); }
+                catch (Exception ex) { _logger.LogDebug(ex, "Could not answer a cluster view request from {NodeId}.", viewAsker); }
+
                 return;
             }
 

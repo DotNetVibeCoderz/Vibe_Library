@@ -60,6 +60,17 @@ public enum WireKind : byte
     /// and a second opinion about ownership is the last thing a cluster needs.
     /// </remarks>
     KeyDigest = 11,
+
+    /// <summary>
+    /// Asks a node for enough of the member table to route by. Answered with an ordinary
+    /// <see cref="AskReply"/>.
+    /// </summary>
+    /// <remarks>
+    /// For clients rather than peers - a peer already has the whole table through gossip. A client
+    /// that routes by the answer saves a hop; one that does not is still correct, because every
+    /// node forwards a message for an actor it does not own.
+    /// </remarks>
+    ClusterViewRequest = 12,
 }
 
 /// <summary>One frame, as it travels between nodes.</summary>

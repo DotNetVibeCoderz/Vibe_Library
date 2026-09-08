@@ -45,6 +45,35 @@ thing in Go and in C#, and neither side needs the other's type names.
 Payload field names are the .NET property names (`Amount`, `Reference`), matched
 case-insensitively.
 
+## Routing in a cluster
+
+A node delivers an inbound message to a local actor and **never forwards it**. That is deliberate -
+bouncing a peer's message onward risks a loop between two nodes that disagree during a rebalance -
+but it has a consequence for clients that is easy to miss:
+
+> A client that sends to a node which does not own the key activates that actor **on the node it
+> sent to**. A node routing by the ring reaches a different activation of the same address, and
+> "one activation per address per cluster" no longer holds.
+
+Against a single node this cannot happen. Against a cluster, the C# client can work out the owner
+itself:
+
+```csharp
+var client = new ActorNetClient(["10.0.0.1:9000", "10.0.0.2:9000"]) { ClusterAware = true };
+```
+
+It asks a node for the member table, builds the same ring the cluster uses — the same hash, the same
+virtual-node count, so it reaches the same answer — and opens a connection per node it actually
+addresses. The view is refreshed every `RoutesRefreshAfter` (30 seconds by default) and whenever a
+connection to a node named by it fails.
+
+Routing degrades rather than fails. A client that cannot get a view, or whose view names a node that
+will not answer, sends to the node it is already connected to — the old behaviour, with the old
+caveat above. Nothing here can make a send fail that would otherwise have succeeded.
+
+**The Node.js, Python and Go clients do not route yet.** In a cluster they should address one node,
+or be handed the owner's address by whatever configures them.
+
 ## The wire protocol
 
 A frame is four bytes of big-endian length, then that many bytes of UTF-8 JSON. Fields are short
