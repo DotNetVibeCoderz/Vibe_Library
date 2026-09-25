@@ -1,0 +1,24 @@
+# Out-of-band reference point for APL.Net's benchmarks (spec section 5.4).
+# A separate Rust binary, never linked into .NET: different runtime, different harness,
+# illustrative only - see docs/en/benchmark-results.md for how to read it.
+# Dibuat oleh Gravicode Studios, dipimpin oleh Kang Fadhil.
+[package]
+name = "aplnet-rayon-reference"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+rayon = "1.10"
+
+[dev-dependencies]
+criterion = { version = "0.5", default-features = false, features = ["cargo_bench_support"] }
+
+[[bench]]
+name = "reference"
+harness = false
+
+[profile.bench]
+opt-level = 3
+lto = "fat"
+codegen-units = 1

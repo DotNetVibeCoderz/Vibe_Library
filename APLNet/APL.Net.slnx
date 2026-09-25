@@ -1,0 +1,17 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/APL.Net/APL.Net.csproj" />
+    <Project Path="src/APL.Net.SourceGen/APL.Net.SourceGen.csproj" />
+  </Folder>
+  <Folder Name="/samples/">
+    <Project Path="samples/APL.Net.Gallery/APL.Net.Gallery.csproj" />
+    <Project Path="samples/APL.Net.Samples/APL.Net.Samples.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/APL.Net.Tests/APL.Net.Tests.csproj" />
+    <Project Path="tests/APL.Net.AotTests/APL.Net.AotTests.csproj" />
+  </Folder>
+  <Folder Name="/benchmarks/">
+    <Project Path="benchmarks/APL.Net.Benchmarks/APL.Net.Benchmarks.csproj" />
+  </Folder>
+</Solution>

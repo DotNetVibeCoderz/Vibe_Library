@@ -1,0 +1,41 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <RootNamespace>AplNet.Gallery</RootNamespace>
+    <AssemblyName>APL.Net.Gallery</AssemblyName>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <!-- The gallery measures the machine it runs on; server GC would make allocation-heavy TPL
+         variants look cheaper than they are in a typical desktop app. -->
+    <ServerGarbageCollection>false</ServerGarbageCollection>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <AvaloniaResource Include="Assets/**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="11.3.12" />
+    <PackageReference Include="Avalonia.Desktop" Version="11.3.12" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="11.3.12" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="11.3.12" />
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
+
+    <!--
+      Pinned past Avalonia's transitive Tmds.DBus.Protocol 0.21.2, which carries GHSA-xrw6-gwf8-vvr9
+      (the advisory also covers >= 0.22.0 < 0.92.0). Only the Linux backend touches D-Bus.
+    -->
+    <PackageReference Include="Tmds.DBus.Protocol" Version="0.95.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/APL.Net/APL.Net.csproj" />
+    <!-- An analyzer reference is not transitive, so the [AplBody] case names the generator itself. -->
+    <ProjectReference Include="../../src/APL.Net.SourceGen/APL.Net.SourceGen.csproj"
+                      OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+</Project>

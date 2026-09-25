@@ -1,0 +1,161 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="AplNet.Gallery.App"
+             RequestedThemeVariant="Light">
+
+  <!--
+    APL.Net Gallery - design tokens.
+    Paper and panels are a cool mineral grey (an instrument, not a magazine). Colour carries meaning
+    only: ultramarine is APL.Net, amber is TPL, slate is the sequential loop. Martian Mono is the
+    instrument readout - measured numbers and the wordmark - and nothing else. APL385 sets the APL
+    glyphs that name each category. Inter does the reading; JetBrains Mono the code.
+  -->
+  <Application.Resources>
+    <ResourceDictionary>
+      <Color x:Key="PaperColor">#ECEFF3</Color>
+      <Color x:Key="PanelColor">#F8F9FB</Color>
+      <Color x:Key="LineColor">#D3D9E1</Color>
+      <Color x:Key="InkColor">#131926</Color>
+      <Color x:Key="MutedColor">#5A6477</Color>
+      <Color x:Key="AplColor">#2F3FD0</Color>
+      <Color x:Key="AplSoftColor">#DDE1FA</Color>
+      <Color x:Key="TplColor">#C77A22</Color>
+      <Color x:Key="CodeColor">#151B28</Color>
+      <Color x:Key="GoodColor">#1D7F55</Color>
+      <Color x:Key="BadColor">#B03636</Color>
+
+      <SolidColorBrush x:Key="Paper" Color="{StaticResource PaperColor}" />
+      <SolidColorBrush x:Key="Panel" Color="{StaticResource PanelColor}" />
+      <SolidColorBrush x:Key="Line" Color="{StaticResource LineColor}" />
+      <SolidColorBrush x:Key="Ink" Color="{StaticResource InkColor}" />
+      <SolidColorBrush x:Key="Muted" Color="{StaticResource MutedColor}" />
+      <SolidColorBrush x:Key="Apl" Color="{StaticResource AplColor}" />
+      <SolidColorBrush x:Key="AplSoft" Color="{StaticResource AplSoftColor}" />
+      <SolidColorBrush x:Key="Tpl" Color="{StaticResource TplColor}" />
+      <SolidColorBrush x:Key="Code" Color="{StaticResource CodeColor}" />
+      <SolidColorBrush x:Key="Good" Color="{StaticResource GoodColor}" />
+      <SolidColorBrush x:Key="Bad" Color="{StaticResource BadColor}" />
+
+      <FontFamily x:Key="ReadoutFont">avares://APL.Net.Gallery/Assets/Fonts#Martian Mono</FontFamily>
+      <FontFamily x:Key="GlyphFont">avares://APL.Net.Gallery/Assets/Fonts#APL385 Unicode</FontFamily>
+      <FontFamily x:Key="CodeFont">avares://APL.Net.Gallery/Assets/Fonts#JetBrains Mono</FontFamily>
+    </ResourceDictionary>
+  </Application.Resources>
+
+  <Application.Styles>
+    <FluentTheme />
+
+    <Style Selector="Window">
+      <Setter Property="FontFamily" Value="fonts:Inter#Inter" />
+    </Style>
+
+    <!-- Type scale: 12 / 13 / 15 / 18 / 32 / 64 -->
+    <Style Selector="TextBlock.eyebrow">
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="LetterSpacing" Value="1.2" />
+      <Setter Property="Foreground" Value="{StaticResource Muted}" />
+    </Style>
+    <Style Selector="TextBlock.title">
+      <Setter Property="FontSize" Value="32" />
+      <Setter Property="FontWeight" Value="Bold" />
+      <Setter Property="LetterSpacing" Value="-0.6" />
+      <Setter Property="Foreground" Value="{StaticResource Ink}" />
+    </Style>
+    <Style Selector="TextBlock.lede">
+      <Setter Property="FontSize" Value="15" />
+      <Setter Property="LineHeight" Value="23" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+      <Setter Property="Foreground" Value="{StaticResource Ink}" />
+      <Setter Property="MaxWidth" Value="780" />
+      <Setter Property="HorizontalAlignment" Value="Left" />
+    </Style>
+    <Style Selector="TextBlock.body">
+      <Setter Property="FontSize" Value="13" />
+      <Setter Property="LineHeight" Value="20" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+      <Setter Property="Foreground" Value="{StaticResource Ink}" />
+    </Style>
+    <Style Selector="TextBlock.muted">
+      <Setter Property="Foreground" Value="{StaticResource Muted}" />
+    </Style>
+    <Style Selector="TextBlock.readout">
+      <Setter Property="FontFamily" Value="{StaticResource ReadoutFont}" />
+    </Style>
+    <Style Selector="TextBlock.glyph">
+      <Setter Property="FontFamily" Value="{StaticResource GlyphFont}" />
+    </Style>
+
+    <Style Selector="Border.panel">
+      <Setter Property="Background" Value="{StaticResource Panel}" />
+      <Setter Property="BorderBrush" Value="{StaticResource Line}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="10" />
+      <Setter Property="Padding" Value="22" />
+    </Style>
+
+    <!-- Sidebar entries -->
+    <Style Selector="Button.nav">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="HorizontalContentAlignment" Value="Left" />
+      <Setter Property="Padding" Value="14,7" />
+      <Setter Property="CornerRadius" Value="6" />
+      <Setter Property="Foreground" Value="{StaticResource Ink}" />
+      <Setter Property="FontSize" Value="13" />
+    </Style>
+    <Style Selector="Button.nav:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="#E1E6EE" />
+    </Style>
+    <Style Selector="Button.nav.selected /template/ ContentPresenter">
+      <Setter Property="Background" Value="{StaticResource AplSoft}" />
+    </Style>
+    <Style Selector="Button.nav.selected">
+      <Setter Property="Foreground" Value="{StaticResource Apl}" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+
+    <!-- The one filled action per page -->
+    <Style Selector="Button.primary">
+      <Setter Property="Background" Value="{StaticResource Apl}" />
+      <Setter Property="Foreground" Value="White" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Padding" Value="20,11" />
+      <Setter Property="CornerRadius" Value="8" />
+    </Style>
+    <Style Selector="Button.primary:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="#2433B5" />
+      <Setter Property="Foreground" Value="White" />
+    </Style>
+    <Style Selector="Button.primary:disabled /template/ ContentPresenter">
+      <Setter Property="Background" Value="#8E97D8" />
+      <Setter Property="Foreground" Value="White" />
+    </Style>
+
+    <!-- Code tabs -->
+    <Style Selector="ToggleButton.tab">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Foreground" Value="#9AA4B8" />
+      <Setter Property="BorderThickness" Value="0,0,0,2" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="CornerRadius" Value="0" />
+      <Setter Property="Padding" Value="4,6" />
+      <Setter Property="Margin" Value="0,0,18,0" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+    <Style Selector="ToggleButton.tab:checked /template/ ContentPresenter, ToggleButton.tab:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Foreground" Value="White" />
+    </Style>
+    <Style Selector="ToggleButton.tab.apl:checked">
+      <Setter Property="BorderBrush" Value="#8FA3FF" />
+    </Style>
+    <Style Selector="ToggleButton.tab.tpl:checked">
+      <Setter Property="BorderBrush" Value="{StaticResource Tpl}" />
+    </Style>
+
+    <!-- Keyboard focus: Fluent's focus rectangle is kept on every control; nothing here removes it. -->
+  </Application.Styles>
+</Application>

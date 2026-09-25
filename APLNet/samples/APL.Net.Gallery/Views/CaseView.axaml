@@ -1,0 +1,119 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:AplNet.Gallery.ViewModels"
+             xmlns:inf="using:AplNet.Gallery.Infrastructure"
+             xmlns:controls="using:AplNet.Gallery.Controls"
+             x:Class="AplNet.Gallery.Views.CaseView"
+             x:DataType="vm:CaseViewModel">
+
+  <UserControl.Styles>
+    <Style Selector="TextBlock.headline">
+      <Setter Property="Foreground" Value="{StaticResource Apl}" />
+    </Style>
+    <Style Selector="TextBlock.headline.loss">
+      <Setter Property="Foreground" Value="{StaticResource Tpl}" />
+    </Style>
+  </UserControl.Styles>
+
+  <ScrollViewer Name="Scroller">
+    <StackPanel Name="PageRoot" Margin="52,40,52,56" Spacing="24" MaxWidth="1180" HorizontalAlignment="Left" Background="{StaticResource Paper}">
+
+      <!-- Eyebrow, title, what the case is -->
+      <StackPanel Spacing="8">
+        <StackPanel Orientation="Horizontal" Spacing="12" Background="Transparent" ToolTip.Tip="{Binding GlyphMeaning}" HorizontalAlignment="Left">
+          <TextBlock Classes="glyph" Text="{Binding Glyph}" FontSize="28" Foreground="{StaticResource Apl}" VerticalAlignment="Center" />
+          <TextBlock Classes="eyebrow" Text="{Binding CategoryName}" VerticalAlignment="Center" />
+        </StackPanel>
+        <TextBlock Classes="title" Text="{Binding Title}" />
+        <TextBlock Classes="lede" Text="{Binding Summary}" Margin="0,4,0,0" />
+      </StackPanel>
+
+      <!-- The readout: the one answer the page exists to give -->
+      <Border Classes="panel" Padding="26,22">
+        <StackPanel Spacing="18">
+          <Grid ColumnDefinitions="*,Auto">
+            <StackPanel Orientation="Horizontal" Spacing="18" VerticalAlignment="Center">
+              <TextBlock Classes="readout headline" Classes.loss="{Binding !HeadlineIsWin}"
+                         Text="{Binding HeadlineValue}" FontSize="58" FontWeight="Bold" LetterSpacing="-6" VerticalAlignment="Center" />
+              <StackPanel VerticalAlignment="Center" Spacing="4">
+                <TextBlock Text="{Binding HeadlineLabel}" FontSize="18" FontWeight="SemiBold" Foreground="{StaticResource Ink}" />
+                <TextBlock Classes="readout muted" Text="{Binding HeadlineDetail}" FontSize="11" />
+              </StackPanel>
+            </StackPanel>
+            <StackPanel Grid.Column="1" Spacing="8" VerticalAlignment="Center" HorizontalAlignment="Right">
+              <Button Classes="primary" Content="{Binding RunLabel}" Command="{Binding RunCommand}" HorizontalAlignment="Right" />
+              <TextBlock Classes="muted" Text="{Binding Status}" FontSize="11" HorizontalAlignment="Right" />
+            </StackPanel>
+          </Grid>
+
+          <Border Height="1" Background="{StaticResource Line}" />
+
+          <Panel>
+            <controls:ResultBars Items="{Binding Measurements}" IsVisible="{Binding HasResults}" />
+            <TextBlock Classes="body muted" IsVisible="{Binding !HasResults}" MaxWidth="700" HorizontalAlignment="Left"
+                       Text="{Binding [NotRunHint], Source={x:Static inf:Loc.Instance}}" />
+          </Panel>
+
+          <Grid ColumnDefinitions="Auto,*,Auto">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <TextBlock Classes="eyebrow" Text="{Binding [Size], Source={x:Static inf:Loc.Instance}}" VerticalAlignment="Center" />
+              <TextBlock Classes="readout" Text="{Binding Size}" FontSize="11" Foreground="{StaticResource Ink}" VerticalAlignment="Center" />
+            </StackPanel>
+            <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="14">
+              <TextBlock Text="{Binding VerificationText}" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource Good}" IsVisible="{Binding IsVerified}" />
+              <TextBlock Text="{Binding VerificationText}" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource Bad}" IsVisible="{Binding IsNotVerified}" />
+            </StackPanel>
+          </Grid>
+        </StackPanel>
+      </Border>
+
+      <!-- Code beside the picture it produces -->
+      <Grid ColumnDefinitions="*,Auto,Auto">
+        <Border Grid.Column="0" Background="{StaticResource Code}" CornerRadius="10" Padding="24,14,24,22">
+          <StackPanel Spacing="12">
+            <StackPanel Orientation="Horizontal">
+              <ToggleButton Classes="tab apl" Content="APL.Net" IsChecked="{Binding ShowsAplCode, Mode=OneWay}" Command="{Binding ShowAplCommand}" />
+              <ToggleButton Classes="tab tpl" Content="TPL" IsChecked="{Binding ShowsTplCode, Mode=OneWay}" Command="{Binding ShowTplCommand}" />
+            </StackPanel>
+            <controls:CodeView Code="{Binding Code}" FontFamily="{StaticResource CodeFont}" FontSize="13" LineHeight="21"
+                               Foreground="#D5DAE3" TextWrapping="NoWrap" />
+          </StackPanel>
+        </Border>
+
+        <Border Grid.Column="2" IsVisible="{Binding HasPreview}" Margin="0" Width="440"
+                Background="{StaticResource Code}" CornerRadius="10" ClipToBounds="True">
+          <Panel>
+            <Image Source="{Binding Preview}" Stretch="Uniform" />
+            <TextBlock Text="{Binding [Preview], Source={x:Static inf:Loc.Instance}}" Foreground="#9AA4B8" FontSize="12"
+                       HorizontalAlignment="Center" VerticalAlignment="Center" TextWrapping="Wrap" MaxWidth="260" TextAlignment="Center"
+                       IsVisible="{Binding Preview, Converter={x:Static ObjectConverters.IsNull}}" />
+            <Border Background="#CC151B28" CornerRadius="6" Padding="10,5" Margin="12" HorizontalAlignment="Left" VerticalAlignment="Bottom"
+                    IsVisible="{Binding PreviewCaption, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+              <TextBlock Classes="readout" Text="{Binding PreviewCaption}" Foreground="White" FontSize="13" />
+            </Border>
+          </Panel>
+        </Border>
+        <Border Grid.Column="1" Width="20" IsVisible="{Binding HasPreview}" />
+      </Grid>
+
+      <!-- Lanes: where the time went, per thread -->
+      <Border Classes="panel" IsVisible="{Binding HasLanes}">
+        <StackPanel Spacing="10">
+          <TextBlock Text="{Binding [Lanes], Source={x:Static inf:Loc.Instance}}" FontSize="15" FontWeight="SemiBold" Foreground="{StaticResource Ink}" />
+          <TextBlock Classes="body muted" Text="{Binding [LanesHint], Source={x:Static inf:Loc.Instance}}" />
+          <controls:LaneChart Traces="{Binding Lanes}" Margin="0,10,0,0" />
+          <TextBlock Classes="body muted" Text="{Binding [NotRun], Source={x:Static inf:Loc.Instance}}"
+                     IsVisible="{Binding !HasLaneData}" />
+        </StackPanel>
+      </Border>
+
+      <!-- The lesson, stated plainly - including when TPL wins -->
+      <Border BorderBrush="{StaticResource Apl}" BorderThickness="3,0,0,0" Padding="20,6,0,6">
+        <StackPanel Spacing="6" MaxWidth="820" HorizontalAlignment="Left">
+          <TextBlock Classes="eyebrow" Text="{Binding [Takeaway], Source={x:Static inf:Loc.Instance}}" />
+          <TextBlock Classes="lede" Text="{Binding Takeaway}" />
+        </StackPanel>
+      </Border>
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

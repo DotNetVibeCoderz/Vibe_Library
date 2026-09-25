@@ -1,0 +1,21 @@
+# Build output
+[Bb]in/
+[Oo]bj/
+artifacts/
+publish/
+BenchmarkDotNet.Artifacts/
+TestResults/
+
+# IDE
+.vs/
+.idea/
+*.user
+*.suo
+*.rsuser
+
+# Rust reference benchmark
+benchmarks/rust-rayon/target/
+
+# Never commit credentials
+*.nupkg.key
+PackageCredentials.txt

@@ -1,0 +1,116 @@
+# Build and test APL.Net (Vibe_Library/APLNet).
+#
+# Vibe_Library holds several independent projects, so this workflow is scoped by path and named
+# after the one it covers. Everything runs from the APLNet/ subdirectory.
+name: APL.Net CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'APLNet/**'
+      - '.github/workflows/aplnet-ci.yml'
+  pull_request:
+    paths:
+      - 'APLNet/**'
+      - '.github/workflows/aplnet-ci.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: aplnet-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+  TESTINGPLATFORM_TELEMETRY_OPTOUT: true
+
+defaults:
+  run:
+    working-directory: APLNet
+
+jobs:
+  build:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # All three: the suite is about threads and timing, and the thread pool behaves differently
+        # enough across platforms to be worth catching here. macos-latest is Arm64, which is also
+        # the only place the AdvSimd (Vector128) path runs on real hardware.
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: APLNet/global.json
+
+      - name: Build
+        run: dotnet build APL.Net.slnx -c Release
+
+      # xunit.v3 runs on Microsoft.Testing.Platform; the test project is its own executable.
+      - name: Test
+        run: dotnet run --project tests/APL.Net.Tests -c Release --no-build
+
+      # The SIMD kernels must give the same answers on narrower hardware (NFR3). Rerun the suite
+      # with the wider instruction sets switched off, down to no hardware intrinsics at all.
+      - name: Test without AVX-512
+        if: runner.os != 'macOS'
+        env:
+          DOTNET_EnableAVX512F: '0'
+        run: dotnet run --project tests/APL.Net.Tests -c Release --no-build
+
+      - name: Test without AVX2
+        if: runner.os != 'macOS'
+        env:
+          DOTNET_EnableAVX2: '0'
+        run: dotnet run --project tests/APL.Net.Tests -c Release --no-build
+
+      - name: Test scalar only
+        env:
+          DOTNET_EnableHWIntrinsic: '0'
+        run: dotnet run --project tests/APL.Net.Tests -c Release --no-build
+
+  # The NativeAOT half of the definition of done: publish the check app with PublishAot (trim and
+  # AOT warnings are errors in that project) and run it.
+  aot:
+    name: nativeaot
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: APLNet/global.json
+
+      - name: Publish
+        run: dotnet publish tests/APL.Net.AotTests -c Release -r linux-x64 -o out/aot
+
+      - name: Run
+        run: ./out/aot/APL.Net.AotTests
+
+  pack:
+    name: pack
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: APLNet/global.json
+
+      # Packing on every green build: a problem that only shows up at pack time is much cheaper to
+      # find here than during a release.
+      - name: Pack
+        run: dotnet pack src/APL.Net/APL.Net.csproj -c Release -o artifacts
+
+      - name: Upload packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: aplnet-nupkg
+          path: APLNet/artifacts/*

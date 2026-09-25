@@ -1,0 +1,84 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:AplNet.Gallery.ViewModels"
+        xmlns:views="using:AplNet.Gallery.Views"
+        xmlns:inf="using:AplNet.Gallery.Infrastructure"
+        x:Class="AplNet.Gallery.Views.MainWindow"
+        x:DataType="vm:MainViewModel"
+        Title="APL.Net Gallery — Gravicode Studios"
+        Width="1440" Height="960" MinWidth="1024" MinHeight="640"
+        WindowStartupLocation="CenterScreen"
+        Background="{StaticResource Paper}">
+
+  <Grid ColumnDefinitions="272,*">
+
+    <!-- Sidebar: cases grouped under the APL glyph that names their idea -->
+    <Border Grid.Column="0" Background="{StaticResource Panel}" BorderBrush="{StaticResource Line}" BorderThickness="0,0,1,0">
+      <DockPanel>
+        <StackPanel DockPanel.Dock="Top" Margin="24,28,24,18" Spacing="2">
+          <TextBlock Classes="readout" Text="APL.Net" FontSize="26" FontWeight="Bold" Foreground="{StaticResource Ink}" LetterSpacing="-0.5" />
+          <TextBlock Classes="eyebrow" Text="{Binding [Gallery], Source={x:Static inf:Loc.Instance}}" LetterSpacing="4" />
+        </StackPanel>
+
+        <Border DockPanel.Dock="Bottom" BorderBrush="{StaticResource Line}" BorderThickness="0,1,0,0" Padding="20,14,20,18">
+          <StackPanel Spacing="10">
+            <Button Classes="nav" Padding="10,6" HorizontalAlignment="Left" Command="{Binding ToggleLanguageCommand}"
+                    ToolTip.Tip="EN / ID">
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <TextBlock Text="⇄" FontSize="14" Foreground="{StaticResource Apl}" />
+                <TextBlock Text="{Binding [Language], Source={x:Static inf:Loc.Instance}}" FontSize="12" FontWeight="SemiBold" />
+              </StackPanel>
+            </Button>
+            <TextBlock Text="{Binding [Credit], Source={x:Static inf:Loc.Instance}}" Classes="muted" FontSize="11" TextWrapping="Wrap" LineHeight="16" />
+          </StackPanel>
+        </Border>
+
+        <ScrollViewer>
+          <StackPanel Margin="10,0,10,22">
+            <Button Classes="nav" Classes.selected="{Binding IsOverviewSelected}" Command="{Binding ShowOverviewCommand}">
+              <StackPanel Orientation="Horizontal">
+                <TextBlock Classes="glyph" Text="⍝" FontSize="18" Width="34" Foreground="{StaticResource Apl}" VerticalAlignment="Center"
+                           ToolTip.Tip="⍝ (lamp) starts a comment in APL - the page that explains the rest." />
+                <TextBlock Text="{Binding [Overview], Source={x:Static inf:Loc.Instance}}" VerticalAlignment="Center" />
+              </StackPanel>
+            </Button>
+
+            <ItemsControl ItemsSource="{Binding Groups}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:CategoryGroup">
+                  <StackPanel Margin="0,20,0,0">
+                    <StackPanel Orientation="Horizontal" Margin="14,0,0,6" Background="Transparent" ToolTip.Tip="{Binding Meaning}">
+                      <TextBlock Classes="glyph" Text="{Binding Glyph}" FontSize="20" Width="34" Foreground="{StaticResource Apl}" VerticalAlignment="Center" />
+                      <TextBlock Classes="eyebrow" Text="{Binding Name}" VerticalAlignment="Center" />
+                    </StackPanel>
+                    <ItemsControl ItemsSource="{Binding Cases}">
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:CaseViewModel">
+                          <Button Classes="nav" Classes.selected="{Binding IsSelected}" Padding="48,7,14,7"
+                                  Command="{Binding OpenCommand}">
+                            <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis" />
+                          </Button>
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                  </StackPanel>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+        </ScrollViewer>
+      </DockPanel>
+    </Border>
+
+    <ContentControl Grid.Column="1" Content="{Binding Current}">
+      <ContentControl.DataTemplates>
+        <DataTemplate DataType="vm:OverviewViewModel">
+          <views:OverviewView />
+        </DataTemplate>
+        <DataTemplate DataType="vm:CaseViewModel">
+          <views:CaseView />
+        </DataTemplate>
+      </ContentControl.DataTemplates>
+    </ContentControl>
+  </Grid>
+</Window>

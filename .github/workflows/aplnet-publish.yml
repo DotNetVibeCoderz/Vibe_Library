@@ -1,0 +1,93 @@
+# Packs APL.Net and pushes it to nuget.org.
+#
+# Trigger with a tag: APLNet-v1.0.0 (namespaced because Vibe_Library holds several projects and a
+# bare v* tag would be ambiguous). A manual run without "push" ticked is a dry run: it builds,
+# tests and packs, uploads the package as an artifact, and touches nothing public.
+#
+# Requires the repository secret NUGET_API_KEY.
+name: APL.Net Publish
+
+on:
+  push:
+    tags:
+      - 'APLNet-v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Package version (blank = the version in Directory.Build.props)'
+        required: false
+        type: string
+      push:
+        description: 'Push to nuget.org (leave off for a dry run)'
+        required: false
+        default: false
+        type: boolean
+
+concurrency:
+  group: aplnet-publish
+  cancel-in-progress: false
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  TESTINGPLATFORM_TELEMETRY_OPTOUT: true
+
+defaults:
+  run:
+    working-directory: APLNet
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: APLNet/global.json
+
+      # A tag is the version, so a tag can never disagree with what actually gets published.
+      - name: Resolve version
+        id: version
+        shell: bash
+        run: |
+          if [ -n "${{ inputs.version }}" ]; then
+            version="${{ inputs.version }}"
+          elif [[ "$GITHUB_REF" == refs/tags/APLNet-v* ]]; then
+            version="${GITHUB_REF#refs/tags/APLNet-v}"
+          else
+            version=""
+          fi
+          echo "value=$version" >> "$GITHUB_OUTPUT"
+          echo "Publishing version: ${version:-<from Directory.Build.props>}"
+
+      - name: Build
+        run: dotnet build APL.Net.slnx -c Release
+
+      - name: Test
+        run: dotnet run --project tests/APL.Net.Tests -c Release --no-build
+
+      - name: Pack
+        run: |
+          if [ -n "${{ steps.version.outputs.value }}" ]; then
+            dotnet pack src/APL.Net/APL.Net.csproj -c Release --no-build -o artifacts -p:Version=${{ steps.version.outputs.value }}
+          else
+            dotnet pack src/APL.Net/APL.Net.csproj -c Release --no-build -o artifacts
+          fi
+
+      - name: Upload packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: aplnet-nupkg
+          path: APLNet/artifacts/*
+
+      - name: Push to nuget.org
+        if: startsWith(github.ref, 'refs/tags/APLNet-v') || inputs.push
+        run: |
+          dotnet nuget push "artifacts/*.nupkg" \
+            --api-key "${{ secrets.NUGET_API_KEY }}" \
+            --source https://api.nuget.org/v3/index.json \
+            --skip-duplicate

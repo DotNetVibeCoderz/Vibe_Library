@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The NativeAOT half of the definition of done. xunit's runner relies on reflection, so the
+    unit suite runs under the JIT; this console exercises every public API against a sequential
+    reference and is published with PublishAot=true, where trimming and the absence of runtime code
+    generation would surface any hidden reflection. Exit code 0 means every check passed.
+
+      dotnet publish tests/APL.Net.AotTests -c Release
+      tests/APL.Net.AotTests/bin/Release/net10.0/<rid>/publish/APL.Net.AotTests
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>AplNet.AotTests</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <PublishAot>true</PublishAot>
+    <!-- Warnings about trimming or AOT in the library would be errors here: that is the point. -->
+    <TrimmerSingleWarn>false</TrimmerSingleWarn>
+    <WarningsAsErrors>$(WarningsAsErrors);IL2026;IL2046;IL2057;IL2062;IL2067;IL2070;IL2072;IL2075;IL2087;IL2090;IL2091;IL3050;IL3051</WarningsAsErrors>
+    <!-- Keep the counters alive under AOT so AplEventSource is exercised too. -->
+    <EventSourceSupport>true</EventSourceSupport>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/APL.Net/APL.Net.csproj" />
+    <ProjectReference Include="../../src/APL.Net.SourceGen/APL.Net.SourceGen.csproj"
+                      OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+</Project>

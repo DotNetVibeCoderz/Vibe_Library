@@ -1,0 +1,145 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:AplNet.Gallery.ViewModels"
+             xmlns:inf="using:AplNet.Gallery.Infrastructure"
+             x:Class="AplNet.Gallery.Views.OverviewView"
+             x:DataType="vm:OverviewViewModel">
+
+  <UserControl.Styles>
+    <Style Selector="TextBlock.layer">
+      <Setter Property="FontFamily" Value="{StaticResource ReadoutFont}" />
+      <Setter Property="FontSize" Value="13" />
+      <Setter Property="Foreground" Value="{StaticResource Ink}" />
+      <Setter Property="VerticalAlignment" Value="Top" />
+    </Style>
+    <Style Selector="TextBlock.win">
+      <Setter Property="Foreground" Value="{StaticResource Apl}" />
+    </Style>
+    <Style Selector="TextBlock.loss">
+      <Setter Property="Foreground" Value="{StaticResource Tpl}" />
+    </Style>
+  </UserControl.Styles>
+
+  <ScrollViewer>
+    <StackPanel Name="PageRoot" Margin="52,44,52,56" Spacing="28" MaxWidth="1180" HorizontalAlignment="Left" Background="{StaticResource Paper}">
+
+      <!-- Thesis -->
+      <StackPanel Spacing="10">
+        <TextBlock Classes="glyph" Text="⍳  ⍤  +/  ⊆  ⎕" FontSize="30" Foreground="{StaticResource Apl}" />
+        <TextBlock Classes="readout" Text="APL.Net" FontSize="68" FontWeight="Bold" LetterSpacing="-3" Foreground="{StaticResource Ink}" />
+        <TextBlock Text="{Binding [Hero], Source={x:Static inf:Loc.Instance}}" FontSize="26" FontWeight="SemiBold" LetterSpacing="-0.4"
+                   Foreground="{StaticResource Ink}" TextWrapping="Wrap" />
+        <TextBlock Classes="lede" Text="{Binding [HeroSub], Source={x:Static inf:Loc.Instance}}" Margin="0,6,0,0" />
+      </StackPanel>
+
+      <!-- This machine -->
+      <Border Classes="panel">
+        <StackPanel Spacing="16">
+          <TextBlock Classes="eyebrow" Text="{Binding [ThisMachine], Source={x:Static inf:Loc.Instance}}" />
+          <Grid ColumnDefinitions="2*,*,2*" RowDefinitions="Auto,Auto">
+            <StackPanel Spacing="4">
+              <TextBlock Classes="muted" FontSize="11" Text="CPU" />
+              <TextBlock Classes="readout" Text="{Binding Cpu}" FontSize="14" TextWrapping="Wrap" Foreground="{StaticResource Ink}" Margin="0,0,20,0" />
+            </StackPanel>
+            <StackPanel Grid.Column="1" Spacing="4">
+              <TextBlock Classes="muted" FontSize="11" Text="Threads" />
+              <TextBlock Classes="readout" Text="{Binding ThreadsText}" FontSize="14" Foreground="{StaticResource Ink}" />
+            </StackPanel>
+            <StackPanel Grid.Column="2" Spacing="4">
+              <TextBlock Classes="muted" FontSize="11" Text="SIMD" />
+              <TextBlock Classes="readout" Text="{Binding Simd}" FontSize="14" TextWrapping="Wrap" Foreground="{StaticResource Ink}" />
+            </StackPanel>
+            <StackPanel Grid.Row="1" Grid.ColumnSpan="3" Spacing="4" Margin="0,14,0,0">
+              <TextBlock Classes="muted" FontSize="11" Text="Runtime" />
+              <TextBlock Classes="readout" FontSize="12" Foreground="{StaticResource Ink}">
+                <Run Text="{Binding Runtime}" />
+                <Run Text="  ·  " />
+                <Run Text="{Binding Os}" />
+              </TextBlock>
+            </StackPanel>
+          </Grid>
+          <StackPanel Spacing="8">
+            <ItemsControl ItemsSource="{Binding ThreadSlots}">
+              <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                  <WrapPanel />
+                </ItemsPanelTemplate>
+              </ItemsControl.ItemsPanel>
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="x:Int32">
+                  <Border Width="30" Height="10" CornerRadius="2" Background="{StaticResource Apl}" Margin="0,0,5,0" />
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <TextBlock Classes="muted" FontSize="11" Text="{Binding [Cores], Source={x:Static inf:Loc.Instance}}" />
+          </StackPanel>
+        </StackPanel>
+      </Border>
+
+      <!-- The layers a call passes through -->
+      <Border Classes="panel">
+        <StackPanel Spacing="14">
+          <TextBlock Classes="eyebrow" Text="{Binding [Layers], Source={x:Static inf:Loc.Instance}}" />
+          <Grid ColumnDefinitions="310,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto">
+            <TextBlock Grid.Row="0" Classes="layer" Text="{Binding [L1], Source={x:Static inf:Loc.Instance}}" Margin="0,0,0,14" />
+            <TextBlock Grid.Row="0" Grid.Column="1" Classes="body muted" Text="{Binding [L1d], Source={x:Static inf:Loc.Instance}}" Margin="0,0,0,14" />
+            <TextBlock Grid.Row="1" Classes="layer" Text="{Binding [L2], Source={x:Static inf:Loc.Instance}}" Margin="0,0,0,14" />
+            <TextBlock Grid.Row="1" Grid.Column="1" Classes="body muted" Text="{Binding [L2d], Source={x:Static inf:Loc.Instance}}" Margin="0,0,0,14" />
+            <TextBlock Grid.Row="2" Classes="layer" Text="{Binding [L3], Source={x:Static inf:Loc.Instance}}" Margin="0,0,0,14" />
+            <TextBlock Grid.Row="2" Grid.Column="1" Classes="body muted" Text="{Binding [L3d], Source={x:Static inf:Loc.Instance}}" Margin="0,0,0,14" />
+            <TextBlock Grid.Row="3" Classes="layer" Text="{Binding [L4], Source={x:Static inf:Loc.Instance}}" Margin="0,0,0,14" />
+            <TextBlock Grid.Row="3" Grid.Column="1" Classes="body muted" Text="{Binding [L4d], Source={x:Static inf:Loc.Instance}}" Margin="0,0,0,14" />
+            <TextBlock Grid.Row="4" Classes="layer" Text="{Binding [L5], Source={x:Static inf:Loc.Instance}}" />
+            <TextBlock Grid.Row="4" Grid.Column="1" Classes="body muted" Text="{Binding [L5d], Source={x:Static inf:Loc.Instance}}" />
+          </Grid>
+        </StackPanel>
+      </Border>
+
+      <!-- Every case, timed here -->
+      <Border Classes="panel" Name="SummaryPanel">
+        <StackPanel Spacing="16">
+          <Grid ColumnDefinitions="*,Auto">
+            <StackPanel Spacing="4" VerticalAlignment="Center">
+              <TextBlock Text="{Binding [SummaryTitle], Source={x:Static inf:Loc.Instance}}" FontSize="18" FontWeight="SemiBold" Foreground="{StaticResource Ink}" />
+              <TextBlock Classes="body muted" Text="{Binding [RunAllHint], Source={x:Static inf:Loc.Instance}}" />
+            </StackPanel>
+            <StackPanel Grid.Column="1" Spacing="6">
+              <Button Classes="primary" Content="{Binding [RunAll], Source={x:Static inf:Loc.Instance}}" Command="{Binding RunAllCommand}" HorizontalAlignment="Right" />
+              <TextBlock Classes="muted" FontSize="11" Text="{Binding Status}" HorizontalAlignment="Right" />
+            </StackPanel>
+          </Grid>
+
+          <StackPanel IsVisible="{Binding HasSummary}" Spacing="0">
+            <Grid ColumnDefinitions="44,*,130,230,110" Margin="0,0,0,6">
+              <TextBlock Grid.Column="1" Classes="eyebrow" Text="{Binding [ColCase], Source={x:Static inf:Loc.Instance}}" />
+              <TextBlock Grid.Column="2" Classes="eyebrow" Text="{Binding [ColTpl], Source={x:Static inf:Loc.Instance}}" />
+              <TextBlock Grid.Column="3" Classes="eyebrow" Text="{Binding [ColApl], Source={x:Static inf:Loc.Instance}}" />
+              <TextBlock Grid.Column="4" Classes="eyebrow" Text="{Binding [ColRatio], Source={x:Static inf:Loc.Instance}}" HorizontalAlignment="Right" />
+            </Grid>
+            <ItemsControl ItemsSource="{Binding Summary}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:SummaryRow">
+                  <Border BorderBrush="{StaticResource Line}" BorderThickness="0,1,0,0" Padding="0,8">
+                    <Grid ColumnDefinitions="44,*,130,230,110">
+                      <TextBlock Classes="glyph" Text="{Binding Glyph}" FontSize="17" Foreground="{StaticResource Apl}" VerticalAlignment="Center" />
+                      <TextBlock Grid.Column="1" Text="{Binding Title}" FontSize="13" Foreground="{StaticResource Ink}" VerticalAlignment="Center" />
+                      <TextBlock Grid.Column="2" Classes="readout" Text="{Binding TplText}" FontSize="12" Foreground="{StaticResource Tpl}" VerticalAlignment="Center" />
+                      <StackPanel Grid.Column="3" VerticalAlignment="Center">
+                        <TextBlock Classes="readout" Text="{Binding AplText}" FontSize="12" Foreground="{StaticResource Apl}" />
+                        <TextBlock Text="{Binding AplName}" FontSize="10" Classes="muted" />
+                      </StackPanel>
+                      <TextBlock Grid.Column="4" Classes="readout" Classes.win="{Binding IsWin}" Classes.loss="{Binding IsLoss}"
+                                 Text="{Binding SpeedupText}" FontSize="14" FontWeight="Bold" HorizontalAlignment="Right" VerticalAlignment="Center" />
+                    </Grid>
+                  </Border>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+        </StackPanel>
+      </Border>
+
+      <TextBlock Classes="muted" FontSize="12" Text="{Binding [Credit], Source={x:Static inf:Loc.Instance}}" />
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

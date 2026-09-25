@@ -1,0 +1,41 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>AplNet.Tests</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+
+    <!--
+      xunit.v3 runs on Microsoft.Testing.Platform. The test project is its own executable, so it can
+      be run directly with "dotnet run"; dotnet.config at the root also routes "dotnet test" to it.
+    -->
+    <OutputType>Exe</OutputType>
+    <TestingPlatformDotnetTestSupport>true</TestingPlatformDotnetTestSupport>
+    <UseMicrosoftTestingPlatformRunner>true</UseMicrosoftTestingPlatformRunner>
+
+    <!-- xUnit1051: the loops under test take their tokens from AplOptions, which is what is being tested. -->
+    <NoWarn>$(NoWarn);xUnit1051</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="xunit.v3" Version="4.0.1" />
+    <!-- Drives the generator in-memory for its diagnostic tests; must not be newer than the generator's own reference allows. -->
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.14.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/APL.Net/APL.Net.csproj" />
+
+    <!-- Twice over: as an analyzer, so [AplBody] methods in this project are really generated, and as
+         a plain reference, so the diagnostic tests can instantiate the generator directly. An analyzer
+         reference is not transitive through the library's own. -->
+    <ProjectReference Include="../../src/APL.Net.SourceGen/APL.Net.SourceGen.csproj"
+                      OutputItemType="Analyzer" ReferenceOutputAssembly="true" />
+  </ItemGroup>
+
+</Project>

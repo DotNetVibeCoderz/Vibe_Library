@@ -1,0 +1,52 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!--
+      The package and assembly carry the product name "APL.Net"; the namespaces follow the .NET
+      naming guidelines instead (acronyms of three letters or more are Pascal-cased), so code reads
+      "using AplNet;" and "Apl.For(...)". A type named APL inside a namespace named APL would also
+      make every "APL.For" resolve to the namespace first and fail to compile.
+    -->
+    <AssemblyName>APL.Net</AssemblyName>
+    <RootNamespace>AplNet</RootNamespace>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+
+    <IsPackable>true</IsPackable>
+    <PackageId>APL.Net</PackageId>
+    <Description>APL.Net (Another Parallel Library): high-performance data-parallel primitives for .NET. Struct-invoker loops the JIT devirtualizes and inlines, static/striped/work-stealing partitioning on the thread pool without ExecutionContext flow, zero-allocation steady state, Vector128/256/512 SIMD kernels, a pointer tier and a source generator. NativeAOT-safe. Dibuat oleh Gravicode Studios, dipimpin oleh Kang Fadhil.</Description>
+    <PackageTags>parallel;simd;vector;performance;tpl;parallel-for;work-stealing;avx2;avx512;nativeaot;hpc</PackageTags>
+
+    <!-- The library must stay usable from NativeAOT and trimmed apps (FR8, NFR4). These turn every
+         reflection or dynamic-code hazard in it into a build warning. -->
+    <IsAotCompatible>true</IsAotCompatible>
+    <IsTrimmable>true</IsTrimmable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- A package-specific README: the repository one links images by relative path, which nuget.org cannot show. -->
+    <None Include="PACKAGE.md" Pack="true" PackagePath="/README.md" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="APL.Net.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The generator runs inside the compiler; it must not become a runtime dependency. -->
+    <ProjectReference Include="../APL.Net.SourceGen/APL.Net.SourceGen.csproj"
+                      OutputItemType="Analyzer" ReferenceOutputAssembly="false" PrivateAssets="all" />
+  </ItemGroup>
+
+  <!--
+    And into the package under analyzers/dotnet/cs, which is where NuGet looks for one. Without
+    this the generator would work for anyone building from source and for nobody who installs the
+    package.
+  -->
+  <Target Name="PackTheGenerator" BeforeTargets="_GetPackageFiles">
+    <ItemGroup>
+      <None Include="$(MSBuildThisFileDirectory)../APL.Net.SourceGen/bin/$(Configuration)/netstandard2.0/APL.Net.SourceGen.dll"
+            Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
+    </ItemGroup>
+  </Target>
+
+</Project>
