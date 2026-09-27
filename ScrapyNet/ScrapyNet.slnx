@@ -1,0 +1,22 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/ScrapyNet.Core/ScrapyNet.Core.csproj" />
+    <Project Path="src/ScrapyNet.Sandbox/ScrapyNet.Sandbox.csproj" />
+    <Project Path="src/ScrapyNet.Cli/ScrapyNet.Cli.csproj" />
+    <Project Path="src/ScrapyNet.AI/ScrapyNet.AI.csproj" />
+    <Project Path="src/ScrapyNet.Platform/ScrapyNet.Platform.csproj" />
+    <Project Path="src/ScrapyNet.Playwright/ScrapyNet.Playwright.csproj" />
+    <Project Path="src/ScrapyNet.Server/ScrapyNet.Server.csproj" />
+  </Folder>
+  <Folder Name="/samples/">
+    <Project Path="samples/ScrapyNet.Samples/ScrapyNet.Samples.csproj" />
+    <Project Path="samples/ScrapyNet.ServerHost/ScrapyNet.ServerHost.csproj" />
+    <Project Path="samples/ScrapyGallery/ScrapyGallery.csproj" />
+  </Folder>
+  <Folder Name="/benchmarks/">
+    <Project Path="benchmarks/ScrapyNet.Benchmarks/ScrapyNet.Benchmarks.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/ScrapyNet.Tests/ScrapyNet.Tests.csproj" />
+  </Folder>
+</Solution>

@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>ScrapyNet</RootNamespace>
+    <AssemblyName>ScrapyNet.Core</AssemblyName>
+  </PropertyGroup>
+
+  <!--
+    Published as Gravicode.ScrapyNet to match the other Gravicode packages. The assembly and every
+    namespace stay ScrapyNet.*, so the prefix is only ever typed once, in a PackageReference.
+  -->
+  <PropertyGroup>
+    <IsPackable>true</IsPackable>
+    <PackageId>Gravicode.ScrapyNet</PackageId>
+    <Title>Scrapy.Net - web crawling and scraping framework for .NET</Title>
+    <Description>A .NET 10 port of Scrapy: spiders, CSS/XPath selectors, items and item loaders, pipelines, feed exports (JSON, JSON Lines, CSV, XML), downloader and spider middlewares, retry, redirects, cookies, proxies, robots.txt, HTTP cache, AutoThrottle, duplicate filtering, pause/resume, signals, stats and a Scrapy-style command line. Dibuat oleh Gravicode Studios, dipimpin oleh Kang Fadhil.</Description>
+    <PackageTags>scrapy;crawler;web-crawler;scraping;web-scraping;spider;xpath;css-selector;html;data-extraction</PackageTags>
+    <PackageReleaseNotes>First release of the Scrapy.Net engine, selectors, items, loaders, pipelines, feed exports, middlewares, extensions and command line.</PackageReleaseNotes>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="AngleSharp" Version="1.5.0" />
+    <PackageReference Include="AngleSharp.XPath" Version="2.0.6" />
+    <PackageReference Include="AngleSharp.Xml" Version="1.2.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="ScrapyNet.Tests" />
+    <InternalsVisibleTo Include="ScrapyNet.Benchmarks" />
+  </ItemGroup>
+
+</Project>

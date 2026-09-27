@@ -1,0 +1,102 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:c="using:ScrapyGallery.Controls"
+        x:Class="ScrapyGallery.MainWindow"
+        Title="Scrapy Gallery — Scrapy.Net"
+        Width="1440" Height="920" MinWidth="1100" MinHeight="720">
+  <Grid ColumnDefinitions="272,*">
+
+    <!-- Feature index -->
+    <Border Grid.Column="0" Background="{StaticResource SilkDeepBrush}" BorderBrush="{StaticResource ThreadBrush}" BorderThickness="0,0,1,0">
+      <DockPanel>
+        <StackPanel DockPanel.Dock="Top" Margin="22,24,18,14" Spacing="2">
+          <TextBlock Classes="display" FontSize="30">
+            <Run Text="Scrapy" /><Run Text=" Gallery" Foreground="{StaticResource ArgiopeBrush}" />
+          </TextBlock>
+          <TextBlock x:Name="SiteStatus" Classes="eyebrow" Text="starting practice site…" TextWrapping="Wrap" />
+        </StackPanel>
+        <Border DockPanel.Dock="Bottom" BorderBrush="{StaticResource ThreadBrush}" BorderThickness="0,1,0,0" Padding="22,14">
+          <StackPanel Spacing="3">
+            <TextBlock Classes="eyebrow" Text="Scrapy.Net · .NET 10" />
+            <TextBlock x:Name="Credit" FontSize="12" TextWrapping="Wrap" Foreground="{StaticResource InkSoftBrush}"
+                       Text="Dibuat oleh Gravicode Studios dipimpin oleh Kang Fadhil" />
+          </StackPanel>
+        </Border>
+        <ListBox x:Name="DemoList" />
+      </DockPanel>
+    </Border>
+
+    <!-- Demo -->
+    <Grid Grid.Column="1" RowDefinitions="Auto,Auto,Auto,*" Margin="34,24,34,20">
+
+      <Grid Grid.Row="0" ColumnDefinitions="*,Auto">
+        <StackPanel Spacing="6">
+          <TextBlock x:Name="Eyebrow" Classes="eyebrow" />
+          <TextBlock x:Name="DemoTitle" Classes="display" FontSize="36" TextWrapping="Wrap" />
+          <TextBlock x:Name="DemoSummary" FontSize="15" LineHeight="23" TextWrapping="Wrap" MaxWidth="860"
+                     HorizontalAlignment="Left" Foreground="{StaticResource InkSoftBrush}" />
+          <WrapPanel x:Name="ConceptTags" Margin="0,4,0,0" />
+        </StackPanel>
+        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top">
+          <ToggleButton x:Name="LangEn" Classes="lang" Content="EN" IsChecked="True" />
+          <ToggleButton x:Name="LangId" Classes="lang" Content="ID" />
+        </StackPanel>
+      </Grid>
+
+      <!-- Signature: the crawl web, with the ledger beside it -->
+      <Grid Grid.Row="1" ColumnDefinitions="*,250" Height="350" Margin="0,14,0,10">
+        <Border Background="#F7F9FB" BorderBrush="{StaticResource ThreadBrush}" BorderThickness="1">
+          <c:CrawlWebView x:Name="Web" />
+        </Border>
+        <Border Grid.Column="1" Margin="14,0,0,0" BorderBrush="{StaticResource ThreadBrush}" BorderThickness="0,0,0,0">
+          <StackPanel x:Name="Ledger" Spacing="0" />
+        </Border>
+      </Grid>
+
+      <!-- Inputs and run -->
+      <Grid Grid.Row="2" ColumnDefinitions="*,Auto" Margin="0,0,0,10">
+        <StackPanel x:Name="InputsPanel" Spacing="6" />
+        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="14" VerticalAlignment="Bottom">
+          <TextBlock x:Name="RunStatus" Classes="eyebrow" VerticalAlignment="Center" />
+          <Button x:Name="RunButton" Classes="run" Content="Run demo" />
+        </StackPanel>
+      </Grid>
+
+      <TabControl Grid.Row="3" x:Name="Tabs" Padding="0,8,0,0">
+        <TabItem Header="Code">
+          <Border Background="{StaticResource InkBrush}" Padding="20,16">
+            <ScrollViewer HorizontalScrollBarVisibility="Auto">
+              <SelectableTextBlock x:Name="CodeText" FontFamily="{StaticResource MonoFont}" FontSize="13" LineHeight="20" />
+            </ScrollViewer>
+          </Border>
+        </TabItem>
+        <TabItem x:Name="ItemsTab" Header="Items">
+          <ScrollViewer HorizontalScrollBarVisibility="Auto">
+            <StackPanel x:Name="ItemsTable" />
+          </ScrollViewer>
+        </TabItem>
+        <TabItem Header="Log">
+          <Border Background="#F7F9FB" BorderBrush="{StaticResource ThreadBrush}" BorderThickness="1" Padding="12,8">
+            <ScrollViewer x:Name="LogScroll" HorizontalScrollBarVisibility="Auto">
+              <SelectableTextBlock x:Name="LogText" FontFamily="{StaticResource MonoFont}" FontSize="11.5" LineHeight="17" />
+            </ScrollViewer>
+          </Border>
+        </TabItem>
+        <TabItem Header="Charts">
+          <Grid ColumnDefinitions="*,300" Margin="0,6,0,0">
+            <c:LineChart x:Name="Chart" Margin="0,0,24,0" />
+            <c:StatusBars x:Name="Statuses" Grid.Column="1" />
+          </Grid>
+        </TabItem>
+        <TabItem x:Name="OutputTab" Header="Output">
+          <ScrollViewer>
+            <StackPanel Spacing="12">
+              <SelectableTextBlock x:Name="OutputText" FontFamily="{StaticResource MonoFont}" FontSize="12.5" LineHeight="19" TextWrapping="Wrap" />
+              <WrapPanel x:Name="ImagesPanel" />
+            </StackPanel>
+          </ScrollViewer>
+        </TabItem>
+      </TabControl>
+    </Grid>
+  </Grid>
+</Window>

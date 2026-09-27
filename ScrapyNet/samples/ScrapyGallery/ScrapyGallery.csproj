@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <RootNamespace>ScrapyGallery</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <AvaloniaUseCompiledBindingsByDefault>false</AvaloniaUseCompiledBindingsByDefault>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="11.3.13" />
+    <PackageReference Include="Avalonia.Desktop" Version="11.3.13" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="11.3.13" />
+    <!-- Headless + Skia renders real frames without a display: that is how the screenshots mode works. -->
+    <PackageReference Include="Avalonia.Headless" Version="11.3.13" />
+    <PackageReference Include="Avalonia.Skia" Version="11.3.13" />
+    <PackageReference Include="Avalonia.Diagnostics" Version="11.3.13" Condition="'$(Configuration)' == 'Debug'" />
+    <!-- Pinned past Avalonia's transitive version, which carries GHSA-xrw6-gwf8-vvr9 (Linux D-Bus only). -->
+    <PackageReference Include="Tmds.DBus.Protocol" Version="0.95.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/ScrapyNet.Core/ScrapyNet.Core.csproj" />
+    <ProjectReference Include="../../src/ScrapyNet.Sandbox/ScrapyNet.Sandbox.csproj" />
+    <ProjectReference Include="../../src/ScrapyNet.AI/ScrapyNet.AI.csproj" />
+    <ProjectReference Include="../../src/ScrapyNet.Platform/ScrapyNet.Platform.csproj" />
+    <ProjectReference Include="../../src/ScrapyNet.Playwright/ScrapyNet.Playwright.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <AvaloniaResource Include="Assets/**" />
+    <!-- Demo sources are compiled AND embedded, so the code shown in the gallery is the code that runs. -->
+    <EmbeddedResource Include="Demos/**/*.cs" LogicalName="demo:%(Filename)%(Extension)" />
+  </ItemGroup>
+
+</Project>

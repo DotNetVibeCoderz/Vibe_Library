@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>ScrapyNet.Server</RootNamespace>
+    <AssemblyName>ScrapyNet.Server</AssemblyName>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <IsPackable>true</IsPackable>
+    <PackageId>Gravicode.ScrapyNet.Server</PackageId>
+    <Title>Scrapy.Net Server - REST API for the crawler platform</Title>
+    <Description>ASP.NET Core endpoints (like scrapyd) for the Scrapy.Net platform: manage spiders and declarative scraping rules, run/stop/pause/resume/cancel/retry jobs, cron schedules, live dashboard, alerts and outgoing webhooks, with API-key authentication and Admin/Operator/Viewer roles. Dibuat oleh Gravicode Studios, dipimpin oleh Kang Fadhil.</Description>
+    <PackageTags>scrapy;scrapyd;crawler;api;aspnetcore;jobs;scheduler;dashboard</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../ScrapyNet.Platform/ScrapyNet.Platform.csproj" />
+  </ItemGroup>
+
+</Project>

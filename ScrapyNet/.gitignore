@@ -1,0 +1,10 @@
+bin/
+obj/
+BenchmarkDotNet.Artifacts/
+TestResults/
+artifacts/
+*.user
+.vs/
+.scrapynet/
+output/
+platform-data/

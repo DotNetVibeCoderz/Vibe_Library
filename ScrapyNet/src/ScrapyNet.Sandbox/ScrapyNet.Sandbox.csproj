@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>ScrapyNet.Sandbox</RootNamespace>
+    <AssemblyName>ScrapyNet.Sandbox</AssemblyName>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <IsPackable>true</IsPackable>
+    <PackageId>Gravicode.ScrapyNet.Sandbox</PackageId>
+    <Title>Scrapy.Net Sandbox - an offline practice website for web scraping</Title>
+    <Description>A self-contained practice website (quotes, bookstore, login with CSRF, JSON APIs, sitemaps, RSS/CSV feeds, robots.txt, redirects, flaky and slow endpoints, proxy mode) that starts in-process on a loopback port. Learn and test Scrapy.Net without touching real sites. Dibuat oleh Gravicode Studios, dipimpin oleh Kang Fadhil.</Description>
+    <PackageTags>scrapy;scraping;crawler;testing;sandbox;practice;mock-server</PackageTags>
+  </PropertyGroup>
+
+</Project>

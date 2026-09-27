@@ -1,0 +1,94 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="ScrapyGallery.App"
+             RequestedThemeVariant="Light">
+  <Application.Resources>
+    <Color x:Key="Silk">#EEF1F4</Color>
+    <Color x:Key="SilkDeep">#E2E7ED</Color>
+    <Color x:Key="Ink">#18213A</Color>
+    <Color x:Key="InkSoft">#4A5573</Color>
+    <Color x:Key="Thread">#9AA7BD</Color>
+    <Color x:Key="Argiope">#E0A100</Color>
+    <SolidColorBrush x:Key="SilkBrush" Color="{StaticResource Silk}" />
+    <SolidColorBrush x:Key="SilkDeepBrush" Color="{StaticResource SilkDeep}" />
+    <SolidColorBrush x:Key="InkBrush" Color="{StaticResource Ink}" />
+    <SolidColorBrush x:Key="InkSoftBrush" Color="{StaticResource InkSoft}" />
+    <SolidColorBrush x:Key="ThreadBrush" Color="{StaticResource Thread}" />
+    <SolidColorBrush x:Key="ArgiopeBrush" Color="{StaticResource Argiope}" />
+    <FontFamily x:Key="DisplayFont">avares://ScrapyGallery/Assets/Fonts#IBM Plex Sans Condensed</FontFamily>
+    <FontFamily x:Key="BodyFont">avares://ScrapyGallery/Assets/Fonts#IBM Plex Sans</FontFamily>
+    <FontFamily x:Key="MonoFont">avares://ScrapyGallery/Assets/Fonts#IBM Plex Mono</FontFamily>
+  </Application.Resources>
+
+  <Application.Styles>
+    <FluentTheme />
+    <Style Selector="Window">
+      <Setter Property="FontFamily" Value="{StaticResource BodyFont}" />
+      <Setter Property="Foreground" Value="{StaticResource InkBrush}" />
+      <Setter Property="Background" Value="{StaticResource SilkBrush}" />
+    </Style>
+    <Style Selector="TextBlock.eyebrow">
+      <Setter Property="FontFamily" Value="{StaticResource MonoFont}" />
+      <Setter Property="FontSize" Value="11.5" />
+      <Setter Property="Foreground" Value="{StaticResource InkSoftBrush}" />
+      <Setter Property="LetterSpacing" Value="0.6" />
+    </Style>
+    <Style Selector="TextBlock.display">
+      <Setter Property="FontFamily" Value="{StaticResource DisplayFont}" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+    <Style Selector="TextBlock.mono">
+      <Setter Property="FontFamily" Value="{StaticResource MonoFont}" />
+    </Style>
+    <Style Selector="ListBox#DemoList">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+    <Style Selector="ListBox#DemoList ListBoxItem">
+      <Setter Property="Padding" Value="14,5" />
+      <Setter Property="CornerRadius" Value="0" />
+    </Style>
+    <Style Selector="ListBox#DemoList ListBoxItem:selected /template/ ContentPresenter">
+      <Setter Property="Background" Value="{StaticResource SilkBrush}" />
+    </Style>
+    <Style Selector="ListBox#DemoList ListBoxItem:selected">
+      <Setter Property="BorderBrush" Value="{StaticResource ArgiopeBrush}" />
+      <Setter Property="BorderThickness" Value="3,0,0,0" />
+    </Style>
+    <Style Selector="Button.run">
+      <Setter Property="Background" Value="{StaticResource InkBrush}" />
+      <Setter Property="Foreground" Value="{StaticResource SilkBrush}" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Padding" Value="22,9" />
+      <Setter Property="CornerRadius" Value="2" />
+    </Style>
+    <Style Selector="Button.run:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="#2A3558" />
+      <Setter Property="Foreground" Value="{StaticResource SilkBrush}" />
+    </Style>
+    <Style Selector="Button.run:disabled /template/ ContentPresenter">
+      <Setter Property="Background" Value="{StaticResource ThreadBrush}" />
+    </Style>
+    <Style Selector="ToggleButton.lang">
+      <Setter Property="FontFamily" Value="{StaticResource MonoFont}" />
+      <Setter Property="FontSize" Value="11.5" />
+      <Setter Property="Padding" Value="10,4" />
+      <Setter Property="CornerRadius" Value="0" />
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+    <Style Selector="ToggleButton.lang:checked /template/ ContentPresenter">
+      <Setter Property="Background" Value="{StaticResource InkBrush}" />
+      <Setter Property="Foreground" Value="{StaticResource SilkBrush}" />
+    </Style>
+    <Style Selector="TabItem">
+      <Setter Property="FontSize" Value="14" />
+      <Setter Property="MinHeight" Value="34" />
+      <Setter Property="Padding" Value="10,0" />
+    </Style>
+    <Style Selector="Border.tag">
+      <Setter Property="BorderBrush" Value="{StaticResource ThreadBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="Padding" Value="7,1" />
+      <Setter Property="Margin" Value="0,0,6,6" />
+    </Style>
+  </Application.Styles>
+</Application>

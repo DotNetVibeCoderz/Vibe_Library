@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>ScrapyNet.Samples</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.10" />
+    <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="2.1.13" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/ScrapyNet.Core/ScrapyNet.Core.csproj" />
+    <ProjectReference Include="../../src/ScrapyNet.Sandbox/ScrapyNet.Sandbox.csproj" />
+    <ProjectReference Include="../../src/ScrapyNet.AI/ScrapyNet.AI.csproj" />
+    <ProjectReference Include="../../src/ScrapyNet.Platform/ScrapyNet.Platform.csproj" />
+    <ProjectReference Include="../../src/ScrapyNet.Playwright/ScrapyNet.Playwright.csproj" />
+  </ItemGroup>
+
+</Project>

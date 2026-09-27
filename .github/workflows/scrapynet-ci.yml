@@ -1,0 +1,101 @@
+# Build and test Scrapy.Net (Vibe_Library/ScrapyNet).
+#
+# Vibe_Library holds several independent projects, so this workflow is scoped by path and named
+# after the one it covers. Everything runs from the ScrapyNet/ subdirectory.
+name: ScrapyNet CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'ScrapyNet/**'
+      - '.github/workflows/scrapynet-ci.yml'
+  pull_request:
+    paths:
+      - 'ScrapyNet/**'
+      - '.github/workflows/scrapynet-ci.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: scrapynet-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  TESTINGPLATFORM_TELEMETRY_OPTOUT: true
+
+defaults:
+  run:
+    working-directory: ScrapyNet
+
+jobs:
+  build:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: ScrapyNet/global.json
+
+      - name: Restore
+        run: dotnet restore ScrapyNet.slnx
+
+      - name: Build
+        run: dotnet build ScrapyNet.slnx -c Release --no-restore
+
+      # The suite is fully offline: it crawls the in-process sandbox site. The Playwright test skips
+      # itself when no browser is installed; live LLM tests skip without credentials.
+      - name: Test
+        run: >
+          dotnet run --project tests/ScrapyNet.Tests -c Release --no-build --
+          --report-xunit-trx --report-xunit-trx-filename scrapynet-tests.trx
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: scrapynet-test-results-${{ matrix.os }}
+          path: ScrapyNet/tests/ScrapyNet.Tests/bin/Release/net10.0/TestResults/*.trx
+          if-no-files-found: warn
+
+  notebooks:
+    name: notebooks (verify)
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: ScrapyNet/global.json
+      # Offline notebooks only; 01 and 03 crawl public practice sites.
+      - name: Run notebook code
+        run: |
+          dotnet run tools/notebooks/verify/02-selectors-and-loaders.cs
+          dotnet run tools/notebooks/verify/04-sandbox-practice.cs
+          dotnet run tools/notebooks/verify/05-ai-rag.cs
+          dotnet run tools/notebooks/verify/06-platform-jobs.cs
+
+  pack:
+    name: pack
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: ScrapyNet/global.json
+      - name: Pack
+        run: dotnet pack ScrapyNet.slnx -c Release -o artifacts
+      - name: Upload packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: scrapynet-packages
+          path: ScrapyNet/artifacts/*.nupkg

@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>ScrapyNet.Playwright</RootNamespace>
+    <AssemblyName>ScrapyNet.Playwright</AssemblyName>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <IsPackable>true</IsPackable>
+    <PackageId>Gravicode.ScrapyNet.Playwright</PackageId>
+    <Title>Scrapy.Net Playwright - crawl JavaScript-heavy sites</Title>
+    <Description>A Playwright download handler for Scrapy.Net (like scrapy-playwright): requests marked with meta "playwright" are rendered in a headless Chromium, Firefox or WebKit, with page actions (click, fill, scroll, wait for selector, evaluate, screenshot), resource blocking and page reuse; other requests keep using plain HTTP. Dibuat oleh Gravicode Studios, dipimpin oleh Kang Fadhil.</Description>
+    <PackageTags>scrapy;playwright;headless-browser;javascript;spa;scraping;crawler</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Playwright" Version="1.61.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../ScrapyNet.Core/ScrapyNet.Core.csproj" />
+  </ItemGroup>
+
+</Project>

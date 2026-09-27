@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>ScrapyNet.Cli</RootNamespace>
+    <AssemblyName>scrapynet</AssemblyName>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <!-- A .NET global tool: dotnet tool install -g Gravicode.ScrapyNet.Cli -->
+  <PropertyGroup>
+    <IsPackable>true</IsPackable>
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>scrapynet</ToolCommandName>
+    <PackageId>Gravicode.ScrapyNet.Cli</PackageId>
+    <Title>Scrapy.Net command-line tool</Title>
+    <Description>The scrapynet command: startproject, genspider, crawl, list, parse, fetch, view, shell, settings, bench and an offline practice site (sandbox). Dibuat oleh Gravicode Studios, dipimpin oleh Kang Fadhil.</Description>
+    <PackageTags>scrapy;crawler;scraping;cli;dotnet-tool</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../ScrapyNet.Core/ScrapyNet.Core.csproj" />
+    <ProjectReference Include="../ScrapyNet.Sandbox/ScrapyNet.Sandbox.csproj" />
+  </ItemGroup>
+
+</Project>

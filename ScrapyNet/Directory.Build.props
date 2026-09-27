@@ -1,0 +1,66 @@
+<Project>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <!-- CS1591: undocumented public member. CS1573: only some parameters documented. -->
+    <NoWarn>$(NoWarn);CS1591;CS1573</NoWarn>
+    <AnalysisLevel>latest</AnalysisLevel>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <TieredPGO>true</TieredPGO>
+    <Optimize Condition="'$(Configuration)' == 'Release'">true</Optimize>
+  </PropertyGroup>
+
+  <!--
+    Attribution flows into every built assembly's metadata, so the credit travels with the
+    binaries rather than living only in the README.
+  -->
+  <PropertyGroup>
+    <Authors>Kang Fadhil (Gravicode Studios)</Authors>
+    <Company>Gravicode Studios</Company>
+    <Product>Scrapy.Net</Product>
+    <Copyright>Copyright (c) 2026 Gravicode Studios. Dibuat oleh Gravicode Studios, dipimpin oleh Kang Fadhil.</Copyright>
+    <Version>0.1.0</Version>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <AssemblyMetadata Include="CreatedBy" Value="Gravicode Studios" />
+    <AssemblyMetadata Include="LedBy" Value="Kang Fadhil" />
+  </ItemGroup>
+
+  <!--
+    NuGet metadata. The sources live in a subfolder of the shared Vibe_Library repository, so both
+    URLs point at that subfolder rather than at the repository root.
+  -->
+  <PropertyGroup>
+    <PackageProjectUrl>https://github.com/DotNetVibeCoderz/Vibe_Library/tree/main/ScrapyNet</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/DotNetVibeCoderz/Vibe_Library/tree/main/ScrapyNet</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageIcon>icon.png</PackageIcon>
+    <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
+    <!-- PublishRepositoryUrl stays off: SourceLink would overwrite RepositoryUrl with the bare remote. -->
+    <PublishRepositoryUrl>false</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <ContinuousIntegrationBuild Condition="'$(GITHUB_ACTIONS)' == 'true'">true</ContinuousIntegrationBuild>
+  </PropertyGroup>
+
+  <!-- Libraries under src/ opt in; apps, samples, tests and benchmarks stay unpackable. -->
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(IsPackable)' == 'true'">
+    <!-- A package-specific README: nuget.org only renders absolute image URLs. -->
+    <None Include="$(MSBuildThisFileDirectory)docs/nuget-readme.md" Pack="true" PackagePath="README.md" Visible="false" />
+    <None Include="$(MSBuildThisFileDirectory)LICENSE" Pack="true" PackagePath="\" Visible="false" />
+    <None Include="$(MSBuildThisFileDirectory)docs/images/icon.png" Pack="true" PackagePath="\" Visible="false" />
+  </ItemGroup>
+
+</Project>

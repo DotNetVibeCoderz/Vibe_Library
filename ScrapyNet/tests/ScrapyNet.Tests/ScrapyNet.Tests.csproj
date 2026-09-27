@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>ScrapyNet.Tests</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <!--
+      xunit.v3 runs on Microsoft.Testing.Platform, which the .NET 10 SDK no longer bridges to
+      VSTest. The test project is its own executable: run it with "dotnet run".
+    -->
+    <OutputType>Exe</OutputType>
+    <TestingPlatformDotnetTestSupport>true</TestingPlatformDotnetTestSupport>
+    <UseMicrosoftTestingPlatformRunner>true</UseMicrosoftTestingPlatformRunner>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="xunit.v3" Version="4.0.0" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.10" />
+    <!-- Pinned past the transitive 2.1.11, which carries GHSA-2m69-gcr7-jv3q. -->
+    <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="2.1.13" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/ScrapyNet.Core/ScrapyNet.Core.csproj" />
+    <ProjectReference Include="../../src/ScrapyNet.Sandbox/ScrapyNet.Sandbox.csproj" />
+    <ProjectReference Include="../../src/ScrapyNet.AI/ScrapyNet.AI.csproj" />
+    <ProjectReference Include="../../src/ScrapyNet.Platform/ScrapyNet.Platform.csproj" />
+    <ProjectReference Include="../../src/ScrapyNet.Playwright/ScrapyNet.Playwright.csproj" />
+    <ProjectReference Include="../../src/ScrapyNet.Server/ScrapyNet.Server.csproj" />
+  </ItemGroup>
+
+</Project>

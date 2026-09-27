@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <RootNamespace>ScrapyNet.ServerHost</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <!-- Web SDK projects warn when packing is disabled; this host is never packed. -->
+    <NoWarn>$(NoWarn);NU5017</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/ScrapyNet.Server/ScrapyNet.Server.csproj" />
+    <ProjectReference Include="../../src/ScrapyNet.Sandbox/ScrapyNet.Sandbox.csproj" />
+  </ItemGroup>
+
+</Project>

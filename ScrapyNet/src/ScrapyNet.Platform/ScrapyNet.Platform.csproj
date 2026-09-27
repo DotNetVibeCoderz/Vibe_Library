@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>ScrapyNet.Platform</RootNamespace>
+    <AssemblyName>ScrapyNet.Platform</AssemblyName>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <IsPackable>true</IsPackable>
+    <PackageId>Gravicode.ScrapyNet.Platform</PackageId>
+    <Title>Scrapy.Net Platform - run crawlers as a managed service</Title>
+    <Description>Control plane for Scrapy.Net: spider catalog with versioning and cloning, declarative no-code spiders (targets and scraping rules as JSON), job manager (run, stop, pause, resume, cancel, retry, history), cron scheduler, encrypted secret store, live monitoring dashboard data, health alerts (failed jobs, zero or dropping items, inaccessible targets, expired logins), notifications (webhook, Slack, Teams, email) and raw content storage. Dibuat oleh Gravicode Studios, dipimpin oleh Kang Fadhil.</Description>
+    <PackageTags>scrapy;crawler;scheduler;cron;jobs;monitoring;alerts;webhook;slack;teams;platform</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../ScrapyNet.Core/ScrapyNet.Core.csproj" />
+  </ItemGroup>
+
+</Project>

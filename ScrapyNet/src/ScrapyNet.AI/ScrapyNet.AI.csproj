@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>ScrapyNet.AI</RootNamespace>
+    <AssemblyName>ScrapyNet.AI</AssemblyName>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <IsPackable>true</IsPackable>
+    <PackageId>Gravicode.ScrapyNet.AI</PackageId>
+    <Title>Scrapy.Net AI - RAG ingestion for crawled content</Title>
+    <Description>Turns Scrapy.Net crawls into AI-ready knowledge: article and metadata extraction (OpenGraph, JSON-LD), text normalization, chunking, SimHash near-duplicate detection, content change detection and incremental re-crawls, local hashing embeddings or OpenAI-compatible embeddings, an in-memory SIMD vector store (plus Qdrant), extractive and LLM summarization, keyword/Naive Bayes/LLM categorization, and a RAG ingestion pipeline with a queryable knowledge base. Dibuat oleh Gravicode Studios, dipimpin oleh Kang Fadhil.</Description>
+    <PackageTags>scrapy;rag;embeddings;vector-database;llm;ai;chunking;simhash;content-extraction;knowledge-base</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.Numerics.Tensors" Version="10.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../ScrapyNet.Core/ScrapyNet.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="ScrapyNet.Tests" />
+  </ItemGroup>
+
+</Project>

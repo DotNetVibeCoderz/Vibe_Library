@@ -1,0 +1,90 @@
+# Packs the Gravicode.ScrapyNet* packages and pushes them to nuget.org.
+#
+# Trigger with a tag: ScrapyNet-v0.1.0 (namespaced because Vibe_Library holds several projects). A
+# manual run without "push" ticked is a dry run: it builds, tests and uploads the packages as
+# artifacts, touching nothing public.
+#
+# Requires the repository secret NUGET_API_KEY.
+name: ScrapyNet Publish
+
+on:
+  push:
+    tags:
+      - 'ScrapyNet-v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Package version (blank = the version in Directory.Build.props)'
+        required: false
+        type: string
+      push:
+        description: 'Push to nuget.org (leave off for a dry run)'
+        required: false
+        default: false
+        type: boolean
+
+concurrency:
+  group: scrapynet-publish
+  cancel-in-progress: false
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  TESTINGPLATFORM_TELEMETRY_OPTOUT: true
+
+defaults:
+  run:
+    working-directory: ScrapyNet
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: ScrapyNet/global.json
+
+      - name: Resolve version
+        id: version
+        shell: bash
+        run: |
+          if [ -n "${{ inputs.version }}" ]; then
+            version="${{ inputs.version }}"
+          elif [[ "$GITHUB_REF" == refs/tags/ScrapyNet-v* ]]; then
+            version="${GITHUB_REF#refs/tags/ScrapyNet-v}"
+          else
+            version=""
+          fi
+          echo "value=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Build
+        run: dotnet build ScrapyNet.slnx -c Release
+
+      - name: Test
+        run: dotnet run --project tests/ScrapyNet.Tests -c Release --no-build
+
+      - name: Pack
+        run: |
+          if [ -n "${{ steps.version.outputs.value }}" ]; then
+            dotnet pack ScrapyNet.slnx -c Release --no-build -o artifacts -p:Version=${{ steps.version.outputs.value }}
+          else
+            dotnet pack ScrapyNet.slnx -c Release --no-build -o artifacts
+          fi
+
+      - name: Upload packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: scrapynet-nupkg
+          path: ScrapyNet/artifacts/*
+
+      - name: Push to nuget.org
+        if: startsWith(github.ref, 'refs/tags/ScrapyNet-v') || inputs.push
+        run: |
+          dotnet nuget push "artifacts/*.nupkg" \
+            --api-key "${{ secrets.NUGET_API_KEY }}" \
+            --source https://api.nuget.org/v3/index.json \
+            --skip-duplicate
