@@ -36,9 +36,19 @@ internal readonly struct LoopPlan
 /// The calling thread is one of the workers. It never waits for a queued work item to be picked up,
 /// only for partitions that are actually running: if the pool is slow to respond (busy, or this loop
 /// is nested inside another) the caller simply claims the partitions itself. That is why a nested loop
-/// cannot deadlock the pool, and why a work item may run after its loop has already returned. Such a
-/// late item finds nothing to claim and leaves; the job goes back to the pool only once the last
-/// holder - caller or late item - has released it, tracked by <see cref="_refCount"/>.
+/// cannot deadlock the pool, and why a work item may run after its loop has already returned.
+/// </para>
+/// <para>
+/// Late items are handled by a <em>gate</em> (<see cref="_gate"/>): an open flag plus a count of pool
+/// workers inside. The caller opens it once the run's fields are set, and when every partition is
+/// done it closes it and waits for the workers still inside to leave - they are only looking for work
+/// that no longer exists, so this is a few spins. From then on the job is idle and goes straight back
+/// to its pool. A late item that arrives while the gate is closed returns without touching anything;
+/// one that arrives after the job has been reused for another loop of the same body type simply
+/// helps with that loop. So a job never waits in limbo for its stale items, and a steady stream of
+/// calls reuses one job even when the machine has fewer cores than the loop has workers.
+/// (An earlier design reference-counted the items and returned the job when the last one ran; on a
+/// two-core machine the items lagged behind the calls and every few calls needed a new job.)
 /// </para>
 /// </remarks>
 internal abstract class ParallelJob : IThreadPoolWorkItem
@@ -47,6 +57,8 @@ internal abstract class ParallelJob : IThreadPoolWorkItem
     private const int NoStop = 0;
     private const int StopFaulted = 1;
     private const int StopCanceled = 2;
+    private const int GateOpen = 1 << 30;
+    private const int GateCountMask = GateOpen - 1;
 
     private readonly ManualResetEventSlim _done = new(initialState: false);
     private readonly Lock _exceptionLock = new();
@@ -65,7 +77,7 @@ internal abstract class ParallelJob : IThreadPoolWorkItem
     private int _next;       // static: next partition to claim; stealing: next worker slot
     private int _remaining;  // static: partitions not finished; stealing: iterations not finished
     private int _stop;
-    private int _refCount;
+    private int _gate;       // GateOpen while a run accepts pool workers, plus the number inside
     private List<Exception>? _exceptions;
 
     /// <summary>Accumulator slots a reduction needs: one per partition, or one per worker when stealing.</summary>
@@ -111,8 +123,11 @@ internal abstract class ParallelJob : IThreadPoolWorkItem
         Prepare(SlotCount);
 
         int queued = _workerCount - 1;
-        _refCount = queued + 1;
         _done.Reset();
+
+        // Everything above is published by this write: a pool worker reads the run's fields only
+        // after it has seen the gate open.
+        Volatile.Write(ref _gate, GateOpen);
 
         if (AplEventSource.Log.IsEnabled())
             AplEventSource.Log.OnLoop(inline: false);
@@ -126,7 +141,22 @@ internal abstract class ParallelJob : IThreadPoolWorkItem
             _done.Wait();
     }
 
-    /// <summary>What the loop ended with. Read by the caller after <see cref="Execute"/> and before <see cref="Release"/>.</summary>
+    /// <summary>
+    /// Closes the gate and waits for the pool workers still inside to leave. After this, no other
+    /// thread touches the run's state, so the outcome can be read and the job reused.
+    /// </summary>
+    protected void CloseGate()
+    {
+        Interlocked.And(ref _gate, ~GateOpen);
+        if ((Volatile.Read(ref _gate) & GateCountMask) == 0)
+            return;
+
+        SpinWait spinner = default;
+        while ((Volatile.Read(ref _gate) & GateCountMask) != 0)
+            spinner.SpinOnce();
+    }
+
+    /// <summary>What the loop ended with. Read by the caller after <see cref="CloseGate"/>.</summary>
     protected void GetOutcome(out List<Exception>? exceptions, out bool canceled, out CancellationToken token)
     {
         exceptions = _exceptions;
@@ -143,12 +173,9 @@ internal abstract class ParallelJob : IThreadPoolWorkItem
             throw new OperationCanceledException(token);
     }
 
-    /// <summary>Drops one reference; the last one returns the job to its pool.</summary>
+    /// <summary>Drops the references held for the last run and returns the job to its pool. Caller only, after <see cref="CloseGate"/>.</summary>
     protected void Release()
     {
-        if (Interlocked.Decrement(ref _refCount) != 0)
-            return;
-
         _exceptions = null;
         _token = default;
         _partitioner = StaticRangePartitioner.Instance;
@@ -157,8 +184,26 @@ internal abstract class ParallelJob : IThreadPoolWorkItem
 
     void IThreadPoolWorkItem.Execute()
     {
-        Work();
-        Release();
+        int observed = Volatile.Read(ref _gate);
+        while (true)
+        {
+            if ((observed & GateOpen) == 0)
+                return;   // a late item: its run is over and the job may already be in someone else's hands
+
+            int previous = Interlocked.CompareExchange(ref _gate, observed + 1, observed);
+            if (previous == observed)
+                break;
+            observed = previous;
+        }
+
+        try
+        {
+            Work();
+        }
+        finally
+        {
+            Interlocked.Decrement(ref _gate);
+        }
     }
 
     private void Work()
@@ -416,11 +461,22 @@ internal abstract class ParallelJob : IThreadPoolWorkItem
     }
 }
 
+internal static class JobPool
+{
+    /// <summary>
+    /// Jobs kept per body type. A job is back in its pool as soon as its loop returns (see the gate
+    /// on <see cref="ParallelJob"/>), so a stream of calls from one thread reuses a single job; more
+    /// are needed only for loops of the same body type running at the same time - from several
+    /// threads, or nested. Beyond this many, extra jobs are allocated and dropped.
+    /// </summary>
+    public const int Size = 16;
+}
+
 /// <summary>A pooled job for a range body.</summary>
 internal sealed class RangeJob<TBody> : ParallelJob
     where TBody : struct, IRangeWorkBody
 {
-    private static readonly RangeJob<TBody>?[] s_pool = new RangeJob<TBody>?[4];
+    private static readonly RangeJob<TBody>?[] s_pool = new RangeJob<TBody>?[JobPool.Size];
 
     private TBody _body;
 
@@ -429,6 +485,7 @@ internal sealed class RangeJob<TBody> : ParallelJob
         RangeJob<TBody> job = Rent();
         job._body = body;
         job.Execute(plan);
+        job.CloseGate();
         job.GetOutcome(out List<Exception>? exceptions, out bool canceled, out CancellationToken token);
         job.Release();
         ThrowIfFailed(exceptions, canceled, token);
@@ -471,7 +528,7 @@ internal sealed class RangeJob<TBody> : ParallelJob
 internal sealed class ReduceJob<T, TBody> : ParallelJob
     where TBody : struct, IReduceBody<T>
 {
-    private static readonly ReduceJob<T, TBody>?[] s_pool = new ReduceJob<T, TBody>?[4];
+    private static readonly ReduceJob<T, TBody>?[] s_pool = new ReduceJob<T, TBody>?[JobPool.Size];
 
     // Accumulators sit a cache line apart so workers writing their own do not invalidate each other's.
     private static readonly int s_stride = Math.Max(1, 64 / Math.Max(1, System.Runtime.CompilerServices.Unsafe.SizeOf<T>()));
@@ -487,6 +544,7 @@ internal sealed class ReduceJob<T, TBody> : ParallelJob
         job._body = body;
         job._identity = identity;
         job.Execute(plan);
+        job.CloseGate();
         job.GetOutcome(out List<Exception>? exceptions, out bool canceled, out CancellationToken token);
 
         T result = identity;

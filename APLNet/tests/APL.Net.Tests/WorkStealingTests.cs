@@ -5,6 +5,10 @@ using AplNet.Core.Partitioners;
 
 namespace AplNet.Tests;
 
+// Serial: the stealing test needs pool threads to be free to steal. When other test classes
+// occupy the pool, the caller legitimately runs everything itself (that is what keeps loops from
+// deadlocking), and nothing is stolen.
+[Collection(nameof(AllocationCollection))]
 public class WorkStealingTests
 {
     [Fact]
@@ -19,7 +23,7 @@ public class WorkStealingTests
         {
             owners[i] = Environment.CurrentManagedThreadId;
             if (i < n / 4)
-                Thread.Sleep(1);
+                Thread.Sleep(3);
         }, options);
 
         int threadsOnExpensiveItems = owners.Take(n / 4).Distinct().Count();
