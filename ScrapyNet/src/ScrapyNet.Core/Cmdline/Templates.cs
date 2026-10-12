@@ -9,7 +9,7 @@ public static class Templates
     public static readonly IReadOnlyList<string> SpiderTemplates = ["basic", "crawl", "sitemap", "xmlfeed", "csvfeed"];
 
     /// <summary>Package version referenced by generated projects.</summary>
-    public static string PackageVersion => typeof(Templates).Assembly.GetName().Version?.ToString(3) ?? "0.1.0";
+    public static string PackageVersion => typeof(Templates).Assembly.GetName().Version?.ToString(3) ?? "0.2.0";
 
     /// <summary>Creates a new Scrapy.Net project directory. Returns the files written.</summary>
     public static IReadOnlyList<string> CreateProject(string name, string directory)

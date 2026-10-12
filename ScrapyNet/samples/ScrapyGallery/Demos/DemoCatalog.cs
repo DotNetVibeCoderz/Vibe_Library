@@ -23,6 +23,8 @@ public static class DemoCatalog
         new ThrottleDemo(),
         new LinkGraphDemo(),
         new ResumeDemo(),
+        new ContractsDemo(),
+        new DistributedDemo(),
         new CacheDemo(),
         new RagDemo(),
         new DedupDemo(),

@@ -50,6 +50,9 @@ Statistik: `rag/documents_seen`, `rag/documents_ingested`, `rag/chunks`, `rag/du
 | `OpenAiEmbeddingGenerator` | `/v1/embeddings` apa pun yang kompatibel OpenAI: OpenAI, Azure OpenAI, Ollama, LM Studio, vLLM |
 | `InMemoryVectorStore` | Pencarian cosine SIMD dengan heap terbatas; simpan/muat ke disk |
 | `QdrantVectorStore` | Qdrant lewat REST |
+| `PgVectorStore` | PostgreSQL + pgvector lewat ADO.NET biasa (driver pilihan Anda, mis. Npgsql); indeks cosine HNSW |
+| `AzureAiSearchVectorStore` | Azure AI Search lewat REST, indeks dibuat saat pertama dipakai |
+| `ExtensionsAiAdapters` | Microsoft.Extensions.AI dua arah: `IChatClient` / `IEmbeddingGenerator` masuk, model Scrapy.Net keluar |
 | `OpenAiChatModel` | Endpoint chat apa pun yang kompatibel OpenAI; `ForAzure(...)` untuk Azure OpenAI |
 | `ExtractiveSummarizer` / `LlmSummarizer` | Ringkasan TextRank / ringkasan tulisan model |
 | `KeywordCategorizer` / `NaiveBayesCategorizer` / `LlmCategorizer` | Aturan, classifier terlatih, zero-shot |
@@ -81,6 +84,35 @@ dan tanpa biaya. Untuk pencarian berdasarkan makna, gunakan model sungguhan:
 ```csharp
 var embeddings = new OpenAiEmbeddingGenerator("text-embedding-3-small", 1536, apiKey);
 var kb = new KnowledgeBase(embeddings, new QdrantVectorStore("http://localhost:6333", "docs", 1536));
+```
+
+## Vector store lainnya
+
+```csharp
+// PostgreSQL + pgvector: provider ADO.NET apa pun; tabel dan indeks HNSW dibuat saat pertama dipakai.
+var pg = new PgVectorStore(() => new NpgsqlConnection(connectionString), "pages", 1536);
+
+// Azure AI Search: admin key; indeks (HNSW, cosine) dibuat saat pertama dipakai.
+var search = new AzureAiSearchVectorStore("https://NAME.search.windows.net", "pages", 1536, adminKey);
+
+var kb = new KnowledgeBase(embeddings, pg);
+```
+
+Semua store mengimplementasikan `IVectorStore`, jadi pipeline, `KnowledgeBase`, dan
+`RagIngestionPipeline` bekerja sama saja dengan store mana pun.
+
+## Microsoft.Extensions.AI
+
+`IChatClient` atau `IEmbeddingGenerator<string, Embedding<float>>` apa pun (OpenAI, Azure AI Inference,
+Ollama, ONNX, ...) bisa dipasang ke Scrapy.Net, dan model milik Scrapy.Net bisa dipakai oleh apa pun yang
+dibangun di atas Microsoft.Extensions.AI:
+
+```csharp
+ILanguageModel model = chatClient.AsLanguageModel();                  // IChatClient → ringkasan, jawaban RAG
+IEmbeddingGenerator embeddings = generator.AsScrapyNetEmbeddings();   // IEmbeddingGenerator<,> → KnowledgeBase
+
+IChatClient client = OpenAiChatModel.ForAzure(endpoint, key, "gpt-5-mini").AsChatClient();
+IEmbeddingGenerator<string, Embedding<float>> local = new HashingEmbeddingGenerator().AsEmbeddingGenerator();
 ```
 
 ## Re-crawl inkremental

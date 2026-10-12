@@ -9,6 +9,7 @@ using ScrapyNet.Server;
 //   curl -H "X-Api-Key: dev-admin" http://localhost:5080/api/spiders
 //   curl -X POST -H "X-Api-Key: dev-admin" http://localhost:5080/api/spiders/sandbox-quotes/run
 //   curl -H "X-Api-Key: dev-viewer" http://localhost:5080/api/dashboard
+//   open http://localhost:5080/admin/ and sign in with dev-admin (or dev-viewer, read-only)
 //
 // API keys come from configuration (ScrapyNet:ApiKeys:<key> = "<name>:<Role>"); the two dev keys
 // below exist only in Development.
@@ -32,7 +33,8 @@ builder.Services.AddScrapyNetPlatform(options =>
 
 var app = builder.Build();
 app.MapScrapyNetApi();
-app.MapGet("/", () => Results.Text("Scrapy.Net server — see /api/health. Dibuat oleh Gravicode Studios, dipimpin oleh Kang Fadhil."));
+app.MapScrapyNetAdmin();                          // the console: http://localhost:5080/admin/
+app.MapGet("/", () => Results.Redirect("/admin/"));
 
 // Seed one declarative spider targeting the sandbox so there is something to run.
 var catalog = app.Services.GetRequiredService<SpiderCatalog>();
@@ -52,6 +54,31 @@ if (!catalog.TryGet("sandbox-quotes", out _))
         },
     });
 }
+if (!catalog.TryGet("sandbox-books", out _))
+{
+    catalog.Create(new SpiderDefinition
+    {
+        Id = "sandbox-books",
+        Name = "sandbox-books",
+        Description = "Book detail pages from the local practice site",
+        Target = new TargetConfig { StartUrls = [sandbox.Url("/books/")] },
+        Rules = new ScrapingRules
+        {
+            Fields = new()
+            {
+                ["title"] = new FieldRule { Css = "h1::text", Processors = ["clean"] },
+                ["price"] = new FieldRule { Css = "p.price_color::text", Processors = ["price"] },
+            },
+            FollowLinks = ["li.next a"],
+            DetailLinks = ["article.product_pod h3 a"],
+            RequiredFields = ["title"],
+        },
+        Settings = new() { ["DOWNLOAD_DELAY"] = 0.05 },
+    });
+}
+var schedules = app.Services.GetRequiredService<CrawlScheduler>();
+if (schedules.List().All(s => s.Id != "books-nightly"))
+    schedules.Add(new ScheduleEntry { Id = "books-nightly", SpiderId = "sandbox-books", Cron = "0 2 * * *" });
 
 app.Lifetime.ApplicationStopping.Register(() => sandbox.DisposeAsync().AsTask().GetAwaiter().GetResult());
 app.Run();

@@ -19,7 +19,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="../ScrapyNet.Core/ScrapyNet.Core.csproj" />
+    <!-- PrivateAssets none: the [ScrapyItem] analyzer flows to anyone installing this package. -->
+    <ProjectReference Include="../ScrapyNet.Core/ScrapyNet.Core.csproj" PrivateAssets="none" />
     <ProjectReference Include="../ScrapyNet.Sandbox/ScrapyNet.Sandbox.csproj" />
   </ItemGroup>
 

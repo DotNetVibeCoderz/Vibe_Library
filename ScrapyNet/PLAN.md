@@ -41,7 +41,7 @@ Status per phase. ✅ done · 🔜 next · 💡 considered
 - ✅ Scrapy Gallery (Avalonia) with 21 demos and headless screenshot generation
 - ✅ 18 console samples, single-file spider, server host
 - ✅ 6 .NET Interactive notebooks with verification programs
-- ✅ Documentation in English and Bahasa Indonesia (15 chapters each)
+- ✅ Documentation in English and Bahasa Indonesia (16 chapters each)
 - ✅ Benchmarks
 
 ## Phase 5 — Release ✅
@@ -49,12 +49,20 @@ Status per phase. ✅ done · 🔜 next · 💡 considered
 - ✅ Test suite (xunit.v3), all green offline; live LLM tests opt-in
 - ✅ Moved to `Vibe_Library/ScrapyNet`, CI workflows, published `Gravicode.ScrapyNet*` 0.1.0 to NuGet
 
+## Phase 6 — 0.2.0 ✅
+
+- ✅ Source-generated item accessors (`[ScrapyItem]`) for trimming and NativeAOT; `samples/AotSpider`
+- ✅ Disk-backed scheduler queue: `JOBDIR` journal written as requests are scheduled, crash-safe
+- ✅ Distributed scheduling over Redis (`Gravicode.ScrapyNet.Redis`, scrapy-redis equivalent)
+- ✅ HTTP/3 (`DOWNLOAD_HTTP_VERSION`, `DOWNLOAD_HTTP_VERSION_POLICY`)
+- ✅ Web admin UI on top of `ScrapyNet.Server` (the Scrapy.Net Console, `MapScrapyNetAdmin`)
+- ✅ Spider contracts and `scrapynet check`
+- ✅ pgvector and Azure AI Search vector stores; `Microsoft.Extensions.AI` adapters both ways
+- ✅ Gallery demos for contracts and distributed crawling; docs chapter 16; CI jobs for Redis, pgvector and NativeAOT
+
 ## Later 💡
 
-- 💡 Source-generated item accessors for NativeAOT
-- 💡 Disk-backed scheduler queue (persist continuously, not only on close)
-- 💡 Distributed scheduling over Redis (scrapy-redis equivalent)
-- 💡 HTTP/3 download handler
-- 💡 Web admin UI on top of `ScrapyNet.Server`
-- 💡 Spider contracts (`scrapy check`)
-- 💡 More vector stores (pgvector, Azure AI Search) and `Microsoft.Extensions.AI` adapters
+- 💡 Trim-safe component registration (no `preserve="all"` descriptor for built-in components)
+- 💡 Microsoft.Extensions.VectorData adapter for `IVectorStore`
+- 💡 Console: live log tail per job and editing spiders with a form as well as JSON
+- 💡 Other shared queues for distributed crawls (RabbitMQ, Azure Service Bus)

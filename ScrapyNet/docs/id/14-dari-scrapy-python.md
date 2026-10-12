@@ -40,12 +40,15 @@ Nama, setting, dan perilaku mengikuti Scrapy; perbedaannya adalah idiom C#.
 | `scrapy shell URL` | `scrapynet shell URL` (bahasa perintah) atau `Fetcher` di notebook |
 | `scrapy runspider spider.py` | `dotnet run spider.cs` (aplikasi file-based .NET 10) |
 | `scrapy-playwright` | `Gravicode.ScrapyNet.Playwright` |
-| `scrapyd` | `Gravicode.ScrapyNet.Server` + `Gravicode.ScrapyNet.Platform` |
+| `scrapyd` | `Gravicode.ScrapyNet.Server` + `Gravicode.ScrapyNet.Platform` (+ konsol, `MapScrapyNetAdmin`) |
+| `scrapy check` dan kontrak docstring (`@url`, `@returns`, `@scrapes`) | `scrapynet check` dan `[Url]`, `[Returns]`, `[Scrapes]`, `[CbKwargs]`, `[Meta]` |
+| `scrapy-redis` | `Gravicode.ScrapyNet.Redis` (`UseRedis`, `RedisSpider`, `RedisPipeline`) |
 
 ## Perbedaan perilaku
 
 - `LOG_LEVEL` default-nya `INFO`, bukan `DEBUG`.
-- `JOBDIR` menyimpan antrean tertunda saat spider ditutup (berhenti dengan rapi), bukan terus-menerus.
+- `JOBDIR` menyimpan antrean dalam satu journal append-only (`requests.queue.log`), bukan antrean pickle
+  per prioritas seperti Scrapy; file-nya tidak bisa dipertukarkan dengan milik Scrapy.
 - Selektor XML mengabaikan namespace secara default (`//url/loc` langsung jalan); daftarkan prefix untuk
   mematikannya.
 - Hasil skalar XPath (`count()`, `boolean()`) dikembalikan sebagai string XPath: `"10"`, `"true"`.

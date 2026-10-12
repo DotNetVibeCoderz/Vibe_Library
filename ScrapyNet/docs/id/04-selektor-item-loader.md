@@ -69,6 +69,26 @@ memakai accessor properti hasil kompilasi yang di-cache per tipe. Pengisian fiel
 secara longgar (`file_urls`, `FileUrls`, dan `fileUrls` dianggap sama) dan mengonversi tipe
 (`"12.50"` → `decimal`).
 
+### Accessor hasil generator (trimming dan NativeAOT)
+
+Tandai class atau record item dengan `[ScrapyItem]` dan sebuah source generator (sudah termasuk dalam
+paket `Gravicode.ScrapyNet`) menulis accessor-nya saat kompilasi. `ItemAdapter`, loader, dan exporter
+lalu memakai lambda terkompilasi biasa alih-alih refleksi — wajib untuk aplikasi yang di-trim dan
+NativeAOT, dan menghemat biaya kompilasi pertama di tempat lain. Properti `init` tetap bisa diisi loader.
+
+```csharp
+[ScrapyItem]
+public sealed record Book
+{
+    public string? Title { get; init; }
+    public decimal Price { get; init; }
+}
+```
+
+`samples/AotSpider` adalah spider lengkap yang dipublikasikan sebagai satu executable native
+(`dotnet publish -c Release -r linux-x64`). Generator melaporkan `SCRAPYNET001` untuk tipe yang tidak
+bisa ditanganinya (generik, abstrak, struct, tipe bersarang private).
+
 ## Item loader
 
 Loader mengumpulkan nilai per field melalui **input processor** dan menghasilkan nilai akhir dengan

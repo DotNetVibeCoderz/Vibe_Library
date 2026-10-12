@@ -10,6 +10,8 @@ public static class SettingKeys
     public const string BotName = "BOT_NAME";
     public const string ConcurrentItems = "CONCURRENT_ITEMS";
     public const string ConcurrentRequests = "CONCURRENT_REQUESTS";
+    /// <summary>Base for relative <c>[Url]</c> contract URLs (default: the spider's first start URL).</summary>
+    public const string ContractsBaseUrl = "CONTRACTS_BASE_URL";
     public const string ConcurrentRequestsPerDomain = "CONCURRENT_REQUESTS_PER_DOMAIN";
     public const string ConcurrentRequestsPerIp = "CONCURRENT_REQUESTS_PER_IP";
     public const string CookiesEnabled = "COOKIES_ENABLED";
@@ -26,7 +28,12 @@ public static class SettingKeys
     public const string DownloadWarnSize = "DOWNLOAD_WARNSIZE";
     public const string DownloadSlots = "DOWNLOAD_SLOTS";
     public const string DownloadVerifySsl = "DOWNLOAD_VERIFY_SSL";
+    /// <summary><c>true</c>: ask for HTTP/2 (same as <c>DOWNLOAD_HTTP_VERSION = "2"</c>).</summary>
     public const string DownloadHttp2 = "DOWNLOAD_HTTP2";
+    /// <summary>HTTP version to ask for: <c>1.1</c> (default), <c>2</c> or <c>3</c> (QUIC). Per request: meta <c>download_http_version</c>.</summary>
+    public const string DownloadHttpVersion = "DOWNLOAD_HTTP_VERSION";
+    /// <summary><c>or-lower</c> (default: fall back, HTTP/3 after an Alt-Svc advertisement), <c>exact</c>, or <c>or-higher</c>.</summary>
+    public const string DownloadHttpVersionPolicy = "DOWNLOAD_HTTP_VERSION_POLICY";
     public const string DownloaderMiddlewares = "DOWNLOADER_MIDDLEWARES";
     public const string DomainHeaders = "DOMAIN_HEADERS";
     public const string DupeFilterClass = "DUPEFILTER_CLASS";
@@ -153,6 +160,8 @@ public static class DefaultSettings
         s.Set(SettingKeys.DownloadWarnSize, 32L * 1024 * 1024, p);
         s.Set(SettingKeys.DownloadVerifySsl, true, p);
         s.Set(SettingKeys.DownloadHttp2, false, p);
+        s.Set(SettingKeys.DownloadHttpVersion, "1.1", p);
+        s.Set(SettingKeys.DownloadHttpVersionPolicy, "or-lower", p);
         s.Set(SettingKeys.DupeFilterDebug, false, p);
         s.Set(SettingKeys.FeedExportEncoding, "utf-8", p);
         s.Set(SettingKeys.FeedExportIndent, 0, p);

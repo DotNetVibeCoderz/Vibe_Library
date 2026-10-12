@@ -9,7 +9,7 @@
     <IsPackable>true</IsPackable>
     <PackageId>Gravicode.ScrapyNet.Server</PackageId>
     <Title>Scrapy.Net Server - REST API for the crawler platform</Title>
-    <Description>ASP.NET Core endpoints (like scrapyd) for the Scrapy.Net platform: manage spiders and declarative scraping rules, run/stop/pause/resume/cancel/retry jobs, cron schedules, live dashboard, alerts and outgoing webhooks, with API-key authentication and Admin/Operator/Viewer roles. Dibuat oleh Gravicode Studios, dipimpin oleh Kang Fadhil.</Description>
+    <Description>ASP.NET Core endpoints (like scrapyd) for the Scrapy.Net platform: manage spiders and declarative scraping rules, run/stop/pause/resume/cancel/retry jobs, cron schedules, live dashboard, alerts and outgoing webhooks, with API-key authentication and Admin/Operator/Viewer roles, plus the Scrapy.Net Console: a browser admin UI (dashboard, spiders, jobs, schedules, selector builder, alerts). Dibuat oleh Gravicode Studios, dipimpin oleh Kang Fadhil.</Description>
     <PackageTags>scrapy;scrapyd;crawler;api;aspnetcore;jobs;scheduler;dashboard</PackageTags>
   </PropertyGroup>
 
@@ -17,8 +17,14 @@
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 
+  <!-- The console: embedded as ScrapyNet.Server.Admin.&lt;path with / as .&gt; (fonts keep their folder). -->
   <ItemGroup>
-    <ProjectReference Include="../ScrapyNet.Platform/ScrapyNet.Platform.csproj" />
+    <EmbeddedResource Include="Admin/*.html;Admin/*.css;Admin/*.js;Admin/*.svg" LogicalName="ScrapyNet.Server.Admin.%(Filename)%(Extension)" />
+    <EmbeddedResource Include="Admin/fonts/*" LogicalName="ScrapyNet.Server.Admin.fonts/%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../ScrapyNet.Platform/ScrapyNet.Platform.csproj" PrivateAssets="none" />
   </ItemGroup>
 
 </Project>

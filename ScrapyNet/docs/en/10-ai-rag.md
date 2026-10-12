@@ -50,6 +50,9 @@ Stats: `rag/documents_seen`, `rag/documents_ingested`, `rag/chunks`, `rag/duplic
 | `OpenAiEmbeddingGenerator` | Any OpenAI-compatible `/v1/embeddings`: OpenAI, Azure OpenAI, Ollama, LM Studio, vLLM |
 | `InMemoryVectorStore` | SIMD cosine search with a bounded heap; save/load to disk |
 | `QdrantVectorStore` | Qdrant over REST |
+| `PgVectorStore` | PostgreSQL + pgvector over plain ADO.NET (bring your driver, e.g. Npgsql); HNSW cosine index |
+| `AzureAiSearchVectorStore` | Azure AI Search over REST, index created on first use |
+| `ExtensionsAiAdapters` | Microsoft.Extensions.AI both ways: `IChatClient` / `IEmbeddingGenerator` in, Scrapy.Net models out |
 | `OpenAiChatModel` | Any OpenAI-compatible chat endpoint; `ForAzure(...)` for Azure OpenAI |
 | `ExtractiveSummarizer` / `LlmSummarizer` | TextRank summaries / model-written summaries |
 | `KeywordCategorizer` / `NaiveBayesCategorizer` / `LlmCategorizer` | Rules, trained classifier, zero-shot |
@@ -81,6 +84,35 @@ catalogues and costs nothing. For meaning-level search, swap in a real model:
 ```csharp
 var embeddings = new OpenAiEmbeddingGenerator("text-embedding-3-small", 1536, apiKey);
 var kb = new KnowledgeBase(embeddings, new QdrantVectorStore("http://localhost:6333", "docs", 1536));
+```
+
+## More vector stores
+
+```csharp
+// PostgreSQL + pgvector: any ADO.NET provider; the table and an HNSW index are created on first use.
+var pg = new PgVectorStore(() => new NpgsqlConnection(connectionString), "pages", 1536);
+
+// Azure AI Search: an admin key; the index (HNSW, cosine) is created on first use.
+var search = new AzureAiSearchVectorStore("https://NAME.search.windows.net", "pages", 1536, adminKey);
+
+var kb = new KnowledgeBase(embeddings, pg);
+```
+
+All stores implement `IVectorStore`, so the pipeline, `KnowledgeBase` and `RagIngestionPipeline` work
+the same with any of them.
+
+## Microsoft.Extensions.AI
+
+Any `IChatClient` or `IEmbeddingGenerator<string, Embedding<float>>` (OpenAI, Azure AI Inference,
+Ollama, ONNX, ...) plugs into Scrapy.Net, and Scrapy.Net's own models plug into anything built on
+Microsoft.Extensions.AI:
+
+```csharp
+ILanguageModel model = chatClient.AsLanguageModel();                  // IChatClient → summaries, RAG answers
+IEmbeddingGenerator embeddings = generator.AsScrapyNetEmbeddings();   // IEmbeddingGenerator<,> → KnowledgeBase
+
+IChatClient client = OpenAiChatModel.ForAzure(endpoint, key, "gpt-5-mini").AsChatClient();
+IEmbeddingGenerator<string, Embedding<float>> local = new HashingEmbeddingGenerator().AsEmbeddingGenerator();
 ```
 
 ## Incremental re-crawls

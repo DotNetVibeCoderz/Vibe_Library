@@ -26,6 +26,7 @@ component names and setting keys, written as idiomatic C#.
 | [13. Performance](13-performance.md) | Design choices and measured numbers |
 | [14. Coming from Python Scrapy](14-from-python-scrapy.md) | Side-by-side mapping of APIs and idioms |
 | [15. Troubleshooting](15-troubleshooting.md) | Common problems and their fixes |
+| [16. Distributed crawling with Redis](16-distributed-crawling.md) | Many workers, one shared queue and duplicate filter (scrapy-redis) |
 
 ## Packages
 
@@ -38,3 +39,4 @@ component names and setting keys, written as idiomatic C#.
 | `Gravicode.ScrapyNet.Server` | ASP.NET Core REST API over the platform, with roles |
 | `Gravicode.ScrapyNet.Sandbox` | An offline practice website that starts in-process |
 | `Gravicode.ScrapyNet.Cli` | The `scrapynet` command-line tool |
+| `Gravicode.ScrapyNet.Redis` | Distributed crawling: shared Redis queue, duplicate filter, Redis-fed spiders, item pipeline |

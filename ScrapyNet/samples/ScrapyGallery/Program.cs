@@ -47,6 +47,8 @@ internal static class Screenshots
         new("jobs", 4, "gallery-platform-jobs.png"),
         new("rulebuilder", 1, "gallery-rule-builder.png"),
         new("browser", 4, "gallery-browser.png"),
+        new("contracts", 4, "gallery-contracts.png"),
+        new("distributed", 4, "gallery-distributed.png"),
     ];
 
     public static int Run(string folder, bool quick)

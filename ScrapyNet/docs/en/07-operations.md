@@ -65,13 +65,37 @@ downloading.
 
 ```bash
 dotnet run -- crawl books -s JOBDIR=crawls/books-1
-# Ctrl+C once: in-flight requests finish, the queue is saved
+# Ctrl+C once, a crash or a kill: the queue is already on disk
 dotnet run -- crawl books -s JOBDIR=crawls/books-1     # continues
 ```
 
-`JOBDIR` holds `requests.queue` (pending requests), `requests.seen` (fingerprints) and `spider.state`
-(`Spider.State`). Only requests whose callbacks are named spider methods can be saved; others are
-counted in `scheduler/unserializable`. Meta values must be JSON-serializable.
+`JOBDIR` holds `requests.queue.log` (the disk queue), `requests.seen` (fingerprints) and `spider.state`
+(`Spider.State`). With `JOBDIR`, each request is written to the queue file as it is scheduled and read
+back when it is dequeued; memory keeps only its position, so a frontier of millions of URLs costs a few
+dozen bytes per pending request. Both files are flushed every second, so even a crash or `kill -9`
+loses at most the last second of scheduling. Popped entries are reclaimed by rewriting the file once
+more than half of it is dead. Stats: `scheduler/enqueued/disk`, `scheduler/dequeued/disk`,
+`scheduler/compactions`.
+
+Only requests whose callbacks are named spider methods go to disk; others stay in memory, are counted
+in `scheduler/unserializable`, and are lost if the crawl stops early. Meta values must be
+JSON-serializable. A `requests.queue` left by Scrapy.Net 0.1 is read once and moved into the journal.
+
+To share one queue between several processes or machines, see
+[Distributed crawling with Redis](16-distributed-crawling.md).
+
+## HTTP/2 and HTTP/3
+
+```csharp
+settings.Set(SettingKeys.DownloadHttpVersion, "3");          // QUIC where the server offers it
+settings.Set(SettingKeys.DownloadHttpVersionPolicy, "exact"); // or "or-lower" (default)
+```
+
+With the default `or-lower` policy, the first request to a server goes over TCP and later ones switch
+to HTTP/3 once the server advertises it in `Alt-Svc`; `exact` connects over QUIC straight away and fails
+if the server doesn't speak it. `response.Protocol` says what was used (`HTTP/3.0`). QUIC needs
+`libmsquic` on Linux and Windows 11 / Server 2022 or later; without it Scrapy.Net logs a warning once
+and uses HTTP/2. Requests through a proxy stay on HTTP/1.1 or HTTP/2.
 
 ## Stopping conditions
 

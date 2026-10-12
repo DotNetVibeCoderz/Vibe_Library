@@ -28,6 +28,9 @@ dotnet run tools/notebooks/verify/05-ai-rag.cs                              # ru
 dotnet run -c Release --project benchmarks/ScrapyNet.Benchmarks -- --filter '*' --job short
 dotnet run -c Release --project benchmarks/ScrapyNet.Benchmarks -- crawl    # end-to-end pages/min
 dotnet pack ScrapyNet.slnx -c Release -o artifacts
+dotnet publish samples/AotSpider -c Release -r win-x64                      # NativeAOT (needs vswhere on PATH on Windows)
+ASPNETCORE_ENVIRONMENT=Development dotnet run --project samples/ScrapyNet.ServerHost   # API + console at /admin/ (key dev-admin)
+dotnet run tools/console-screenshots.cs -- docs/images                      # console screenshots + browser smoke test (host running)
 ```
 
 **`dotnet test` does not work**: xunit.v3 runs on Microsoft.Testing.Platform, which the .NET 10 SDK no
@@ -35,6 +38,8 @@ longer bridges through VSTest. Run the test project with `dotnet run` (`dotnet.c
 
 Live LLM tests (`LiveLlmTests`) are skipped unless `SCRAPYNET_AZURE_OPENAI_ENDPOINT`/`_KEY`/`_DEPLOYMENT`
 or `SCRAPYNET_DEEPSEEK_KEY` (+ `SCRAPYNET_DEEPSEEK_MODEL`) are set. Never write keys into files.
+`RedisTests` need `SCRAPYNET_REDIS` (e.g. `localhost:6379`) and the pgvector test `SCRAPYNET_PGVECTOR`
+(a Npgsql connection string); CI runs both against service containers in the `integration` job.
 
 ## Layout
 
@@ -49,13 +54,16 @@ src/ScrapyNet.Core        Gravicode.ScrapyNet — the framework (namespace Scrap
   Settings/               Settings (priorities), ComponentDictionary, FeedCollection, DefaultSettings, SettingKeys
   Crawling/               Crawler, CrawlerRunner/CrawlerProcess, SpiderLoader, Scrapy (static helpers)
   Cmdline/                ScrapyCommandLine (in-project runner), Fetcher, ScrapyShell, Templates
+  Contracts/              spider contracts ([Url], [Returns], [Scrapes]...) and ContractRunner (`check`)
+src/ScrapyNet.Generators  [ScrapyItem] source generator (netstandard2.0), packed into Gravicode.ScrapyNet as an analyzer
+src/ScrapyNet.Redis       Gravicode.ScrapyNet.Redis — RedisScheduler, RedisDupeFilter, RedisSpider, RedisPipeline
 src/ScrapyNet.Sandbox     offline practice site on a raw-socket HTTP server (tests, samples, gallery, CLI)
 src/ScrapyNet.AI          extraction, chunking, SimHash, embeddings, vector stores, LLM clients, RAG
 src/ScrapyNet.Platform    catalog, declarative spiders, jobs, cron, secrets, monitor, alerts, raw content
 src/ScrapyNet.Playwright  browser download handler
-src/ScrapyNet.Server      ASP.NET Core minimal API over the platform
+src/ScrapyNet.Server      ASP.NET Core minimal API over the platform + the console (Admin/, embedded static files)
 src/ScrapyNet.Cli         `scrapynet` dotnet tool (forwards crawl/list/parse to `dotnet run` in a project)
-samples/                  console samples, single-file spider, server host, ScrapyGallery (Avalonia)
+samples/                  console samples, single-file spider, server host, AotSpider, ScrapyGallery (Avalonia)
 tests/ScrapyNet.Tests     xunit.v3; one SandboxSite shared via AssemblyFixture
 ```
 
@@ -82,6 +90,16 @@ tests/ScrapyNet.Tests     xunit.v3; one SandboxSite shared via AssemblyFixture
   multiple bytes. Use byte arrays.
 - `WebProxy` bypasses loopback; `HttpDownloadHandler` uses its own non-bypassing `IWebProxy`.
 - The sandbox's data is deterministic (seeded); tests assert exact counts against `SandboxData`.
+- **JOBDIR queue** is an append-only journal (`DiskRequestJournal`, `requests.queue.log`): `+{priority}<TAB>{json}` per
+  push, `-offset` per pop; the scheduler heap holds offsets. Flushed every second; compacted when half dead.
+- **Generated item accessors**: `[ScrapyItem]` types register into `ItemAccessors` from a module initializer;
+  `ItemAdapter.TypeAccessor` prefers them over reflection. `init` setters go through `UnsafeAccessor`.
+  Core embeds `ILLink.Descriptors.xml` (preserve all) so built-in components survive trimming.
+- **Contracts** replace a spider's start requests through the internal `Spider.StartOverride` hook.
+- **Redis**: requests travel as `RequestSerializer` JSON plus a `_rid` (unique sorted-set members);
+  `RedisSpider` keeps itself open via `spider_idle` + `DontCloseSpiderException`.
+- **Console** (`src/ScrapyNet.Server/Admin`): vanilla JS, DOM built with `textContent` only (scraped data is
+  untrusted), strict CSP (no inline script or style attributes; styles set via CSSOM are fine).
 
 ## Gallery
 

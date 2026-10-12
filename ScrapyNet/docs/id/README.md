@@ -26,6 +26,7 @@ dan kunci setting yang sama, ditulis sebagai C# yang idiomatis.
 | [13. Performa](13-performa.md) | Pilihan desain dan angka hasil pengukuran |
 | [14. Dari Scrapy Python](14-dari-scrapy-python.md) | Pemetaan API dan idiom berdampingan |
 | [15. Pemecahan masalah](15-pemecahan-masalah.md) | Masalah umum dan solusinya |
+| [16. Crawl terdistribusi dengan Redis](16-crawl-terdistribusi.md) | Banyak worker, satu antrean dan filter duplikat bersama (scrapy-redis) |
 
 ## Paket
 
@@ -38,3 +39,4 @@ dan kunci setting yang sama, ditulis sebagai C# yang idiomatis.
 | `Gravicode.ScrapyNet.Server` | REST API ASP.NET Core di atas platform, dengan peran (role) |
 | `Gravicode.ScrapyNet.Sandbox` | Situs latihan offline yang berjalan di dalam proses |
 | `Gravicode.ScrapyNet.Cli` | Tool command line `scrapynet` |
+| `Gravicode.ScrapyNet.Redis` | Crawl terdistribusi: antrean Redis bersama, filter duplikat, spider yang diberi URL lewat Redis, pipeline item |

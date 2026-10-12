@@ -281,6 +281,27 @@ public abstract class ItemAdapter
         private TypeAccessor(Type type)
         {
             var members = new List<MemberAccessor>();
+            if (ItemAccessors.Get(type) is { } generated)
+            {
+                foreach (var m in generated) members.Add(new MemberAccessor(m.Name, m.Type, m.Getter, m.Setter));
+                Generated = true;
+            }
+            else
+            {
+                AddReflectedMembers(type, members);
+            }
+
+            Names = [.. members.Select(m => m.Name)];
+            _exact = members.ToDictionary(m => m.Name, StringComparer.Ordinal);
+            _loose = new Dictionary<string, MemberAccessor>(StringComparer.Ordinal);
+            foreach (var m in members) _loose.TryAdd(NormalizeName(m.Name), m);
+        }
+
+        /// <summary>True when the accessors came from <see cref="ItemAccessors"/> rather than reflection.</summary>
+        public bool Generated { get; }
+
+        private static void AddReflectedMembers(Type type, List<MemberAccessor> members)
+        {
             foreach (var p in type.GetProperties(BindingFlags.Instance | BindingFlags.Public))
             {
                 if (p.GetIndexParameters().Length > 0 || p.GetMethod is null) continue;
@@ -290,16 +311,14 @@ public abstract class ItemAdapter
             }
             foreach (var f in type.GetFields(BindingFlags.Instance | BindingFlags.Public))
                 members.Add(new MemberAccessor(f.Name, f.FieldType, o => f.GetValue(o), f.IsInitOnly ? null : (o, v) => f.SetValue(o, v)));
-
-            Names = [.. members.Select(m => m.Name)];
-            _exact = members.ToDictionary(m => m.Name, StringComparer.Ordinal);
-            _loose = new Dictionary<string, MemberAccessor>(StringComparer.Ordinal);
-            foreach (var m in members) _loose.TryAdd(NormalizeName(m.Name), m);
         }
 
         public IReadOnlyList<string> Names { get; }
 
         public static TypeAccessor Get(Type type) => Cache.GetOrAdd(type, static t => new TypeAccessor(t));
+
+        /// <summary>Drops a cached accessor so a later registration takes effect.</summary>
+        public static void Invalidate(Type type) => Cache.TryRemove(type, out _);
 
         public MemberAccessor? Find(string name) =>
             _exact.TryGetValue(name, out var m) ? m : _loose.GetValueOrDefault(NormalizeName(name));

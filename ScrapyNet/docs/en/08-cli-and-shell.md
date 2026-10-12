@@ -20,6 +20,7 @@ dotnet tool install -g Gravicode.ScrapyNet.Cli
 | `scrapynet version [-v]` | Version and environment |
 | `scrapynet sandbox [--port 8080]` | Runs the offline practice website |
 | `scrapynet bench` | Crawls the local sandbox as fast as possible and reports pages/min |
+| `scrapynet check [SPIDER...] [-l] [-v]` | Runs [spider contracts](03-spiders.md#spider-contracts); exit code 1 on failure |
 
 Global options: `-s KEY=VALUE` (repeatable, JSON values allowed), `-L LEVEL`, `--nolog`,
 `--logfile FILE`, `--env NAME`, `--settings FILE`.
@@ -79,7 +80,7 @@ response.Css("span.text::text").GetAll()
 
 ```csharp
 // quotes_spider.cs
-#:package Gravicode.ScrapyNet@0.1.0
+#:package Gravicode.ScrapyNet@0.2.0
 using ScrapyNet;
 
 var (result, items) = await Scrapy.CrawlAndCollectAsync(new QuotesSpider(), new Settings());

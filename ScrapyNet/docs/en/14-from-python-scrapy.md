@@ -40,12 +40,15 @@ Names, settings and behaviour follow Scrapy; the differences are C# idiom.
 | `scrapy shell URL` | `scrapynet shell URL` (command language) or `Fetcher` in a notebook |
 | `scrapy runspider spider.py` | `dotnet run spider.cs` (.NET 10 file-based app) |
 | `scrapy-playwright` | `Gravicode.ScrapyNet.Playwright` |
-| `scrapyd` | `Gravicode.ScrapyNet.Server` + `Gravicode.ScrapyNet.Platform` |
+| `scrapyd` | `Gravicode.ScrapyNet.Server` + `Gravicode.ScrapyNet.Platform` (+ the console, `MapScrapyNetAdmin`) |
+| `scrapy check` and docstring contracts (`@url`, `@returns`, `@scrapes`) | `scrapynet check` and `[Url]`, `[Returns]`, `[Scrapes]`, `[CbKwargs]`, `[Meta]` |
+| `scrapy-redis` | `Gravicode.ScrapyNet.Redis` (`UseRedis`, `RedisSpider`, `RedisPipeline`) |
 
 ## Behavioural differences
 
 - `LOG_LEVEL` defaults to `INFO` rather than `DEBUG`.
-- `JOBDIR` saves the pending queue when the spider closes (graceful stop), not continuously.
+- `JOBDIR` keeps the queue in one append-only journal (`requests.queue.log`) rather than Scrapy's
+  per-priority pickle queues; the files are not interchangeable with Scrapy's.
 - XML selectors ignore namespaces by default (`//url/loc` just works); register a prefix to opt out.
 - XPath scalar results (`count()`, `boolean()`) come back as XPath strings: `"10"`, `"true"`.
 - Callbacks can be async and await freely; there is no reactor to block.

@@ -20,6 +20,7 @@ dotnet tool install -g Gravicode.ScrapyNet.Cli
 | `scrapynet version [-v]` | Versi dan lingkungan |
 | `scrapynet sandbox [--port 8080]` | Menjalankan situs latihan offline |
 | `scrapynet bench` | Mengcrawl sandbox lokal secepat mungkin dan melaporkan halaman/menit |
+| `scrapynet check [SPIDER...] [-l] [-v]` | Menjalankan [kontrak spider](03-spider.md#kontrak-spider); exit code 1 bila gagal |
 
 Opsi global: `-s KEY=VALUE` (bisa berulang, nilai JSON diperbolehkan), `-L LEVEL`, `--nolog`,
 `--logfile FILE`, `--env NAMA`, `--settings FILE`.
@@ -78,7 +79,7 @@ response.Css("span.text::text").GetAll()
 
 ```csharp
 // quotes_spider.cs
-#:package Gravicode.ScrapyNet@0.1.0
+#:package Gravicode.ScrapyNet@0.2.0
 using ScrapyNet;
 
 var (result, items) = await Scrapy.CrawlAndCollectAsync(new QuotesSpider(), new Settings());

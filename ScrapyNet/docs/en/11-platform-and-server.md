@@ -154,6 +154,7 @@ app.Run();
 | Endpoint | Role |
 |---|---|
 | `GET /api/health` | anyone |
+| `GET /api/me` — the caller's name and role | Viewer |
 | `GET /api/spiders`, `/api/spiders/{id}`, `/api/spiders/{id}/versions` | Viewer |
 | `POST /api/spiders`, `PUT /api/spiders/{id}`, `DELETE /api/spiders/{id}`, `POST .../clone`, `POST .../rollback/{v}` | Admin |
 | `POST /api/spiders/{id}/run`, `.../enable`, `.../disable` | Operator |
@@ -166,3 +167,39 @@ app.Run();
 
 Clients authenticate with `X-Api-Key: <key>` or `Authorization: Bearer <key>`. See
 `samples/ScrapyNet.ServerHost` for a runnable host.
+
+## The console
+
+![Scrapy.Net Console — dashboard](../images/console-dashboard.png)
+
+`MapScrapyNetAdmin()` adds a browser console on top of the API — the "web admin" of the platform:
+
+```csharp
+app.MapScrapyNetApi("/api");
+app.MapScrapyNetAdmin("/admin");          // http://host/admin/
+```
+
+Sign in with an API key; the console shows only what that key's role allows (viewers watch, operators
+run and schedule, admins edit spiders and alert channels). It has:
+
+- **Dashboard** — requests in the last minute, running/completed/failed jobs, items in 24 hours, error
+  rate; each running job drawn as an orb web of its last 24 seconds of throughput (it turns rust above
+  5% errors), a pages-per-minute chart and the responses by HTTP status, refreshed every two seconds;
+- **Spiders** — the catalog, run with arguments and setting overrides, enable/disable, clone, delete,
+  edit the definition as JSON (each save is a new version) and roll back;
+- **Jobs** — history with filters; a job page with its counters, throughput, pause/resume/stop/cancel/
+  retry and the first 50 items;
+- **Schedules** — cron entries with presets, time zones, next and last runs;
+- **Selector builder** — try an item container, fields (CSS or XPath, processors) and follow links on a
+  live page, see the extracted items, and save the rules as a new spider;
+- **Alerts** — recent alerts and outgoing channels (Slack, Teams, webhooks).
+
+| | |
+|---|---|
+| ![Selector builder](../images/console-builder.png) | ![Dark mode](../images/console-dashboard-dark.png) |
+
+The console is static files embedded in `Gravicode.ScrapyNet.Server`; it holds no data of its own and is
+served with a strict Content-Security-Policy (same-origin scripts, styles and fonts only, no inline
+code). Scraped content is always rendered as text. It works in light and dark mode and on phones.
+`tools/console-screenshots.cs` drives it with Playwright to produce these screenshots and fails on any
+browser error.

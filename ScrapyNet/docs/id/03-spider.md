@@ -187,3 +187,40 @@ Argumen masuk ke `spider.Arguments` dan ke properti publik yang namanya cocok (`
 ```csharp
 if (response.Css(".captcha").Any()) throw new CloseSpiderException("blocked_by_captcha");
 ```
+
+## Kontrak spider
+
+Kontrak adalah tes kecil berupa atribut pada callback, seperti kontrak docstring di Scrapy. Setiap
+callback yang memiliki `[Url]` diambil sekali melalui setting dan middleware milik spider itu sendiri;
+output-nya diperiksa lalu dibuang, sehingga tidak ada yang di-follow dan tidak ada yang masuk pipeline.
+
+```csharp
+using ScrapyNet.Contracts;
+
+[Url("/books/")]                          // relatif: CONTRACTS_BASE_URL atau URL awal pertama
+[Returns("requests", 20)]                 // minimal 20 request
+[Returns("items", 0, 0)]                  // dan tanpa item
+public override async IAsyncEnumerable<object> Parse(Response response) { ... }
+
+[Url("https://books.toscrape.com/catalogue/a-light-in-the-attic_1000/index.html")]
+[Returns("items", 1, 1)]
+[Scrapes("title", "price", "upc")]        // setiap item memiliki field ini
+[CbKwargs("""{"category": "poetry"}""")]
+public async IAsyncEnumerable<object> ParseBook(Response response) { ... }
+```
+
+```bash
+dotnet run -- check            # semua spider;  check books -v  untuk satu spider, rinci
+dotnet run -- check -l         # daftar callback yang memiliki kontrak
+```
+
+Laporannya mengikuti Scrapy: `.` lulus, `F` gagal, `E` error (unduhan gagal, error HTTP, atau exception di
+callback), lalu rinciannya dan `OK` atau `FAILED (failures=1)`; exit code 1 bila ada yang gagal.
+Jalankan di CI atau secara terjadwal agar Anda tahu situs mengubah tata letaknya sebelum crawl
+menghasilkan item kosong.
+
+Buat kontrak sendiri dengan menurunkan `ContractAttribute` dan meng-override `AdjustRequest`,
+`PreProcess(Response)` atau `PostProcess(output)`; lempar `ContractFailException` untuk menggagalkan.
+Dari kode: `await ContractRunner.CheckAsync([new BooksSpider()], settings)`.
+
+![Kontrak spider di galeri](../images/gallery-contracts.png)

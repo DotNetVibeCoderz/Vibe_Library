@@ -20,8 +20,22 @@ The duplicate filter drops requests it has seen (`dupefilter/filtered` in stats)
 parameters that don't matter.
 
 **A pause/resume run starts over.**
-Stop gracefully (one Ctrl+C), use the same `JOBDIR`, and make callbacks named spider methods — lambdas
-can't be saved (`scheduler/unserializable` counts them).
+Use the same `JOBDIR` and make callbacks named spider methods — lambdas can't be saved
+(`scheduler/unserializable` counts them). The queue is on disk from the start, so even a crash resumes.
+
+**`HTTP/3` was requested but responses say `HTTP/2.0`.**
+QUIC is unavailable on this machine (Linux needs `libmsquic`; Windows needs 11 / Server 2022+) — the log
+says so once. With the default `or-lower` policy, the first request to a host is also TCP; HTTP/3 starts
+after the server advertises it in `Alt-Svc`.
+
+**A Redis worker exits straight away with 0 pages.**
+Its start key was empty and `MAX_IDLE_TIME_BEFORE_CLOSE` passed, or another worker finished the crawl
+first. Push start URLs before starting workers, and set `SCHEDULER_PERSIST=true` when several share a
+queue.
+
+**`scrapynet check` reports `ERROR ... (download)`.**
+The contract's `[Url]` returned an HTTP error or could not be fetched; check the URL (relative ones
+resolve against `CONTRACTS_BASE_URL` or the first start URL).
 
 **`NotConfiguredException` in the log / a middleware isn't running.**
 Built-in components switch themselves off when their setting is missing (`FILES_STORE`,

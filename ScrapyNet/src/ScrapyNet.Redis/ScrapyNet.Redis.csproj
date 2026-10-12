@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>ScrapyNet.Redis</RootNamespace>
+    <AssemblyName>ScrapyNet.Redis</AssemblyName>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <IsPackable>true</IsPackable>
+    <PackageId>Gravicode.ScrapyNet.Redis</PackageId>
+    <Title>Scrapy.Net Redis - distributed crawling</Title>
+    <Description>Distributed crawling for Scrapy.Net on Redis, after scrapy-redis: a shared scheduler queue (priority, FIFO or LIFO), a shared duplicate filter, spiders that read start URLs from a Redis list or set and wait for more, and an item pipeline that pushes items to Redis. Run the same spider on many machines and they split the work. Dibuat oleh Gravicode Studios, dipimpin oleh Kang Fadhil.</Description>
+    <PackageTags>scrapy;scrapy-redis;redis;distributed;crawler;web-crawler;scraping;queue</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="StackExchange.Redis" Version="3.3.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- PrivateAssets none: the [ScrapyItem] analyzer flows to anyone installing this package. -->
+    <ProjectReference Include="../ScrapyNet.Core/ScrapyNet.Core.csproj" PrivateAssets="none" />
+  </ItemGroup>
+
+</Project>

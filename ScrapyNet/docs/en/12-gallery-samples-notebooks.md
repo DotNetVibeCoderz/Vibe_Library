@@ -29,7 +29,7 @@ button. While it runs you watch:
 | Extract data | Selectors playground · Items and item loaders |
 | Crawl sites | First spider · CrawlSpider and link rules · Sitemaps and robots.txt · Logins, forms and sessions · JSON APIs and API keys · JavaScript pages in a browser |
 | Process & export | Item pipelines · Feed exports · Files and images |
-| Operate crawls | Retries, redirects and errors · Proxy rotation · AutoThrottle · Depth, duplicates and signals · Pause and resume · HTTP cache |
+| Operate crawls | Retries, redirects and errors · Proxy rotation · AutoThrottle · Depth, duplicates and signals · Pause and resume · Spider contracts · Distributed crawling (Redis) · HTTP cache |
 | AI & knowledge | Crawl to knowledge base · Near-duplicates and summaries |
 | Run as a platform | Jobs, schedules and alerts · No-code scraping rules |
 
@@ -73,6 +73,17 @@ dotnet run --project samples/ScrapyNet.Samples -- all     # run every offline sa
 
 `samples/SingleFile/quotes_spider.cs` is a complete spider in one file (`dotnet run quotes_spider.cs`),
 and `samples/ScrapyNet.ServerHost` runs the REST API.
+
+## NativeAOT spider
+
+`samples/AotSpider` crawls the sandbox's bookshop with an `ItemLoader` into a `[ScrapyItem]` record and
+exports JSON Lines, compiled ahead of time into one native executable:
+
+```bash
+dotnet publish samples/AotSpider -c Release -r win-x64     # or linux-x64, osx-arm64
+```
+
+CI publishes and runs it on Linux on every push.
 
 ## Notebooks
 

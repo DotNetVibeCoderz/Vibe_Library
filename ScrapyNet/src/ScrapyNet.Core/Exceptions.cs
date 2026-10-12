@@ -83,6 +83,7 @@ public static class MetaKeys
     public const string DownloadMaxSize = "download_maxsize";
     public const string DownloadWarnSize = "download_warnsize";
     public const string DownloadLatency = "download_latency";
+    public const string DownloadHttpVersion = "download_http_version";
     public const string DownloadSlot = "download_slot";
     public const string DontRetry = "dont_retry";
     public const string MaxRetryTimes = "max_retry_times";

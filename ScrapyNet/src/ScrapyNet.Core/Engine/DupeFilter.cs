@@ -30,6 +30,7 @@ public class RFPDupeFilter : IDupeFilter
     private readonly string? _path;
     private StreamWriter? _file;
     private bool _loggedDupes;
+    private long _lastFlush = Environment.TickCount64;
 
     public RFPDupeFilter(Crawler crawler)
     {
@@ -69,7 +70,17 @@ public class RFPDupeFilter : IDupeFilter
         lock (_gate)
         {
             if (!_seen.Add(fp)) return true;
-            _file?.WriteLine(fp.ToHex());
+            if (_file is not null)
+            {
+                _file.WriteLine(fp.ToHex());
+                // Flushed about once a second, in step with the scheduler journal, so a crash loses
+                // at most a second of fingerprints.
+                if (Environment.TickCount64 - _lastFlush >= 1000)
+                {
+                    _file.Flush();
+                    _lastFlush = Environment.TickCount64;
+                }
+            }
             return false;
         }
     }

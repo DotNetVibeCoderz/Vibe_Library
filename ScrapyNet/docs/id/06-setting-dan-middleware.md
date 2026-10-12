@@ -55,12 +55,15 @@ File per lingkungan memisahkan dev dan prod: `scrapy.dev.json`, `scrapy.prod.jso
 | `DOWNLOAD_MAXSIZE` / `DOWNLOAD_WARNSIZE` | 1 GiB / 32 MiB | Batas ukuran respons |
 | `DOWNLOAD_VERIFY_SSL` | true | Validasi sertifikat |
 | `DOWNLOAD_HTTP2` | false | Utamakan HTTP/2 |
+| `DOWNLOAD_HTTP_VERSION` | `1.1` | `1.1`, `2` atau `3` (QUIC); per request: `meta["download_http_version"]` |
+| `DOWNLOAD_HTTP_VERSION_POLICY` | `or-lower` | `or-lower` (boleh turun; HTTP/3 setelah diiklankan lewat `Alt-Svc`), `exact`, `or-higher` |
 | `DEFAULT_REQUEST_HEADERS` | Accept, Accept-Language | Ditambahkan bila belum ada |
 | `DOMAIN_HEADERS` | {} | Header per host (API key yang tidak boleh bocor) |
 | `COOKIES_ENABLED` / `COOKIES_DEBUG` / `COOKIES_PERSIST_FILE` | true / false / – | Penanganan cookie |
 | `DEPTH_LIMIT` / `DEPTH_PRIORITY` / `DEPTH_STATS_VERBOSE` | 0 / 0 / false | Kontrol kedalaman tautan |
 | `SCHEDULER_ORDER` | `lifo` | `lifo` (depth-first) atau `fifo` (breadth-first) dalam satu prioritas |
-| `JOBDIR` | – | Folder jeda/lanjut |
+| `JOBDIR` | – | Folder jeda/lanjut (antrean disk, sidik jari, state spider) |
+| `CONTRACTS_BASE_URL` | URL awal pertama | Basis URL `[Url]` kontrak yang relatif |
 | `RETRY_ENABLED` / `RETRY_TIMES` / `RETRY_HTTP_CODES` | true / 2 / 500,502,503,504,522,524,408,429 | Retry |
 | `RETRY_PRIORITY_ADJUST` / `RETRY_BACKOFF_BASE` / `RETRY_BACKOFF_MAX` | -1 / 0 / 60 | Penjadwalan retry |
 | `REDIRECT_ENABLED` / `REDIRECT_MAX_TIMES` | true / 20 | Redirect |

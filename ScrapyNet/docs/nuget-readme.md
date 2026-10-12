@@ -36,13 +36,16 @@ Console.WriteLine(await Scrapy.CrawlAsync(new QuotesSpider(), settings));
 
 | Package | Adds |
 |---|---|
-| `Gravicode.ScrapyNet` | Engine, spiders (Crawl/Sitemap/XML/CSV), CSS/XPath selectors, items, loaders, middlewares (retry, redirect, cookies, proxies, robots.txt, cache, AutoThrottle), pipelines (files, images, databases), feed exports, pause/resume, signals, stats, CLI runner |
+| `Gravicode.ScrapyNet` | Engine, spiders (Crawl/Sitemap/XML/CSV), CSS/XPath selectors, items, loaders, middlewares (retry, redirect, cookies, proxies, robots.txt, cache, AutoThrottle), pipelines (files, images, databases), feed exports, crash-safe pause/resume, HTTP/3, spider contracts, NativeAOT (`[ScrapyItem]`), signals, stats, CLI runner |
+| `Gravicode.ScrapyNet.Redis` | Distributed crawling: shared Redis queue and duplicate filter, Redis-fed spiders (scrapy-redis) |
 | `Gravicode.ScrapyNet.Playwright` | JavaScript rendering with page actions |
-| `Gravicode.ScrapyNet.AI` | Extraction, chunking, dedup, embeddings, vector search, RAG with OpenAI/Azure/DeepSeek/Ollama |
+| `Gravicode.ScrapyNet.AI` | Extraction, chunking, dedup, embeddings, vector search (Qdrant, pgvector, Azure AI Search), RAG with OpenAI/Azure/DeepSeek/Ollama or any Microsoft.Extensions.AI client |
 | `Gravicode.ScrapyNet.Platform` | Declarative spiders, jobs, cron, secrets, monitoring, alerts |
-| `Gravicode.ScrapyNet.Server` | REST API with roles (scrapyd-style) |
+| `Gravicode.ScrapyNet.Server` | REST API with roles (scrapyd-style) and the Scrapy.Net Console web admin |
 | `Gravicode.ScrapyNet.Sandbox` | Offline practice website for learning and tests |
-| `Gravicode.ScrapyNet.Cli` | `scrapynet` tool: startproject, genspider, crawl, shell, fetch, parse, bench |
+| `Gravicode.ScrapyNet.Cli` | `scrapynet` tool: startproject, genspider, crawl, check, shell, fetch, parse, bench |
+
+![Scrapy.Net Console](https://raw.githubusercontent.com/DotNetVibeCoderz/Vibe_Library/main/ScrapyNet/docs/images/console-dashboard.png)
 
 ## Documentation
 

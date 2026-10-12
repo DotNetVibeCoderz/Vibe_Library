@@ -65,13 +65,38 @@ mengunduh.
 
 ```bash
 dotnet run -- crawl books -s JOBDIR=crawls/books-1
-# Ctrl+C sekali: request yang sedang berjalan selesai, antrean disimpan
+# Ctrl+C sekali, crash, atau kill: antrean sudah ada di disk
 dotnet run -- crawl books -s JOBDIR=crawls/books-1     # dilanjutkan
 ```
 
-`JOBDIR` berisi `requests.queue` (request tertunda), `requests.seen` (sidik jari), dan `spider.state`
-(`Spider.State`). Hanya request dengan callback berupa method bernama milik spider yang bisa disimpan;
-sisanya dihitung dalam `scheduler/unserializable`. Nilai meta harus bisa diserialisasi ke JSON.
+`JOBDIR` berisi `requests.queue.log` (antrean disk), `requests.seen` (sidik jari), dan `spider.state`
+(`Spider.State`). Dengan `JOBDIR`, setiap request ditulis ke file antrean saat dijadwalkan dan dibaca
+kembali saat diambil; memori hanya menyimpan posisinya, sehingga frontier jutaan URL hanya memakan
+beberapa puluh byte per request tertunda. Kedua file di-flush setiap detik, jadi crash atau `kill -9`
+pun paling banyak kehilangan penjadwalan satu detik terakhir. Entri yang sudah diambil dibersihkan
+dengan menulis ulang file begitu lebih dari separuhnya mati. Statistik: `scheduler/enqueued/disk`,
+`scheduler/dequeued/disk`, `scheduler/compactions`.
+
+Hanya request dengan callback berupa method bernama milik spider yang masuk disk; sisanya tetap di
+memori, dihitung dalam `scheduler/unserializable`, dan hilang bila crawl berhenti lebih awal. Nilai meta
+harus bisa diserialisasi ke JSON. `requests.queue` peninggalan Scrapy.Net 0.1 dibaca sekali lalu
+dipindahkan ke journal.
+
+Untuk berbagi satu antrean antara beberapa proses atau mesin, lihat
+[Crawl terdistribusi dengan Redis](16-crawl-terdistribusi.md).
+
+## HTTP/2 dan HTTP/3
+
+```csharp
+settings.Set(SettingKeys.DownloadHttpVersion, "3");          // QUIC bila server mendukung
+settings.Set(SettingKeys.DownloadHttpVersionPolicy, "exact"); // atau "or-lower" (default)
+```
+
+Dengan kebijakan default `or-lower`, request pertama ke sebuah server lewat TCP dan request berikutnya
+beralih ke HTTP/3 setelah server mengiklankannya lewat `Alt-Svc`; `exact` langsung terhubung lewat QUIC
+dan gagal bila server tidak mendukungnya. `response.Protocol` menunjukkan yang dipakai (`HTTP/3.0`).
+QUIC butuh `libmsquic` di Linux dan Windows 11 / Server 2022 atau lebih baru; tanpanya Scrapy.Net
+mencatat peringatan sekali dan memakai HTTP/2. Request lewat proxy tetap memakai HTTP/1.1 atau HTTP/2.
 
 ## Kondisi berhenti
 

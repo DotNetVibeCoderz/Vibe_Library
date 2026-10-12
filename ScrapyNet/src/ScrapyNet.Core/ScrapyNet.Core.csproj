@@ -13,9 +13,8 @@
     <IsPackable>true</IsPackable>
     <PackageId>Gravicode.ScrapyNet</PackageId>
     <Title>Scrapy.Net - web crawling and scraping framework for .NET</Title>
-    <Description>A .NET 10 port of Scrapy: spiders, CSS/XPath selectors, items and item loaders, pipelines, feed exports (JSON, JSON Lines, CSV, XML), downloader and spider middlewares, retry, redirects, cookies, proxies, robots.txt, HTTP cache, AutoThrottle, duplicate filtering, pause/resume, signals, stats and a Scrapy-style command line. Dibuat oleh Gravicode Studios, dipimpin oleh Kang Fadhil.</Description>
+    <Description>A .NET 10 port of Scrapy: spiders, CSS/XPath selectors, items and item loaders, pipelines, feed exports (JSON, JSON Lines, CSV, XML), downloader and spider middlewares, retry, redirects, cookies, proxies, robots.txt, HTTP cache, AutoThrottle, duplicate filtering, pause/resume with a crash-safe disk queue, HTTP/2 and HTTP/3, spider contracts (scrapynet check), source-generated item accessors for NativeAOT, signals, stats and a Scrapy-style command line. Dibuat oleh Gravicode Studios, dipimpin oleh Kang Fadhil.</Description>
     <PackageTags>scrapy;crawler;web-crawler;scraping;web-scraping;spider;xpath;css-selector;html;data-extraction</PackageTags>
-    <PackageReleaseNotes>First release of the Scrapy.Net engine, selectors, items, loaders, pipelines, feed exports, middlewares, extensions and command line.</PackageReleaseNotes>
   </PropertyGroup>
 
   <ItemGroup>
@@ -23,6 +22,19 @@
     <PackageReference Include="AngleSharp.XPath" Version="2.0.6" />
     <PackageReference Include="AngleSharp.Xml" Version="1.2.0" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.0" />
+  </ItemGroup>
+
+  <!--
+    The [ScrapyItem] source generator travels inside this package as an analyzer. Built first, never
+    referenced as a library.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="../ScrapyNet.Generators/ScrapyNet.Generators.csproj" ReferenceOutputAssembly="false" PrivateAssets="all" />
+    <None Include="../ScrapyNet.Generators/bin/$(Configuration)/netstandard2.0/ScrapyNet.Generators.dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="ILLink.Descriptors.xml" LogicalName="ILLink.Descriptors.xml" />
   </ItemGroup>
 
   <ItemGroup>

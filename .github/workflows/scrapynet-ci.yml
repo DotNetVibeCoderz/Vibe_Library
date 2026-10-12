@@ -99,3 +99,53 @@ jobs:
         with:
           name: scrapynet-packages
           path: ScrapyNet/artifacts/*.nupkg
+
+  # Redis (distributed crawling) and PostgreSQL + pgvector against real servers. Service containers
+  # only run on Linux, so these tests skip themselves in the matrix above and run here.
+  integration:
+    name: integration (redis, pgvector)
+    runs-on: ubuntu-latest
+    needs: build
+    services:
+      redis:
+        image: redis:7
+        ports: ['6379:6379']
+        options: --health-cmd "redis-cli ping" --health-interval 5s --health-timeout 3s --health-retries 10
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_PASSWORD: scrapynet
+        ports: ['5432:5432']
+        options: --health-cmd pg_isready --health-interval 5s --health-timeout 3s --health-retries 10
+    env:
+      SCRAPYNET_REDIS: localhost:6379
+      SCRAPYNET_PGVECTOR: Host=localhost;Username=postgres;Password=scrapynet;Database=postgres
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: ScrapyNet/global.json
+      - name: Build
+        run: dotnet build tests/ScrapyNet.Tests -c Release
+      - name: Redis tests
+        run: dotnet run --project tests/ScrapyNet.Tests -c Release --no-build -- --filter-class '*RedisTests*'
+      - name: pgvector tests
+        run: dotnet run --project tests/ScrapyNet.Tests -c Release --no-build -- --filter-method '*Pgvector*'
+
+  # A NativeAOT spider: compiles ahead of time and crawls the sandbox with generated item accessors.
+  aot:
+    name: native AOT
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: ScrapyNet/global.json
+      - name: Publish
+        run: dotnet publish samples/AotSpider -c Release -r linux-x64 -o aot
+      - name: Run
+        run: |
+          ./aot/AotSpider | tee aot.log
+          grep -q "finished" aot.log
+          grep -q "Generated accessors: True" aot.log

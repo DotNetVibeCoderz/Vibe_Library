@@ -30,20 +30,28 @@ public interface IScheduler
 /// <remarks>
 /// LIFO (Scrapy's default) crawls depth-first, which keeps the pending queue short. FIFO crawls
 /// breadth-first; combine it with a positive <c>DEPTH_PRIORITY</c> for a strict BFS.
-/// With <c>JOBDIR</c>, pending requests are written to <c>requests.queue</c> when the spider closes for
-/// any reason other than <c>finished</c>, and read back on the next start.
+/// <para>
+/// With <c>JOBDIR</c>, requests live on disk from the moment they are scheduled (<c>requests.queue.log</c>,
+/// see <see cref="DiskRequestJournal"/>), like Scrapy's disk queues: memory holds only their position,
+/// and a crash or a kill keeps the queue. Requests whose callback cannot be named (lambdas) stay in
+/// memory and are counted as <c>scheduler/unserializable</c>; they are lost if the crawl stops early.
+/// </para>
 /// </remarks>
 public class Scheduler : IScheduler
 {
-    private readonly PriorityQueue<Request, (int Priority, long Sequence)> _queue = new();
+    private readonly PriorityQueue<Entry, (int Priority, long Sequence)> _queue = new();
     private readonly object _gate = new();
     private readonly Crawler _crawler;
     private readonly ILogger _logger;
     private readonly bool _lifo;
     private readonly bool _debug;
-    private readonly string? _queuePath;
+    private readonly string? _jobDir;
+    private DiskRequestJournal? _journal;
     private long _sequence;
     private Spider? _spider;
+
+    /// <summary>A queued request: in memory, or at an offset in the journal.</summary>
+    private readonly record struct Entry(Request? Request, int Priority, long Offset, int Length);
 
     public Scheduler(Crawler crawler, IDupeFilter? dupeFilter = null)
     {
@@ -53,7 +61,7 @@ public class Scheduler : IScheduler
         _lifo = !string.Equals(crawler.Settings.GetString(SettingKeys.SchedulerOrder), "fifo", StringComparison.OrdinalIgnoreCase);
         _debug = crawler.Settings.GetBool(SettingKeys.SchedulerDebug);
         var jobDir = crawler.Settings.GetString(SettingKeys.JobDir);
-        if (!string.IsNullOrEmpty(jobDir)) _queuePath = Path.Combine(jobDir, "requests.queue");
+        if (!string.IsNullOrEmpty(jobDir)) _jobDir = jobDir;
     }
 
     public IDupeFilter DupeFilter { get; }
@@ -72,59 +80,68 @@ public class Scheduler : IScheduler
     {
         _spider = spider;
         await DupeFilter.OpenAsync(spider).ConfigureAwait(false);
-        if (_queuePath is not null && File.Exists(_queuePath))
+        if (_jobDir is null) return;
+
+        _journal = DiskRequestJournal.Open(Path.Combine(_jobDir, "requests.queue.log"), out var pending);
+        lock (_gate)
+            foreach (var (priority, offset, length) in pending)
+                PushEntry(new Entry(null, priority, offset, length));
+        var restored = pending.Count + RestoreLegacyQueue(spider);
+        if (restored > 0)
         {
-            var restored = 0;
-            foreach (var line in File.ReadLines(_queuePath))
-            {
-                if (string.IsNullOrWhiteSpace(line)) continue;
-                try
-                {
-                    var request = RequestSerializer.FromJson(JsonNode.Parse(line)!.AsObject(), spider);
-                    Push(request);
-                    restored++;
-                }
-                catch (Exception ex) when (ex is JsonException or InvalidOperationException or ArgumentException)
-                {
-                    _logger.LogWarning("Could not restore a request from {Path}: {Error}", _queuePath, ex.Message);
-                }
-            }
-            File.Delete(_queuePath);
             _logger.LogInformation("Resuming crawl ({Count} requests scheduled)", restored);
             _crawler.Stats.Inc("scheduler/restored", restored);
         }
     }
 
+    /// <summary>Reads a <c>requests.queue</c> snapshot written by Scrapy.Net 0.1 into the journal.</summary>
+    private int RestoreLegacyQueue(Spider spider)
+    {
+        var legacy = Path.Combine(_jobDir!, "requests.queue");
+        if (!File.Exists(legacy)) return 0;
+        var restored = 0;
+        foreach (var line in File.ReadLines(legacy))
+        {
+            if (string.IsNullOrWhiteSpace(line)) continue;
+            try
+            {
+                Push(RequestSerializer.FromJson(JsonNode.Parse(line)!.AsObject(), spider));
+                restored++;
+            }
+            catch (Exception ex) when (ex is JsonException or InvalidOperationException or ArgumentException)
+            {
+                _logger.LogWarning("Could not restore a request from {Path}: {Error}", legacy, ex.Message);
+            }
+        }
+        File.Delete(legacy);
+        return restored;
+    }
+
     public async ValueTask CloseAsync(string reason)
     {
-        if (_queuePath is not null)
+        if (_journal is not null)
         {
-            List<Request> pending;
+            int onDisk, inMemory;
             lock (_gate)
             {
-                pending = [];
-                while (_queue.TryDequeue(out var r, out _)) pending.Add(r);
-            }
-            if (pending.Count > 0)
-            {
-                Directory.CreateDirectory(Path.GetDirectoryName(_queuePath)!);
-                var written = 0;
-                await using (var writer = new StreamWriter(_queuePath, append: false))
+                inMemory = _queue.UnorderedItems.Count(e => e.Element.Request is not null);
+                onDisk = _queue.Count - inMemory;
+                if (_queue.Count == 0)
                 {
-                    foreach (var request in pending)
-                    {
-                        var json = RequestSerializer.ToJson(request);
-                        if (json is null)
-                        {
-                            _crawler.Stats.Inc("scheduler/unserializable");
-                            continue;
-                        }
-                        await writer.WriteLineAsync(json.ToJsonString()).ConfigureAwait(false);
-                        written++;
-                    }
+                    _journal.Delete();
                 }
-                _logger.LogInformation("Saved {Count} pending requests to {Path} (reason: {Reason})", written, _queuePath, reason);
+                else
+                {
+                    if (_journal.ShouldCompact) Compact();
+                    _journal.Flush();
+                    _journal.Dispose();
+                }
+                _journal = null;
             }
+            if (onDisk > 0)
+                _logger.LogInformation("Kept {Count} pending requests in {Path} (reason: {Reason})", onDisk, Path.Combine(_jobDir!, "requests.queue.log"), reason);
+            if (inMemory > 0)
+                _logger.LogWarning("{Count} pending requests could not be persisted (lambda callbacks); they are lost", inMemory);
         }
         await DupeFilter.CloseAsync(reason).ConfigureAwait(false);
     }
@@ -136,33 +153,80 @@ public class Scheduler : IScheduler
             DupeFilter.Log(request, _spider!);
             return false;
         }
-        Push(request);
+        var onDisk = Push(request);
         if (_debug) _logger.LogDebug("Enqueued {Request} (priority {Priority})", request, request.Priority);
         _crawler.Stats.Inc("scheduler/enqueued");
-        _crawler.Stats.Inc("scheduler/enqueued/memory");
+        _crawler.Stats.Inc(onDisk ? "scheduler/enqueued/disk" : "scheduler/enqueued/memory");
         return true;
     }
 
     public Request? Dequeue()
     {
-        Request? request;
+        Entry entry;
+        string? json = null;
         lock (_gate)
         {
-            if (!_queue.TryDequeue(out request, out _)) return null;
+            if (!_queue.TryDequeue(out entry, out _)) return null;
+            if (entry.Request is null)
+            {
+                json = _journal!.Pop(entry.Offset, entry.Length);
+                if (_journal.ShouldCompact) Compact();
+            }
         }
         _crawler.Stats.Inc("scheduler/dequeued");
-        _crawler.Stats.Inc("scheduler/dequeued/memory");
-        return request;
+        if (json is null)
+        {
+            _crawler.Stats.Inc("scheduler/dequeued/memory");
+            return entry.Request;
+        }
+        _crawler.Stats.Inc("scheduler/dequeued/disk");
+        return RequestSerializer.FromJson(JsonNode.Parse(json)!.AsObject(), _spider!);
     }
 
-    private void Push(Request request)
+    /// <summary>Queues a request on disk when a journal is open and the request can be serialized.</summary>
+    private bool Push(Request request)
     {
-        lock (_gate)
+        if (_journal is not null)
         {
-            var seq = ++_sequence;
-            // PriorityQueue is a min-heap: negate priority so higher runs first; negate the sequence for LIFO.
-            _queue.Enqueue(request, (-request.Priority, _lifo ? -seq : seq));
+            if (RequestSerializer.ToJson(request) is { } json)
+            {
+                var text = json.ToJsonString();
+                lock (_gate)
+                {
+                    var (offset, length) = _journal.Push(request.Priority, text);
+                    PushEntry(new Entry(null, request.Priority, offset, length));
+                }
+                return true;
+            }
+            _crawler.Stats.Inc("scheduler/unserializable");
         }
+        lock (_gate) PushEntry(new Entry(request, request.Priority, 0, 0));
+        return false;
+    }
+
+    private void PushEntry(Entry entry)
+    {
+        var seq = ++_sequence;
+        // PriorityQueue is a min-heap: negate priority so higher runs first; negate the sequence for LIFO.
+        _queue.Enqueue(entry, (-entry.Priority, _lifo ? -seq : seq));
+    }
+
+    /// <summary>Rewrites the journal with live entries only, keeping queue order. Caller holds the lock.</summary>
+    private void Compact()
+    {
+        var items = _queue.UnorderedItems.ToList();
+        var onDisk = items.Where(i => i.Element.Request is null).ToList();
+        var moved = _journal!.Compact([.. onDisk.Select(i => (i.Element.Priority, i.Element.Offset, i.Element.Length))]);
+        _queue.Clear();
+        var next = 0;
+        foreach (var (element, priority) in items)
+        {
+            var updated = element.Request is null
+                ? element with { Offset = moved[next].Offset, Length = moved[next++].Length }
+                : element;
+            _queue.Enqueue(updated, priority);
+        }
+        _crawler.Stats.Inc("scheduler/compactions");
     }
 
     private static IDupeFilter CreateDupeFilter(Crawler crawler)

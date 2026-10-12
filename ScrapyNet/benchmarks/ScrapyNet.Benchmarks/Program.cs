@@ -139,6 +139,19 @@ public static class CrawlThroughput
             var result = await Scrapy.CrawlAsync(new BenchSpider(site.Url("/graph/0")), settings);
             Console.WriteLine($"CONCURRENT_REQUESTS={concurrency,-3} {result.ResponseCount,6} pages in {result.Elapsed.TotalSeconds,6:0.00}s = {result.ResponseCount / result.Elapsed.TotalMinutes,9:N0} pages/min");
         }
+
+        // The same crawl with JOBDIR: every request goes through the disk journal.
+        var jobDir = Path.Combine(Path.GetTempPath(), "scrapynet-bench-jobdir", Guid.NewGuid().ToString("N"));
+        var persisted = new Settings();
+        persisted.Set(SettingKeys.LogLevel, "ERROR");
+        persisted.Set(SettingKeys.StatsDump, false);
+        persisted.Set(SettingKeys.ConcurrentRequests, 16);
+        persisted.Set(SettingKeys.ConcurrentRequestsPerDomain, 16);
+        persisted.Set(SettingKeys.CloseSpiderPageCount, 5000);
+        persisted.Set(SettingKeys.JobDir, jobDir);
+        var withJobDir = await Scrapy.CrawlAsync(new BenchSpider(site.Url("/graph/0")), persisted);
+        Console.WriteLine($"JOBDIR (disk queue), 16   {withJobDir.ResponseCount,6} pages in {withJobDir.Elapsed.TotalSeconds,6:0.00}s = {withJobDir.ResponseCount / withJobDir.Elapsed.TotalMinutes,9:N0} pages/min");
+        Directory.Delete(jobDir, recursive: true);
     }
 
     private sealed class BenchSpider(string start) : Spider

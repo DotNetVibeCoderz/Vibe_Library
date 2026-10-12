@@ -35,7 +35,9 @@ public sealed class HttpDownloadHandler : IDownloadHandler, IDisposable
     private readonly long _maxSize;
     private readonly long _warnSize;
     private readonly bool _verifySsl;
-    private readonly bool _http2;
+    private readonly Version _httpVersion;
+    private readonly HttpVersionPolicy _versionPolicy;
+    private bool _warnedNoQuic;
     private readonly int _perServer;
 
     public HttpDownloadHandler(Crawler crawler)
@@ -46,7 +48,9 @@ public sealed class HttpDownloadHandler : IDownloadHandler, IDisposable
         _maxSize = _settings.GetLong(SettingKeys.DownloadMaxSize);
         _warnSize = _settings.GetLong(SettingKeys.DownloadWarnSize);
         _verifySsl = _settings.GetBool(SettingKeys.DownloadVerifySsl, true);
-        _http2 = _settings.GetBool(SettingKeys.DownloadHttp2);
+        _httpVersion = ParseVersion(_settings.GetString(SettingKeys.DownloadHttpVersion)) ?? (_settings.GetBool(SettingKeys.DownloadHttp2) ? HttpVersion.Version20 : HttpVersion.Version11);
+        if (_settings.GetBool(SettingKeys.DownloadHttp2) && _httpVersion < HttpVersion.Version20) _httpVersion = HttpVersion.Version20;
+        _versionPolicy = ParsePolicy(_settings.GetString(SettingKeys.DownloadHttpVersionPolicy));
         _perServer = Math.Max(_settings.GetInt(SettingKeys.ConcurrentRequestsPerDomain, 8), _settings.GetInt(SettingKeys.ConcurrentRequestsPerIp));
     }
 
@@ -169,10 +173,21 @@ public sealed class HttpDownloadHandler : IDownloadHandler, IDisposable
     private HttpRequestMessage BuildMessage(Request request, string? proxy)
     {
         var message = new HttpRequestMessage(new HttpMethod(request.Method), request.Uri);
-        if (_http2)
+        var version = request.Meta.TryGetValue(MetaKeys.DownloadHttpVersion, out var v) && ParseVersion(v?.ToString()) is { } requested ? requested : _httpVersion;
+        if (version == HttpVersion.Version30 && !System.Net.Quic.QuicConnection.IsSupported)
         {
-            message.Version = HttpVersion.Version20;
-            message.VersionPolicy = HttpVersionPolicy.RequestVersionOrLower;
+            // No QUIC on this machine (Linux needs libmsquic): HTTP/2 is the closest that works.
+            if (!_warnedNoQuic)
+            {
+                _logger.LogWarning("HTTP/3 was requested but QUIC is not available on this system; using HTTP/2");
+                _warnedNoQuic = true;
+            }
+            version = HttpVersion.Version20;
+        }
+        if (version != HttpVersion.Version11)
+        {
+            message.Version = version;
+            message.VersionPolicy = _versionPolicy;
         }
         if (request.Body.Length > 0 || request.Method is "POST" or "PUT" or "PATCH")
             message.Content = new ByteArrayContent(request.Body);
@@ -189,6 +204,23 @@ public sealed class HttpDownloadHandler : IDownloadHandler, IDisposable
         }
         return message;
     }
+
+    private static Version? ParseVersion(string? text) => text?.Trim().ToLowerInvariant() switch
+    {
+        "1.0" or "http/1.0" => HttpVersion.Version10,
+        "1.1" or "http/1.1" or "1" => HttpVersion.Version11,
+        "2" or "2.0" or "http/2" or "h2" => HttpVersion.Version20,
+        "3" or "3.0" or "http/3" or "h3" => HttpVersion.Version30,
+        null or "" => null,
+        _ => throw new ArgumentException($"Unknown HTTP version '{text}'; use 1.1, 2 or 3."),
+    };
+
+    private static HttpVersionPolicy ParsePolicy(string? text) => text?.Trim().ToLowerInvariant() switch
+    {
+        "exact" => HttpVersionPolicy.RequestVersionExact,
+        "or-higher" or "orhigher" => HttpVersionPolicy.RequestVersionOrHigher,
+        _ => HttpVersionPolicy.RequestVersionOrLower,
+    };
 
     private HttpMessageInvoker GetClient(string? proxy) =>
         _clients.GetOrAdd(proxy ?? "", key =>

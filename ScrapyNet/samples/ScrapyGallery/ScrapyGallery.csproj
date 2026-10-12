@@ -28,6 +28,7 @@
     <ProjectReference Include="../../src/ScrapyNet.AI/ScrapyNet.AI.csproj" />
     <ProjectReference Include="../../src/ScrapyNet.Platform/ScrapyNet.Platform.csproj" />
     <ProjectReference Include="../../src/ScrapyNet.Playwright/ScrapyNet.Playwright.csproj" />
+    <ProjectReference Include="../../src/ScrapyNet.Redis/ScrapyNet.Redis.csproj" />
   </ItemGroup>
 
   <ItemGroup>

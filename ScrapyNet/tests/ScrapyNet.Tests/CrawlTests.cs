@@ -374,7 +374,8 @@ public class CrawlTests(SandboxFixture sandbox)
         var (first, firstItems) = await Scrapy.CrawlAndCollectAsync(new GraphSpider(Base), s => { Configure(s); s.Set(SettingKeys.CloseSpiderItemCount, 40); },
             TestContext.Current.CancellationToken);
         Assert.Equal("closespider_itemcount", first.FinishReason);
-        Assert.True(File.Exists(Path.Combine(jobDir, "requests.queue")));
+        Assert.True(File.Exists(Path.Combine(jobDir, "requests.queue.log")));
+        Assert.True((long)first.Stats["scheduler/enqueued/disk"]! > 0);
 
         // The resumed run must not start over: start URLs are dont_filter, but everything already
         // seen is skipped and the saved queue is picked up.
@@ -384,6 +385,7 @@ public class CrawlTests(SandboxFixture sandbox)
         Assert.Equal(200, all);
         Assert.True(secondItems.Count < 200);
         Assert.True((long)second.Stats["scheduler/restored"]! > 0);
+        Assert.False(File.Exists(Path.Combine(jobDir, "requests.queue.log")));
     }
 
     [Fact]

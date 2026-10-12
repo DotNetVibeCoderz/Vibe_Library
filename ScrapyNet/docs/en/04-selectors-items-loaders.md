@@ -68,6 +68,26 @@ public sealed class ProductItem() : Item("name", "price", new Field("url") { Ser
 `AsDictionary()` — using compiled property accessors cached per type. Setting a field matches names
 loosely (`file_urls`, `FileUrls` and `fileUrls` are the same) and converts types (`"12.50"` → `decimal`).
 
+### Generated accessors (trimming and NativeAOT)
+
+Mark an item class or record with `[ScrapyItem]` and a source generator (shipped inside the
+`Gravicode.ScrapyNet` package) writes its accessors at compile time. `ItemAdapter`, loaders and exporters
+then use plain compiled lambdas instead of reflection — required for trimmed and NativeAOT apps, and
+free of the first-use compile cost everywhere else. `init` properties stay settable by loaders.
+
+```csharp
+[ScrapyItem]
+public sealed record Book
+{
+    public string? Title { get; init; }
+    public decimal Price { get; init; }
+}
+```
+
+`samples/AotSpider` is a complete spider published as a single native executable
+(`dotnet publish -c Release -r linux-x64`). The generator reports `SCRAPYNET001` for types it cannot
+handle (generic, abstract, structs, private nested types).
+
 ## Item loaders
 
 A loader collects values per field through **input processors** and produces the final value with

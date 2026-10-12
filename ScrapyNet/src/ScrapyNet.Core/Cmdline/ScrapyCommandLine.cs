@@ -63,6 +63,9 @@ public sealed class CommandArgs
                 case "-d" or "--depth":
                     result.Options["depth"] = Next();
                     break;
+                case "-l" or "--list":
+                    result.Flags.Add("list");
+                    break;
                 case "-v" or "--verbose":
                     result.Flags.Add("verbose");
                     break;
@@ -112,6 +115,7 @@ public static class ScrapyCommandLine
     {
         ["crawl"] = "Run a spider:  crawl <spider> [-a k=v] [-o file] [-O file] [-s KEY=VALUE]",
         ["list"] = "List available spiders",
+        ["check"] = "Check spider contracts:  check [spider ...] [-l] [-v]",
         ["parse"] = "Fetch a URL and show what a spider callback extracts:  parse <url> [--spider name] [-c callback] [-d depth]",
         ["fetch"] = "Download a URL and print the body:  fetch <url> [--headers] [--nolog]",
         ["view"] = "Open a URL in the browser as Scrapy.Net sees it:  view <url>",
@@ -202,6 +206,9 @@ public static class ScrapyCommandLine
             case "list":
                 foreach (var name in SpiderLoader.FromAssemblies(assemblies).List()) await output.WriteLineAsync(name).ConfigureAwait(false);
                 return 0;
+
+            case "check":
+                return await CheckAsync(args, assemblies, output).ConfigureAwait(false);
 
             case "crawl":
                 return await CrawlAsync(args, assemblies).ConfigureAwait(false);
@@ -338,6 +345,27 @@ public static class ScrapyCommandLine
             foreach (var r in level.Value.OfType<Request>()) await output.WriteLineAsync($"{r}  callback={r.CallbackName ?? "Parse"}").ConfigureAwait(false);
         }
         return 0;
+    }
+
+    private static async Task<int> CheckAsync(CommandArgs args, Assembly[] assemblies, TextWriter output)
+    {
+        var loader = SpiderLoader.FromAssemblies(assemblies);
+        var names = args.Positional.Count > 0 ? args.Positional : loader.List();
+        if (args.Flag("list"))
+        {
+            foreach (var name in names)
+            {
+                var methods = Contracts.ContractRunner.List(loader.Load(name));
+                if (methods.Count == 0) continue;
+                await output.WriteLineAsync(name).ConfigureAwait(false);
+                foreach (var (method, _) in methods) await output.WriteLineAsync($"  * {method.Name}").ConfigureAwait(false);
+            }
+            return 0;
+        }
+        var spiders = names.Select(n => (Spider)Activator.CreateInstance(loader.Load(n))!).ToList();
+        var report = await Contracts.ContractRunner.CheckAsync(spiders, BuildQuietSettings(args)).ConfigureAwait(false);
+        await output.WriteLineAsync(report.Format(args.Flag("verbose"))).ConfigureAwait(false);
+        return report.Success ? 0 : 1;
     }
 
     private static async Task<int> SettingsCommandAsync(CommandArgs args, TextWriter output)

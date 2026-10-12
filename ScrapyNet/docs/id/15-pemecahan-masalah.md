@@ -20,8 +20,23 @@ Filter duplikat membuang request yang sudah pernah terlihat (`dupefilter/filtere
 pada parameter yang tidak penting.
 
 **Run jeda/lanjut mulai dari awal lagi.**
-Berhentilah dengan rapi (Ctrl+C sekali), gunakan `JOBDIR` yang sama, dan jadikan callback sebagai method
-bernama milik spider — lambda tidak bisa disimpan (`scheduler/unserializable` menghitungnya).
+Gunakan `JOBDIR` yang sama dan jadikan callback sebagai method bernama milik spider — lambda tidak bisa
+disimpan (`scheduler/unserializable` menghitungnya). Antrean sudah ada di disk sejak awal, jadi crash
+pun bisa dilanjutkan.
+
+**`HTTP/3` diminta tetapi respons menyebut `HTTP/2.0`.**
+QUIC tidak tersedia di mesin ini (Linux butuh `libmsquic`; Windows butuh 11 / Server 2022+) — log
+menyebutkannya sekali. Dengan kebijakan default `or-lower`, request pertama ke sebuah host juga lewat
+TCP; HTTP/3 dimulai setelah server mengiklankannya lewat `Alt-Svc`.
+
+**Worker Redis langsung berhenti dengan 0 halaman.**
+Key URL awalnya kosong dan `MAX_IDLE_TIME_BEFORE_CLOSE` terlewati, atau worker lain sudah menyelesaikan
+crawl lebih dulu. Isi URL awal sebelum menjalankan worker, dan set `SCHEDULER_PERSIST=true` bila
+beberapa worker berbagi antrean.
+
+**`scrapynet check` melaporkan `ERROR ... (download)`.**
+`[Url]` pada kontrak mengembalikan error HTTP atau tidak bisa diambil; periksa URL-nya (URL relatif
+diselesaikan terhadap `CONTRACTS_BASE_URL` atau URL awal pertama).
 
 **`NotConfiguredException` di log / middleware tidak berjalan.**
 Komponen bawaan menonaktifkan diri bila setting-nya tidak ada (`FILES_STORE`, `HTTPCACHE_ENABLED`,

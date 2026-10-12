@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="scrapynet-api" content="{{API}}">
+  <title>Scrapy.Net Console</title>
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="admin.css?v={{VERSION}}">
+  <script type="module" src="admin.js?v={{VERSION}}"></script>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+
+  <!-- Sign in: the console holds no data of its own; everything comes from the API with this key. -->
+  <section id="signin" class="signin" hidden>
+    <form class="signin-card" id="signin-form">
+      <div class="brand brand-lg">
+        <svg class="mark" viewBox="0 0 40 40" aria-hidden="true"><use href="#web-mark"/></svg>
+        <div>
+          <p class="brand-name">Scrapy.Net</p>
+          <p class="brand-sub">Console</p>
+        </div>
+      </div>
+      <label for="api-key">API key</label>
+      <input id="api-key" name="key" type="password" autocomplete="current-password" required spellcheck="false">
+      <label class="check"><input type="checkbox" id="remember"> Remember on this device</label>
+      <p class="form-error" id="signin-error" role="alert"></p>
+      <button class="btn btn-primary" type="submit">Sign in</button>
+      <p class="credit">Dibuat oleh Gravicode Studios dipimpin oleh Kang Fadhil</p>
+    </form>
+  </section>
+
+  <div class="shell" id="shell" hidden>
+    <header class="topbar">
+      <button class="icon-btn nav-toggle" id="nav-toggle" aria-label="Menu" aria-expanded="false" aria-controls="rail">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 6h14M3 10h14M3 14h14"/></svg>
+      </button>
+      <div class="brand">
+        <svg class="mark" viewBox="0 0 40 40" aria-hidden="true"><use href="#web-mark"/></svg>
+        <p class="brand-name">Scrapy.Net <span>Console</span></p>
+      </div>
+      <p class="live" id="live" aria-live="polite"><span class="live-dot"></span><span id="live-text">Connecting…</span></p>
+      <div class="who">
+        <span id="who-name"></span>
+        <span class="role" id="who-role"></span>
+        <button class="btn btn-quiet" id="signout">Sign out</button>
+      </div>
+    </header>
+
+    <nav class="rail" id="rail" aria-label="Sections">
+      <a href="#/dashboard" data-view="dashboard">Dashboard</a>
+      <a href="#/spiders" data-view="spiders">Spiders</a>
+      <a href="#/jobs" data-view="jobs">Jobs</a>
+      <a href="#/schedules" data-view="schedules">Schedules</a>
+      <a href="#/builder" data-view="builder">Selector builder</a>
+      <a href="#/alerts" data-view="alerts">Alerts</a>
+      <button class="btn btn-quiet rail-theme" id="theme">Theme: Auto</button>
+      <p class="rail-credit">Dibuat oleh Gravicode Studios<br>dipimpin oleh Kang Fadhil</p>
+    </nav>
+
+    <main id="main" tabindex="-1"></main>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <dialog id="dialog"></dialog>
+
+  <svg class="sprite" aria-hidden="true">
+    <defs>
+      <!-- Brand mark: an orb web of eight spokes and three turns of spiral. -->
+      <symbol id="web-mark" viewBox="0 0 40 40">
+        <g fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round">
+          <path d="M20 2v36M2 20h36M7.3 7.3l25.4 25.4M32.7 7.3 7.3 32.7"/>
+          <path d="M20 8l8.5 3.5L32 20l-3.5 8.5L20 32l-8.5-3.5L8 20l3.5-8.5z"/>
+          <path d="M20 14l4.2 1.8L26 20l-1.8 4.2L20 26l-4.2-1.8L14 20l1.8-4.2z"/>
+        </g>
+        <circle cx="20" cy="20" r="3" class="mark-spider"/>
+      </symbol>
+    </defs>
+  </svg>
+</body>
+</html>

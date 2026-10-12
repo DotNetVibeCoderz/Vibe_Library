@@ -143,9 +143,9 @@ public static class ResumeSample
             return s;
         }
 
-        // First run stops early (as if interrupted with Ctrl+C); its queue is saved to JOBDIR.
+        // First run stops early (as if interrupted with Ctrl+C, or killed): its queue is already on disk in JOBDIR.
         var first = await Scrapy.CrawlAsync(new GraphSpider(site.Url("/graph/0")), Make(50));
-        Console.WriteLine($"run 1: {first.ItemCount} pages, reason={first.FinishReason}, saved queue: {File.Exists(Path.Combine(jobDir, "requests.queue"))}");
+        Console.WriteLine($"run 1: {first.ItemCount} pages, reason={first.FinishReason}, disk queue kept: {File.Exists(Path.Combine(jobDir, "requests.queue.log"))}");
         // Second run picks up the saved queue and skips everything already seen.
         var second = await Scrapy.CrawlAsync(new GraphSpider(site.Url("/graph/0")), Make(null));
         Console.WriteLine($"run 2: {second.ItemCount} pages, restored {second.Stats.GetValueOrDefault("scheduler/restored")} requests, reason={second.FinishReason}");

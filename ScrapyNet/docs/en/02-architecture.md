@@ -36,7 +36,7 @@ Scrapy.Net keeps Scrapy's architecture, so everything you know about Scrapy's da
 |---|---|---|
 | Crawler | `Crawler` | Owns one spider run: settings, stats, signals, extensions, engine |
 | Engine | `ExecutionEngine` | Pulls start requests lazily, moves requests from scheduler to downloader, detects idleness, closes the spider |
-| Scheduler | `Scheduler` (`IScheduler`) | Priority queue (LIFO or FIFO within a priority), duplicate filter, JOBDIR persistence |
+| Scheduler | `Scheduler` (`IScheduler`) | Priority queue (LIFO or FIFO within a priority), duplicate filter, disk queue under JOBDIR; `RedisScheduler` shares one queue between workers |
 | Dupe filter | `RFPDupeFilter` (`IDupeFilter`) | SHA-1 request fingerprints stored as 20-byte structs |
 | Downloader | `Downloader` | Global `CONCURRENT_REQUESTS`, per-slot concurrency and delay, handler dispatch by URL scheme |
 | Download handlers | `HttpDownloadHandler`, `FileDownloadHandler`, `DataUriDownloadHandler`, `PlaywrightDownloadHandler` | Turn a request into a response |

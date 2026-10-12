@@ -9,12 +9,13 @@
 | Parsing | Documents parsed lazily and once per response; CSS pseudo-element parsing cached | A callback running ten queries parses once |
 | Fingerprints | SHA-1 over method, canonical URL and body, stored as a 20-byte struct | A million seen URLs take ≈ 40 MB instead of 150+ MB as hex strings |
 | Scheduler | `PriorityQueue` with sequence tie-breaks | O(log n) enqueue/dequeue, stable LIFO/FIFO |
+| Disk queue (`JOBDIR`) | Append-only journal; memory holds offsets; positional reads (`RandomAccess`) | A pending request costs ~40 bytes of RAM; crash-safe within a second |
 | Start requests | Pulled lazily while the queue is short | Millions of start URLs never sit in memory |
 | Slots | Delay enforced by reserving start times | No background loop, no lock held while waiting |
 | Engine | Wake-up signal instead of polling | Idle CPU is idle |
 | Stats | `Interlocked` on pre-allocated cells | Per-request counters don't lock or allocate |
 | Signals | Immutable handler arrays swapped on connect | Sending is a lock-free read; no handlers ≈ free |
-| Items | Compiled property accessors cached per type | Exporting doesn't use reflection per item |
+| Items | Compiled property accessors cached per type; `[ScrapyItem]` generates them at build time | Exporting doesn't use reflection per item; works under NativeAOT |
 | Exports | `Utf8JsonWriter` straight to the stream | Also keeps AOT/trimmed apps working |
 | Vector search | `TensorPrimitives.CosineSimilarity` (SIMD) with a bounded heap | One pass, O(k) memory |
 
@@ -44,6 +45,19 @@ CONCURRENT_REQUESTS=8     3605 pages in 1.34s = 161,574 pages/min
 CONCURRENT_REQUESTS=16    3605 pages in 0.68s = 316,689 pages/min
 CONCURRENT_REQUESTS=32    3605 pages in 0.70s = 309,543 pages/min
 ```
+
+The same benchmark also crawls with `JOBDIR`, so every request goes through the disk queue. Measured
+in one session (absolute numbers vary between runs and machines; compare within a run):
+
+| CONCURRENT_REQUESTS=16 | pages/min |
+|---|---:|
+| In-memory queue | 229,166 |
+| Disk queue (`JOBDIR`) | 187,002 |
+
+The disk queue costs about a fifth of raw framework throughput, which no real website will notice.
+
+`samples/AotSpider` published with NativeAOT is an 18 MB executable that starts and crawls the 63-page
+bookshop in well under a second.
 
 Against real websites, politeness settings (`DOWNLOAD_DELAY`, AutoThrottle, per-domain concurrency)
 and server latency decide throughput long before the framework does.

@@ -28,7 +28,7 @@ diubah, dan tombol **Run**. Selama berjalan Anda bisa melihat:
 | Ekstraksi data | Taman bermain selector · Item dan item loader |
 | Menjelajah situs | Spider pertama · CrawlSpider dan aturan tautan · Sitemap dan robots.txt · Login, formulir, dan sesi · API JSON dan API key · Halaman JavaScript di browser |
 | Olah & ekspor | Pipeline item · Ekspor feed · File dan gambar |
-| Operasional crawl | Retry, redirect, dan error · Rotasi proxy · AutoThrottle · Kedalaman, duplikat, dan sinyal · Jeda dan lanjutkan · Cache HTTP |
+| Operasional crawl | Retry, redirect, dan error · Rotasi proxy · AutoThrottle · Kedalaman, duplikat, dan sinyal · Jeda dan lanjutkan · Kontrak spider · Crawl terdistribusi (Redis) · Cache HTTP |
 | AI & pengetahuan | Dari crawl ke basis pengetahuan · Hampir-duplikat dan ringkasan |
 | Platform crawler | Job, jadwal, dan peringatan · Aturan scraping tanpa kode |
 
@@ -72,6 +72,17 @@ dotnet run --project samples/ScrapyNet.Samples -- all     # jalankan semua sampe
 
 `samples/SingleFile/quotes_spider.cs` adalah spider lengkap dalam satu file
 (`dotnet run quotes_spider.cs`), dan `samples/ScrapyNet.ServerHost` menjalankan REST API.
+
+## Spider NativeAOT
+
+`samples/AotSpider` meng-crawl toko buku di sandbox dengan `ItemLoader` ke record `[ScrapyItem]` dan
+mengekspor JSON Lines, dikompilasi ahead-of-time menjadi satu executable native:
+
+```bash
+dotnet publish samples/AotSpider -c Release -r win-x64     # atau linux-x64, osx-arm64
+```
+
+CI mempublikasikan dan menjalankannya di Linux pada setiap push.
 
 ## Notebook
 

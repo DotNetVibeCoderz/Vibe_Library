@@ -96,6 +96,8 @@ public static class ScrapyNetApi
         var operatorGroup = api.MapGroup("").AddEndpointFilter(RequireRole(PlatformRole.Operator));
         var admin = api.MapGroup("").AddEndpointFilter(RequireRole(PlatformRole.Admin));
 
+        // Who the key belongs to, so clients (the console) can show only what the role allows.
+        viewer.MapGet("/me", (HttpContext http) => http.Items["scrapynet.client"] is ApiClient client ? Results.Ok(new { client.Name, role = client.Role.ToString() }) : Results.Unauthorized());
         viewer.MapGet("/spiders", (SpiderCatalog c) => c.List());
         viewer.MapGet("/spiders/{id}", (string id, SpiderCatalog c) => c.TryGet(id, out var d) ? Results.Ok(d) : Results.NotFound());
         viewer.MapGet("/spiders/{id}/versions", (string id, SpiderCatalog c) => Try(() => c.Versions(id)));

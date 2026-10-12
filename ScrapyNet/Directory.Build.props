@@ -23,7 +23,8 @@
     <Company>Gravicode Studios</Company>
     <Product>Scrapy.Net</Product>
     <Copyright>Copyright (c) 2026 Gravicode Studios. Dibuat oleh Gravicode Studios, dipimpin oleh Kang Fadhil.</Copyright>
-    <Version>0.1.0</Version>
+    <Version>0.2.0</Version>
+    <PackageReleaseNotes>0.2.0: [ScrapyItem] source-generated item accessors and NativeAOT support; crash-safe disk queue for JOBDIR; HTTP/3 (DOWNLOAD_HTTP_VERSION); spider contracts and scrapynet check; Gravicode.ScrapyNet.Redis for distributed crawling; pgvector and Azure AI Search vector stores and Microsoft.Extensions.AI adapters; the Scrapy.Net Console (web admin) in Gravicode.ScrapyNet.Server. See https://github.com/DotNetVibeCoderz/Vibe_Library/blob/main/ScrapyNet/Progress.md</PackageReleaseNotes>
   </PropertyGroup>
 
   <ItemGroup>

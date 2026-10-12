@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    A NativeAOT spider: dotnet publish -c Release (-r win-x64 / linux-x64 / osx-arm64).
+    Items carry [ScrapyItem], so the source generator gives them reflection-free accessors.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <PublishAot>true</PublishAot>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/ScrapyNet.Core/ScrapyNet.Core.csproj" />
+    <ProjectReference Include="../../src/ScrapyNet.Sandbox/ScrapyNet.Sandbox.csproj" />
+    <!-- A package reference brings the generator automatically; a project reference names it. -->
+    <ProjectReference Include="../../src/ScrapyNet.Generators/ScrapyNet.Generators.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+</Project>

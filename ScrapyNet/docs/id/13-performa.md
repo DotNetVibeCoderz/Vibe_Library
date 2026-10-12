@@ -9,12 +9,13 @@
 | Parsing | Dokumen diparse secara malas dan sekali per respons; parsing pseudo-element CSS di-cache | Callback dengan sepuluh query tetap parse sekali |
 | Sidik jari | SHA-1 atas method, URL kanonik, dan body, disimpan sebagai struct 20 byte | Sejuta URL yang terlihat ≈ 40 MB, bukan 150+ MB sebagai string heksa |
 | Scheduler | `PriorityQueue` dengan pemecah seri berbasis urutan | Enqueue/dequeue O(log n), LIFO/FIFO yang stabil |
+| Antrean disk (`JOBDIR`) | Journal append-only; memori hanya menyimpan offset; baca posisional (`RandomAccess`) | Satu request tertunda ≈ 40 byte RAM; aman dari crash dalam satu detik |
 | Start request | Diambil secara malas selama antrean pendek | Jutaan URL awal tidak pernah tinggal di memori |
 | Slot | Jeda ditegakkan dengan memesan waktu mulai | Tanpa loop latar, tanpa lock saat menunggu |
 | Engine | Sinyal bangun, bukan polling | CPU benar-benar diam saat idle |
 | Statistik | `Interlocked` pada sel yang sudah dialokasikan | Counter per request tanpa lock dan tanpa alokasi |
 | Sinyal | Array handler immutable yang ditukar saat connect | Pengiriman adalah baca tanpa lock; tanpa handler ≈ gratis |
-| Item | Accessor properti terkompilasi yang di-cache per tipe | Ekspor tidak memakai refleksi per item |
+| Item | Accessor properti terkompilasi yang di-cache per tipe; `[ScrapyItem]` membuatnya saat build | Ekspor tidak memakai refleksi per item; berjalan di NativeAOT |
 | Ekspor | `Utf8JsonWriter` langsung ke stream | Juga membuat aplikasi AOT/trimmed tetap berjalan |
 | Pencarian vektor | `TensorPrimitives.CosineSimilarity` (SIMD) dengan heap terbatas | Satu kali lintasan, memori O(k) |
 
@@ -44,6 +45,20 @@ CONCURRENT_REQUESTS=8     3605 pages in 1.34s = 161,574 pages/min
 CONCURRENT_REQUESTS=16    3605 pages in 0.68s = 316,689 pages/min
 CONCURRENT_REQUESTS=32    3605 pages in 0.70s = 309,543 pages/min
 ```
+
+Benchmark yang sama juga meng-crawl dengan `JOBDIR`, sehingga setiap request melewati antrean disk.
+Diukur dalam satu sesi (angka absolut berbeda antar-run dan mesin; bandingkan dalam satu run):
+
+| CONCURRENT_REQUESTS=16 | halaman/menit |
+|---|---:|
+| Antrean di memori | 229.166 |
+| Antrean disk (`JOBDIR`) | 187.002 |
+
+Antrean disk memakan sekitar seperlima throughput mentah framework, yang tidak akan terasa terhadap
+situs web sungguhan.
+
+`samples/AotSpider` yang dipublikasikan dengan NativeAOT adalah executable 18 MB yang mulai dan
+meng-crawl toko buku 63 halaman dalam waktu jauh di bawah satu detik.
 
 Pada situs sungguhan, setting kesopanan (`DOWNLOAD_DELAY`, AutoThrottle, konkurensi per domain) dan
 latensi server menentukan throughput jauh sebelum framework-nya.

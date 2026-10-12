@@ -37,7 +37,7 @@ berlaku.
 |---|---|---|
 | Crawler | `Crawler` | Memiliki satu run spider: setting, statistik, sinyal, ekstensi, engine |
 | Engine | `ExecutionEngine` | Mengambil start request secara malas, memindahkan request dari scheduler ke downloader, mendeteksi idle, menutup spider |
-| Scheduler | `Scheduler` (`IScheduler`) | Antrean prioritas (LIFO atau FIFO dalam satu prioritas), filter duplikat, persistensi JOBDIR |
+| Scheduler | `Scheduler` (`IScheduler`) | Antrean prioritas (LIFO atau FIFO dalam satu prioritas), filter duplikat, antrean disk dengan JOBDIR; `RedisScheduler` berbagi satu antrean antar-worker |
 | Filter duplikat | `RFPDupeFilter` (`IDupeFilter`) | Sidik jari request SHA-1 yang disimpan sebagai struct 20 byte |
 | Downloader | `Downloader` | `CONCURRENT_REQUESTS` global, konkurensi dan jeda per slot, pemilihan handler berdasarkan skema URL |
 | Download handler | `HttpDownloadHandler`, `FileDownloadHandler`, `DataUriDownloadHandler`, `PlaywrightDownloadHandler` | Mengubah request menjadi respons |

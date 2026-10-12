@@ -4,7 +4,7 @@
 //     dotnet run quotes_spider.cs -- -o quotes.jsonl
 //
 // Outside this repository, replace the #:project line with:
-//     #:package Gravicode.ScrapyNet@0.1.0
+//     #:package Gravicode.ScrapyNet@0.2.0
 #:project ../../src/ScrapyNet.Core/ScrapyNet.Core.csproj
 
 using ScrapyNet;

@@ -1,0 +1,9 @@
+<!--
+  Kept whole when an application is trimmed or compiled with NativeAOT. Built-in middlewares,
+  pipelines, extensions and handlers are created from Type objects in settings (constructor
+  injection), so their constructors must survive trimming. Application items should carry
+  [ScrapyItem]; application components need to be kept the same way (see docs, Performance).
+-->
+<linker>
+  <assembly fullname="ScrapyNet.Core" preserve="all" />
+</linker>

@@ -186,3 +186,40 @@ Arguments land in `spider.Arguments` and in any public settable property whose n
 ```csharp
 if (response.Css(".captcha").Any()) throw new CloseSpiderException("blocked_by_captcha");
 ```
+
+## Spider contracts
+
+Contracts are small tests written as attributes on a callback, like Scrapy's docstring contracts. Each
+callback with `[Url]` is fetched once through the spider's own settings and middlewares; its output is
+checked and then discarded, so nothing is followed and nothing reaches a pipeline.
+
+```csharp
+using ScrapyNet.Contracts;
+
+[Url("/books/")]                          // relative: CONTRACTS_BASE_URL or the first start URL
+[Returns("requests", 20)]                 // at least 20 requests
+[Returns("items", 0, 0)]                  // and no items
+public override async IAsyncEnumerable<object> Parse(Response response) { ... }
+
+[Url("https://books.toscrape.com/catalogue/a-light-in-the-attic_1000/index.html")]
+[Returns("items", 1, 1)]
+[Scrapes("title", "price", "upc")]        // every item has these fields set
+[CbKwargs("""{"category": "poetry"}""")]
+public async IAsyncEnumerable<object> ParseBook(Response response) { ... }
+```
+
+```bash
+dotnet run -- check            # every spider;  check books -v  for one, verbose
+dotnet run -- check -l         # list the callbacks that have contracts
+```
+
+The report follows Scrapy's: `.` passed, `F` failed, `E` error (a download failure, an HTTP error, or an
+exception in the callback), then the details and `OK` or `FAILED (failures=1)`; the exit code is 1 when
+anything failed. Run it in CI or on a schedule to learn that a site changed its layout before a crawl
+returns empty items.
+
+Write your own contract by deriving from `ContractAttribute` and overriding `AdjustRequest`,
+`PreProcess(Response)` or `PostProcess(output)`; throw `ContractFailException` to fail. From code:
+`await ContractRunner.CheckAsync([new BooksSpider()], settings)`.
+
+![Spider contracts in the gallery](../images/gallery-contracts.png)

@@ -55,12 +55,15 @@ Environment files keep dev and prod apart: `scrapy.dev.json`, `scrapy.prod.json`
 | `DOWNLOAD_MAXSIZE` / `DOWNLOAD_WARNSIZE` | 1 GiB / 32 MiB | Response size limits |
 | `DOWNLOAD_VERIFY_SSL` | true | Certificate validation |
 | `DOWNLOAD_HTTP2` | false | Prefer HTTP/2 |
+| `DOWNLOAD_HTTP_VERSION` | `1.1` | `1.1`, `2` or `3` (QUIC); per request: `meta["download_http_version"]` |
+| `DOWNLOAD_HTTP_VERSION_POLICY` | `or-lower` | `or-lower` (fall back; HTTP/3 after an `Alt-Svc` advertisement), `exact`, `or-higher` |
 | `DEFAULT_REQUEST_HEADERS` | Accept, Accept-Language | Added when missing |
 | `DOMAIN_HEADERS` | {} | Headers per host (API keys that must not leak) |
 | `COOKIES_ENABLED` / `COOKIES_DEBUG` / `COOKIES_PERSIST_FILE` | true / false / – | Cookie handling |
 | `DEPTH_LIMIT` / `DEPTH_PRIORITY` / `DEPTH_STATS_VERBOSE` | 0 / 0 / false | Link depth control |
 | `SCHEDULER_ORDER` | `lifo` | `lifo` (depth-first) or `fifo` (breadth-first) within a priority |
-| `JOBDIR` | – | Pause/resume folder |
+| `JOBDIR` | – | Pause/resume folder (disk queue, seen fingerprints, spider state) |
+| `CONTRACTS_BASE_URL` | first start URL | Base for relative `[Url]` contract URLs |
 | `RETRY_ENABLED` / `RETRY_TIMES` / `RETRY_HTTP_CODES` | true / 2 / 500,502,503,504,522,524,408,429 | Retries |
 | `RETRY_PRIORITY_ADJUST` / `RETRY_BACKOFF_BASE` / `RETRY_BACKOFF_MAX` | -1 / 0 / 60 | Retry scheduling |
 | `REDIRECT_ENABLED` / `REDIRECT_MAX_TIMES` | true / 20 | Redirects |

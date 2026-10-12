@@ -97,7 +97,7 @@ public sealed class ExecutionEngine
         await Scraper.OpenSpiderAsync(_spider).ConfigureAwait(false);
         await _crawler.Signals.SendAsync(Signals.SpiderOpened, new SpiderEventArgs(_spider)).ConfigureAwait(false);
         await _spider.OnOpenedAsync().ConfigureAwait(false);
-        var start = Scraper.SpiderMiddleware.ProcessStartRequests(_spider.StartAsync(_killSource.Token), _spider);
+        var start = Scraper.SpiderMiddleware.ProcessStartRequests((_spider.StartOverride ?? _spider.StartAsync)(_killSource.Token), _spider);
         _start = start.GetAsyncEnumerator(_killSource.Token);
     }
 

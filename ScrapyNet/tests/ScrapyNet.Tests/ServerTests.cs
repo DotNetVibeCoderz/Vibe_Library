@@ -36,6 +36,7 @@ public class ServerTests(SandboxFixture sandbox)
         });
         var app = builder.Build();
         app.MapScrapyNetApi();
+        app.MapScrapyNetAdmin();
         await app.StartAsync(TestContext.Current.CancellationToken);
         var address = app.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>()!.Addresses.First();
         HttpClient Client(string? key)
@@ -100,5 +101,54 @@ public class ServerTests(SandboxFixture sandbox)
         Assert.Equal("nightly", schedules[0].GetProperty("id").GetString());
         Assert.Equal(HttpStatusCode.BadRequest, (await admin.PostAsJsonAsync("/api/schedules", new { id = "bad", spiderId = "quotes", cron = "nope" }, Json, ct)).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await viewer.GetAsync("/api/jobs/unknown", ct)).StatusCode);
+    }
+}
+
+public class AdminConsoleTests
+{
+    [Fact]
+    public async Task Console_is_served_with_a_strict_policy_and_me_reports_the_role()
+    {
+        var builder = WebApplication.CreateSlimBuilder();
+        builder.WebHost.UseUrls("http://127.0.0.1:0");
+        builder.Logging.ClearProviders();
+        builder.Services.AddScrapyNetPlatform(o => o.AddApiKey("op-key", "ops", PlatformRole.Operator));
+        var app = builder.Build();
+        app.MapScrapyNetApi("/v1");
+        app.MapScrapyNetAdmin("/console", "/v1");
+        var ct = TestContext.Current.CancellationToken;
+        await app.StartAsync(ct);
+        await using var _ = app;
+        var address = app.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>()!.Addresses.First();
+        using var http = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false }) { BaseAddress = new Uri(address) };
+
+        var redirect = await http.GetAsync("/console", ct);
+        Assert.Equal(HttpStatusCode.Redirect, redirect.StatusCode);
+        Assert.Equal("/console/", redirect.Headers.Location!.OriginalString);
+
+        var page = await http.GetAsync("/console/", ct);
+        Assert.Equal(HttpStatusCode.OK, page.StatusCode);
+        var csp = page.Headers.GetValues("Content-Security-Policy").Single();
+        Assert.Contains("script-src 'self'", csp);
+        Assert.DoesNotContain("unsafe-inline", csp);
+        var html = await page.Content.ReadAsStringAsync(ct);
+        Assert.Contains("content=\"/v1\"", html);
+        Assert.DoesNotContain("{{", html);
+        Assert.Contains("Dibuat oleh Gravicode Studios dipimpin oleh Kang Fadhil", html);
+
+        foreach (var (file, type) in new[] { ("admin.js", "text/javascript"), ("admin.css", "text/css"), ("fonts/IBMPlexSans-Regular.ttf", "font/ttf"), ("icon.svg", "image/svg+xml") })
+        {
+            var response = await http.GetAsync("/console/" + file, ct);
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            Assert.StartsWith(type, response.Content.Headers.ContentType!.ToString());
+        }
+        Assert.Equal(HttpStatusCode.NotFound, (await http.GetAsync("/console/../appsettings.json", ct)).StatusCode);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, (await http.GetAsync("/v1/me", ct)).StatusCode);
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/v1/me");
+        request.Headers.Add("X-Api-Key", "op-key");
+        var me = JsonDocument.Parse(await (await http.SendAsync(request, ct)).Content.ReadAsStringAsync(ct)).RootElement;
+        Assert.Equal("ops", me.GetProperty("name").GetString());
+        Assert.Equal("Operator", me.GetProperty("role").GetString());
     }
 }

@@ -80,6 +80,9 @@ public abstract class Spider
     /// <summary>Spider arguments (<c>-a key=value</c>). Arguments are also assigned to matching public settable properties.</summary>
     public IReadOnlyDictionary<string, string> Arguments => _arguments;
 
+    /// <summary>Replaces <see cref="StartAsync"/> for one run (used by contract checks, like Scrapy's <c>check</c>).</summary>
+    internal Func<CancellationToken, IAsyncEnumerable<Request>>? StartOverride { get; set; }
+
     /// <summary>
     /// Produces the initial requests (Scrapy's <c>start()</c>/<c>start_requests()</c>). The default yields
     /// a request per <see cref="StartUrls"/> entry, not subject to duplicate filtering, handled by <see cref="Parse"/>.

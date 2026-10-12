@@ -154,6 +154,7 @@ app.Run();
 | Endpoint | Peran |
 |---|---|
 | `GET /api/health` | siapa saja |
+| `GET /api/me` — nama dan peran pemanggil | Viewer |
 | `GET /api/spiders`, `/api/spiders/{id}`, `/api/spiders/{id}/versions` | Viewer |
 | `POST /api/spiders`, `PUT /api/spiders/{id}`, `DELETE /api/spiders/{id}`, `POST .../clone`, `POST .../rollback/{v}` | Admin |
 | `POST /api/spiders/{id}/run`, `.../enable`, `.../disable` | Operator |
@@ -166,3 +167,40 @@ app.Run();
 
 Klien mengautentikasi dengan `X-Api-Key: <key>` atau `Authorization: Bearer <key>`. Lihat
 `samples/ScrapyNet.ServerHost` untuk host yang siap dijalankan.
+
+## Konsol
+
+![Scrapy.Net Console — dasbor](../images/console-dashboard.png)
+
+`MapScrapyNetAdmin()` menambahkan konsol berbasis browser di atas API — "web admin" untuk platform:
+
+```csharp
+app.MapScrapyNetApi("/api");
+app.MapScrapyNetAdmin("/admin");          // http://host/admin/
+```
+
+Masuk dengan API key; konsol hanya menampilkan yang diizinkan peran key tersebut (viewer memantau,
+operator menjalankan dan menjadwalkan, admin mengubah spider dan kanal peringatan). Isinya:
+
+- **Dashboard** — request dalam satu menit terakhir, job berjalan/selesai/gagal, item 24 jam, tingkat
+  error; setiap job yang berjalan digambar sebagai jaring laba-laba dari throughput 24 detik terakhirnya
+  (berubah merah karat di atas 5% error), grafik halaman per menit, dan respons per status HTTP,
+  diperbarui setiap dua detik;
+- **Spiders** — katalog, jalankan dengan argumen dan override setting, aktifkan/nonaktifkan, clone,
+  hapus, edit definisi sebagai JSON (setiap simpan menjadi versi baru), dan rollback;
+- **Jobs** — riwayat dengan filter; halaman job berisi penghitung, throughput, pause/resume/stop/cancel/
+  retry, dan 50 item pertama;
+- **Schedules** — entri cron dengan preset, zona waktu, jadwal berikutnya dan terakhir;
+- **Selector builder** — coba container item, field (CSS atau XPath, processor), dan link yang di-follow
+  pada halaman langsung, lihat item yang diekstrak, lalu simpan rule-nya sebagai spider baru;
+- **Alerts** — peringatan terbaru dan kanal keluar (Slack, Teams, webhook).
+
+| | |
+|---|---|
+| ![Selector builder](../images/console-builder.png) | ![Mode gelap](../images/console-dashboard-dark.png) |
+
+Konsol berupa file statis yang di-embed di `Gravicode.ScrapyNet.Server`; konsol tidak menyimpan data
+sendiri dan dilayani dengan Content-Security-Policy ketat (hanya script, style, dan font dari origin yang
+sama, tanpa kode inline). Konten hasil scraping selalu ditampilkan sebagai teks. Konsol mendukung mode
+terang dan gelap serta ponsel. `tools/console-screenshots.cs` menjalankannya dengan Playwright untuk
+membuat screenshot ini dan gagal bila ada error di browser.

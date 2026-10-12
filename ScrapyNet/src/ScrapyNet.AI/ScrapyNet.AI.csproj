@@ -9,16 +9,18 @@
     <IsPackable>true</IsPackable>
     <PackageId>Gravicode.ScrapyNet.AI</PackageId>
     <Title>Scrapy.Net AI - RAG ingestion for crawled content</Title>
-    <Description>Turns Scrapy.Net crawls into AI-ready knowledge: article and metadata extraction (OpenGraph, JSON-LD), text normalization, chunking, SimHash near-duplicate detection, content change detection and incremental re-crawls, local hashing embeddings or OpenAI-compatible embeddings, an in-memory SIMD vector store (plus Qdrant), extractive and LLM summarization, keyword/Naive Bayes/LLM categorization, and a RAG ingestion pipeline with a queryable knowledge base. Dibuat oleh Gravicode Studios, dipimpin oleh Kang Fadhil.</Description>
+    <Description>Turns Scrapy.Net crawls into AI-ready knowledge: article and metadata extraction (OpenGraph, JSON-LD), text normalization, chunking, SimHash near-duplicate detection, content change detection and incremental re-crawls, local hashing embeddings or OpenAI-compatible embeddings, an in-memory SIMD vector store (plus Qdrant, pgvector and Azure AI Search), Microsoft.Extensions.AI adapters (IChatClient, IEmbeddingGenerator), extractive and LLM summarization, keyword/Naive Bayes/LLM categorization, and a RAG ingestion pipeline with a queryable knowledge base. Dibuat oleh Gravicode Studios, dipimpin oleh Kang Fadhil.</Description>
     <PackageTags>scrapy;rag;embeddings;vector-database;llm;ai;chunking;simhash;content-extraction;knowledge-base</PackageTags>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="System.Numerics.Tensors" Version="10.0.0" />
+    <PackageReference Include="Microsoft.Extensions.AI.Abstractions" Version="10.10.1" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="../ScrapyNet.Core/ScrapyNet.Core.csproj" />
+    <!-- PrivateAssets none: the [ScrapyItem] analyzer flows to anyone installing this package. -->
+    <ProjectReference Include="../ScrapyNet.Core/ScrapyNet.Core.csproj" PrivateAssets="none" />
   </ItemGroup>
 
   <ItemGroup>
