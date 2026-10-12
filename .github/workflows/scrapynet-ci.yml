@@ -39,9 +39,9 @@ jobs:
         os: [ubuntu-latest, windows-latest, macos-latest]
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v6
         with:
           global-json-file: ScrapyNet/global.json
 
@@ -60,7 +60,7 @@ jobs:
 
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: scrapynet-test-results-${{ matrix.os }}
           path: ScrapyNet/tests/ScrapyNet.Tests/bin/Release/net10.0/TestResults/*.trx
@@ -71,8 +71,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: build
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
         with:
           global-json-file: ScrapyNet/global.json
       # Offline notebooks only; 01 and 03 crawl public practice sites.
@@ -88,14 +88,14 @@ jobs:
     runs-on: ubuntu-latest
     needs: build
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
         with:
           global-json-file: ScrapyNet/global.json
       - name: Pack
         run: dotnet pack ScrapyNet.slnx -c Release -o artifacts
       - name: Upload packages
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: scrapynet-packages
           path: ScrapyNet/artifacts/*.nupkg
