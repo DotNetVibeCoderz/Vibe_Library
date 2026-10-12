@@ -196,7 +196,8 @@ public static class ContractRunner
         {
             var name = method.Name;
             var url = contracts.OfType<UrlAttribute>().First().Url;
-            if (!Uri.TryCreate(url, UriKind.Absolute, out _))
+            // HasScheme first: on Linux and macOS "/books/" parses as an absolute file:// URI.
+            if (!UrlUtils.HasScheme(url) || !Uri.TryCreate(url, UriKind.Absolute, out _))
                 url = baseUrl is null ? url : new Uri(new Uri(baseUrl), url).ToString();
 
             void Record(string check, ContractOutcome outcome, string? message = null)
