@@ -251,8 +251,9 @@ public static class Catalog
     /// </para>
     /// <para>
     /// A2C additionally uses a short horizon (γ = 0.9, λ = 0.9). Without a trust region its
-    /// gradient is noisy, and a shorter horizon is the cheapest way to cut that noise — measured on
-    /// Reacher, the difference between a policy that reaches the target and one that barely moves.
+    /// gradient is noisy, and a shorter horizon is the cheapest way to cut that noise — on Reacher
+    /// one seed reached -31 with it against -141 without. It remains seed-sensitive (-28 to -125
+    /// across six seeds); PPO is the dependable choice for continuous actions.
     /// </para>
     /// </remarks>
     public static IVectorContinuousAgent CreateVectorAgent(

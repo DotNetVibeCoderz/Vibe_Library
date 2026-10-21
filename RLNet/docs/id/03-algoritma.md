@@ -144,8 +144,10 @@ bukan setelah rollout 2048 langkah pertama selesai.
 **Pada aksi kontinu** (`ContinuousA2CAgent`) ia adalah algoritma paling sensitif di sini. Tanpa
 trust region, derau setiap rollout langsung masuk ke langkahnya, dan obatnya adalah horizon yang
 lebih pendek: `Catalog` memakai `Gamma = 0.9` dan `GaeLambda = 0.9` untuknya. Diukur di Reacher
-selama 200.000 langkah, itulah beda antara −31 dan −141, sementara lengan yang belum dilatih bernilai
-sekitar −220.
+selama 200.000 langkah, satu seed mencapai −31 dengan setelan itu dibanding −141 pada `Gamma = 0.99`,
+sementara lengan yang belum dilatih bernilai sekitar −200. Meski begitu ia peka terhadap seed: enam
+seed pada setelan katalog berakhir di mana saja antara −28 dan −125. Kalau hasil kontinu penting,
+pilih PPO.
 
 ## PPO
 

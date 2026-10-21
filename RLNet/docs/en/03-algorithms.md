@@ -140,7 +140,9 @@ visible within seconds in the console rather than after the first 2048-step roll
 **On continuous actions** (`ContinuousA2CAgent`) it is the most sensitive algorithm here. With no
 trust region, every rollout's noise goes straight into the step, and the cure is a shorter horizon:
 `Catalog` uses `Gamma = 0.9` and `GaeLambda = 0.9` for it. Measured on Reacher over 200,000 steps,
-that is the difference between −31 and −141, where an untrained arm scores about −220.
+one seed reached −31 at that setting against −141 at `Gamma = 0.99`, where an untrained arm scores
+about −200. Even so it is seed-sensitive: six seeds at the catalog setting ended anywhere from −28
+to −125. If continuous results matter, prefer PPO.
 
 ## PPO
 

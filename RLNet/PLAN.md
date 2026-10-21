@@ -66,7 +66,8 @@ Ordered by how much each one unblocks real use.
 2. 🔜 **Batched off-policy agents.** DQN, SAC and TD3 take one transition at a time; feeding them a
    `VectorEnvironment` would need per-copy n-step handling and a batched `SelectActions`. Worth it
    mainly for SAC on expensive environments.
-3. 🔜 **Continuous A2C robustness.** It needs γ = 0.9 to learn Reacher and 500k steps on Pendulum.
+3. 🔜 **Continuous A2C robustness.** It needs γ = 0.9 to learn Reacher, 500k steps on Pendulum,
+   and still ends anywhere from −28 to −125 on Reacher depending on the seed.
    Generalised state-dependent exploration (gSDE) is what the reference implementations use to fix
    that; evaluate it against the current fixed log-std.
 

@@ -61,7 +61,10 @@ See [PLAN.md](PLAN.md#phase-6--next-).
   `ExportParameters` already existed. What was missing was the resumable state (targets, Adam
   moments, RNG, counters), a file format, and validation.
 - Continuous PPO, catalog settings: Pendulum about −170 in 100k steps (~10 s), Reacher about −26 in
-  200k. Continuous A2C needs γ = 0.9: Reacher −31 vs −141 at γ = 0.99.
+  200k. Continuous A2C needs γ = 0.9 (one seed: Reacher −31 vs −141 at γ = 0.99) and is
+  seed-sensitive: −28 to −125 across six seeds. CI caught this — the first 0.2.0 tag failed the
+  learning test on macOS (−124) and Linux (−149) against a fixed −120 bar set from one lucky seed.
+  The test now requires improvement over the same agent untrained (≈ −200).
 - Measured, and written into the docs as found: batching across copies speeds PPO up only 10–13%
   (its update dominates) and A2C not at all; parallel stepping is ~6× slower on these environments.
   The docs recommend vector environments for sample decorrelation, not speed.
