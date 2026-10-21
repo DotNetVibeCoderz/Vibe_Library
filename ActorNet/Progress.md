@@ -205,6 +205,7 @@ works and something automated proves it** — not when the code exists.
 - [x] A tagged release: `ActorNet-v0.4.0` published all nine packages through the workflow,
       verified by installing `ActorNet` from nuget.org into a project that uses a generated proxy
 - [x] `ActorNet-v0.5.0`: ten packages, `ActorNet.Kubernetes` published for the first time
+- [x] `ActorNet-v0.5.1`: the same ten packages, now carrying an icon; no library code changed
 
 ---
 
