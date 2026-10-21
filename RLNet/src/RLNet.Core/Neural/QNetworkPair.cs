@@ -1,6 +1,7 @@
 // RLNet - Reinforcement Learning for .NET
 // Dibuat oleh Gravicode Studios, dipimpin oleh Kang Fadhil.
 
+using RLNet.Persistence;
 using RLNet.Utils;
 
 namespace RLNet.Neural;
@@ -28,7 +29,7 @@ namespace RLNet.Neural;
 /// agent has to differentiate through the rescaling.
 /// </para>
 /// </remarks>
-public sealed class QNetworkPair
+public sealed class QNetworkPair : ICheckpointable
 {
     private readonly MlpNetwork _q1;
     private readonly MlpNetwork _q2;
@@ -238,6 +239,27 @@ public sealed class QNetworkPair
     {
         _q1Target.SoftUpdateFrom(_q1, tau);
         _q2Target.SoftUpdateFrom(_q2, tau);
+    }
+
+    /// <summary>Writes all four critics and both optimisers.</summary>
+    public void WriteState(CheckpointWriter writer)
+    {
+        writer.Write("q1", _q1);
+        writer.Write("q2", _q2);
+        writer.Write("q1Target", _q1Target);
+        writer.Write("q2Target", _q2Target);
+        writer.Write("optimizer1", _optimizer1);
+        writer.Write("optimizer2", _optimizer2);
+    }
+
+    public void ReadState(CheckpointReader reader)
+    {
+        reader.Read("q1", _q1);
+        reader.Read("q2", _q2);
+        reader.Read("q1Target", _q1Target);
+        reader.Read("q2Target", _q2Target);
+        reader.Read("optimizer1", _optimizer1);
+        reader.Read("optimizer2", _optimizer2);
     }
 
     /// <summary>Copies both critics' parameters out.</summary>

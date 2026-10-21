@@ -2,6 +2,7 @@
 // Dibuat oleh Gravicode Studios, dipimpin oleh Kang Fadhil.
 
 using RLNet.Environments.MultiAgent;
+using RLNet.Persistence;
 
 namespace RLNet.Agents;
 
@@ -30,7 +31,7 @@ namespace RLNet.Agents;
 /// per wall-clock second — at the cost of every agent behaving identically.
 /// </para>
 /// </remarks>
-public sealed class IndependentLearners
+public sealed class IndependentLearners : ICheckpointable
 {
     private readonly IDiscreteAgent[] _agents;
     private readonly int[] _actions;
@@ -118,4 +119,27 @@ public sealed class IndependentLearners
     {
         foreach (var agent in _agents.Distinct()) agent.SetProgress(progress);
     }
+
+    /// <summary>
+    /// Writes each distinct agent once — a shared-parameter set is one agent, however many slots
+    /// it fills. Every agent must itself be <see cref="ICheckpointable"/>.
+    /// </summary>
+    public void WriteState(CheckpointWriter writer)
+    {
+        var distinct = _agents.Distinct().ToArray();
+        writer.Write("agents", distinct.Length);
+        for (int i = 0; i < distinct.Length; i++)
+            writer.WriteComponent("agent" + i, AsCheckpointable(distinct[i]));
+    }
+
+    public void ReadState(CheckpointReader reader)
+    {
+        var distinct = _agents.Distinct().ToArray();
+        for (int i = 0; i < distinct.Length; i++)
+            reader.ReadComponent("agent" + i, AsCheckpointable(distinct[i]));
+    }
+
+    private static ICheckpointable AsCheckpointable(IDiscreteAgent agent) =>
+        agent as ICheckpointable
+        ?? throw new NotSupportedException(agent.Name + " (" + agent.GetType().Name + ") does not support checkpoints.");
 }

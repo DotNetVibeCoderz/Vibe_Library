@@ -164,6 +164,76 @@ public static class Trainer
         return state.Build(learners.Agents[0].Metrics);
     }
 
+    /// <summary>Trains a batched discrete agent across several copies of an environment.</summary>
+    /// <remarks>
+    /// Episodes are counted per copy, so <see cref="TrainingOptions.MaxEpisodes"/> and the
+    /// solve threshold mean what they do for a single environment; <see cref="TrainingOptions.MaxSteps"/>
+    /// counts every copy's steps, so eight copies reach it eight times sooner in iterations.
+    /// </remarks>
+    public static TrainingReport Train(
+        DiscreteVectorEnvironment environment,
+        IVectorDiscreteAgent agent,
+        TrainingOptions? options = null)
+    {
+        var settings = options ?? new TrainingOptions();
+        var state = new RunState(settings);
+        var episodes = new VectorEpisodes(environment.Count);
+
+        var observations = new float[environment.Count * environment.ObservationSize];
+        var actions = new int[environment.Count];
+        environment.Reset(settings.Seed);
+
+        while (!state.ShouldFinish())
+        {
+            agent.SetProgress(state.Progress);
+
+            environment.Observations.CopyTo(observations);
+            agent.SelectActions(observations, actions);
+            environment.Step(actions);
+
+            agent.ObserveBatch(
+                observations, actions, environment.Rewards, environment.NextObservations,
+                environment.Terminated, environment.Truncated);
+
+            episodes.Record(environment, agent, state);
+        }
+
+        return state.Build(agent.Metrics);
+    }
+
+    /// <summary>Trains a batched continuous agent across several copies of an environment.</summary>
+    /// <remarks>Counts episodes and steps as the discrete overload does.</remarks>
+    public static TrainingReport Train(
+        ContinuousVectorEnvironment environment,
+        IVectorContinuousAgent agent,
+        TrainingOptions? options = null)
+    {
+        var settings = options ?? new TrainingOptions();
+        var state = new RunState(settings);
+        var episodes = new VectorEpisodes(environment.Count);
+
+        var observations = new float[environment.Count * environment.ObservationSize];
+        var actions = new float[environment.Count * environment.ActionSpace.FlatSize];
+        environment.Reset(settings.Seed);
+
+        while (!state.ShouldFinish())
+        {
+            agent.SetProgress(state.Progress);
+
+            environment.Observations.CopyTo(observations);
+            agent.SelectActions(observations, actions);
+            environment.Step(actions);
+
+            agent.ObserveBatch(
+                observations, actions, environment.Rewards, environment.NextObservations,
+                environment.Terminated, environment.Truncated);
+
+            episodes.Record(environment, agent, state);
+        }
+
+        return state.Build(agent.Metrics);
+    }
+
     /// <summary>
     /// Runs a trained discrete agent with exploration off and returns the mean return.
     /// </summary>
@@ -227,7 +297,40 @@ public static class Trainer
         return total / episodes;
     }
 
-    /// <summary>Bookkeeping shared by all three training loops.</summary>
+    /// <summary>Per-copy episode accumulators for the vector loops.</summary>
+    private sealed class VectorEpisodes(int count)
+    {
+        private readonly float[] _returns = new float[count];
+        private readonly int[] _lengths = new int[count];
+
+        public void Record(VectorEnvironment environment, IAgent agent, RunState state)
+        {
+            var rewards = environment.Rewards;
+            var terminated = environment.Terminated;
+            var truncated = environment.Truncated;
+
+            for (int i = 0; i < rewards.Length; i++)
+            {
+                _returns[i] += rewards[i];
+                _lengths[i]++;
+                state.CountSteps(1);
+
+                if (!terminated[i] && !truncated[i]) continue;
+
+                agent.OnEpisodeEnd();
+
+                // Several copies can finish on the same step. Once the run's episode budget or
+                // solve condition is met, the rest are not counted, so MaxEpisodes is exact.
+                if (!state.EpisodesExhausted)
+                    state.CompleteEpisode(terminated[i], agent.Metrics, _returns[i], _lengths[i]);
+
+                _returns[i] = 0f;
+                _lengths[i] = 0;
+            }
+        }
+    }
+
+    /// <summary>Bookkeeping shared by every training loop.</summary>
     private sealed class RunState(TrainingOptions options)
     {
         private readonly List<float> _returns = [];
@@ -250,6 +353,14 @@ public static class Trainer
             ? Math.Clamp(TotalSteps / (float)options.MaxSteps, 0f, 1f)
             : Math.Clamp(Episodes / (float)Math.Max(1, options.MaxEpisodes), 0f, 1f);
 
+        /// <summary>
+        /// Whether no further episode should be counted: stopped, solved, or out of episodes. Unlike
+        /// <see cref="ShouldFinish"/> it ignores the step limit, which the single-environment loop
+        /// also lets an episode finish on.
+        /// </summary>
+        public bool EpisodesExhausted =>
+            _stopped || Solved || (options.MaxSteps <= 0 && Episodes >= options.MaxEpisodes);
+
         public bool ShouldFinish()
         {
             if (_stopped || Solved) return true;
@@ -263,20 +374,30 @@ public static class Trainer
             TotalSteps++;
         }
 
+        /// <summary>Counts steps whose rewards the caller is accumulating itself.</summary>
+        public void CountSteps(int steps) => TotalSteps += steps;
+
         public void CompleteEpisode(bool terminated, AgentMetrics metrics)
         {
-            Episodes++;
-            _returns.Add(_episodeReturn);
-            BestReturn = MathF.Max(BestReturn, _episodeReturn);
+            CompleteEpisode(terminated, metrics, _episodeReturn, _episodeSteps);
+            _episodeReturn = 0f;
+            _episodeSteps = 0;
+        }
 
-            _window.Enqueue(_episodeReturn);
-            _windowSum += _episodeReturn;
+        public void CompleteEpisode(bool terminated, AgentMetrics metrics, float episodeReturn, int episodeSteps)
+        {
+            Episodes++;
+            _returns.Add(episodeReturn);
+            BestReturn = MathF.Max(BestReturn, episodeReturn);
+
+            _window.Enqueue(episodeReturn);
+            _windowSum += episodeReturn;
             if (_window.Count > options.WindowSize) _windowSum -= _window.Dequeue();
 
             float average = _windowSum / _window.Count;
 
             options.OnEpisode?.Invoke(new EpisodeReport(
-                Episodes, _episodeSteps, _episodeReturn, average, TotalSteps, terminated));
+                Episodes, episodeSteps, episodeReturn, average, TotalSteps, terminated));
 
             // The threshold is only meaningful once the window is full; a single lucky episode
             // early on would otherwise end the run and report it as solved.
@@ -289,9 +410,6 @@ public static class Trainer
             }
 
             if (options.ShouldStop?.Invoke() == true) _stopped = true;
-
-            _episodeReturn = 0f;
-            _episodeSteps = 0;
         }
 
         public TrainingReport Build(AgentMetrics metrics) => new()

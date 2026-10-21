@@ -106,6 +106,34 @@ public static class DemoPresets
                 },
                 seed: seed),
 
+            // Half the library's rollout, so the first update lands after five Pendulum episodes
+            // rather than ten. PPO is cheap per step here — no replay, no critics on every step —
+            // so the curve moves sooner than SAC's despite needing more steps overall.
+            Algorithm.Ppo => new ContinuousPpoAgent(
+                observationSpace, actionSpace,
+                new PpoOptions
+                {
+                    RolloutLength = 1_024,
+                    LearningRate = 1e-3f,
+                    EntropyCoefficient = 0f,
+                    NormalizeObservations = true,
+                    NormalizeRewards = true,
+                },
+                seed: seed),
+
+            Algorithm.A2C => new ContinuousA2CAgent(
+                observationSpace, actionSpace,
+                new A2COptions
+                {
+                    LearningRate = 1e-3f,
+                    Gamma = 0.9f,
+                    GaeLambda = 0.9f,
+                    EntropyCoefficient = 0f,
+                    NormalizeObservations = true,
+                    NormalizeRewards = true,
+                },
+                seed: seed),
+
             _ => throw new ArgumentOutOfRangeException(nameof(algorithm), algorithm, "Not a continuous algorithm."),
         };
 

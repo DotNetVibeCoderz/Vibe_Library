@@ -11,7 +11,8 @@ namespace RLNet.Neural;
 /// Single-threaded on purpose. A network small enough for classic control finishes a forward
 /// pass in a few microseconds, and the cost of waking thread-pool workers is larger than the
 /// work handed to them. Parallelism in RL belongs one level up — at the environment, where
-/// <c>VectorEnvironment</c> steps many copies at once — not inside a 64-wide layer.
+/// <see cref="Environments.VectorEnvironment"/> steps many copies at once and the agent batches
+/// them into one forward pass — not inside a 64-wide layer.
 /// </para>
 /// <para>
 /// The weight layout does the heavy lifting here. Weights are row-major <c>[inputSize,

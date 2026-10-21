@@ -1,11 +1,9 @@
 // RLNet - Reinforcement Learning for .NET
 // Dibuat oleh Gravicode Studios, dipimpin oleh Kang Fadhil.
 
-using RLNet.Buffers;
 using RLNet.Neural;
 using RLNet.Policies;
 using RLNet.Spaces;
-using RLNet.Utils;
 
 namespace RLNet.Agents;
 
@@ -38,6 +36,27 @@ public sealed class A2COptions
 
     /// <summary>Standardise advantages across the rollout.</summary>
     public bool NormalizeAdvantages { get; set; } = true;
+
+    /// <summary>
+    /// Standardise observations with running statistics before they reach either network.
+    /// The statistics are saved in the agent's checkpoint.
+    /// </summary>
+    public bool NormalizeObservations { get; set; }
+
+    /// <summary>Scale rewards by the running spread of the discounted return.</summary>
+    public bool NormalizeRewards { get; set; }
+
+    /// <summary>
+    /// Starting log standard deviation of the Gaussian policy, continuous actions only. 0 means a
+    /// spread of 1 on the unit action scale — wide enough to reach both bounds from the start.
+    /// </summary>
+    public float InitialLogStd { get; set; }
+
+    internal OnPolicySettings ToSettings() => new(
+        OnPolicyMethod.A2C, HiddenSizes, LearningRate, Gamma, GaeLambda, RolloutLength,
+        MinibatchSize: RolloutLength, Epochs: 1, ClipRange: 0f, ValueCoefficient, EntropyCoefficient,
+        MaxGradientNorm, NormalizeAdvantages, AnnealLearningRate: false, TargetKl: 0f,
+        NormalizeObservations, NormalizeRewards);
 }
 
 /// <summary>
@@ -53,183 +72,29 @@ public sealed class A2COptions
 /// </para>
 /// <para>
 /// It earns its place for two reasons. It is the shortest complete actor-critic in the library,
-/// so it is the one to read first; and its short rollout means it updates far more often than
+/// so it is the one to read first — the update is <c>OnPolicyLearner.UpdateA2C</c>, which shares
+/// everything else with PPO; and its short rollout means it updates far more often than
 /// PPO, which makes early learning visible within seconds in the visualizer rather than after
 /// the first 2048-step rollout completes.
 /// </para>
+/// <para>
+/// <see cref="ContinuousA2CAgent"/> is the same algorithm over a Gaussian policy.
+/// </para>
 /// </remarks>
-public sealed class A2CAgent : IDiscreteAgent
+public sealed class A2CAgent : DiscreteOnPolicyAgent
 {
-    private readonly A2COptions _options;
-    private readonly RolloutBuffer _rollout;
-    private readonly FastRandom _random;
-
-    private readonly MlpNetwork _actor;
-    private readonly MlpNetwork _critic;
-    private readonly AdamOptimizer _actorOptimizer;
-    private readonly AdamOptimizer _criticOptimizer;
-
-    private readonly int _actionCount;
-    private readonly int _observationSize;
-    private readonly float[] _probabilities;
-
-    private float _pendingLogProbability;
-    private float _pendingValue;
-
     public A2CAgent(
         Space observationSpace,
         DiscreteSpace actionSpace,
         A2COptions? options = null,
         int? seed = null,
         IComputeBackend? backend = null)
+        : base(new OnPolicyLearner(
+            (options ?? new A2COptions()).ToSettings(),
+            new CategoricalHead(actionSpace.Count),
+            observationSpace.FlatSize, seed, backend))
     {
-        _options = options ?? new A2COptions();
-        _random = seed.HasValue ? new FastRandom(seed.Value) : new FastRandom();
-
-        _observationSize = observationSpace.FlatSize;
-        _actionCount = actionSpace.Count;
-
-        _rollout = new RolloutBuffer(_options.RolloutLength, _observationSize, 1);
-
-        _actor = new MlpNetwork(
-            _observationSize, _options.HiddenSizes, _actionCount,
-            Activation.Tanh, Activation.Linear,
-            _options.RolloutLength, _random, outputScale: 0.01f, backend);
-
-        _critic = new MlpNetwork(
-            _observationSize, _options.HiddenSizes, 1,
-            Activation.Tanh, Activation.Linear,
-            _options.RolloutLength, _random, 1f, backend);
-
-        _actorOptimizer = new AdamOptimizer(
-            _actor.ParameterCount, _options.LearningRate, maxGradientNorm: _options.MaxGradientNorm);
-        _criticOptimizer = new AdamOptimizer(
-            _critic.ParameterCount, _options.LearningRate, maxGradientNorm: _options.MaxGradientNorm);
-
-        _probabilities = new float[_actionCount];
     }
 
-    public string Name => "A2C";
-    public AgentMetrics Metrics { get; } = new();
-
-    /// <summary>A2C runs at a constant learning rate; progress is not used.</summary>
-    public void SetProgress(float progress) { }
-
-    public int SelectAction(ReadOnlySpan<float> observation, bool deterministic = false)
-    {
-        var logits = _actor.Forward(observation);
-        int action = CategoricalPolicy.Sample(
-            logits, _probabilities, _random, deterministic, out _pendingLogProbability);
-
-        _pendingValue = _critic.Forward(observation)[0];
-        Metrics.Entropy = CategoricalPolicy.Entropy(_probabilities);
-
-        return action;
-    }
-
-    public void Observe(
-        ReadOnlySpan<float> observation,
-        int action,
-        float reward,
-        ReadOnlySpan<float> nextObservation,
-        bool terminated,
-        bool truncated)
-    {
-        float bootstrap = truncated ? _critic.Forward(nextObservation)[0] : 0f;
-
-        _rollout.AddDiscrete(
-            observation, action, _pendingLogProbability, _pendingValue,
-            reward, terminated, truncated, bootstrap);
-
-        Metrics.StepCount++;
-
-        if (_rollout.IsFull)
-        {
-            bool episodeContinues = !terminated && !truncated;
-            float lastValue = episodeContinues ? _critic.Forward(nextObservation)[0] : 0f;
-            Update(lastValue);
-        }
-    }
-
-    public void OnEpisodeEnd() { }
-
-    private void Update(float lastValue)
-    {
-        _rollout.ComputeAdvantages(lastValue, _options.Gamma, _options.GaeLambda);
-        if (_options.NormalizeAdvantages) _rollout.NormalizeAdvantages();
-
-        int n = _rollout.Count;
-
-        // The whole rollout is one batch — there is no minibatching, because with a single pass
-        // over the data there is nothing to gain from splitting it.
-        _rollout.Observations.AsSpan(0, n * _observationSize).CopyTo(_actor.InputBuffer(n));
-        _rollout.Observations.AsSpan(0, n * _observationSize).CopyTo(_critic.InputBuffer(n));
-
-        // --- Actor ---------------------------------------------------------------------------
-
-        var logits = _actor.Forward(n);
-        var actorGradient = _actor.OutputGradientBuffer(n);
-        actorGradient.Clear();
-
-        float policyLoss = 0f, entropyTotal = 0f;
-
-        for (int i = 0; i < n; i++)
-        {
-            int action = (int)_rollout.Actions[i];
-            float advantage = _rollout.Advantages[i];
-
-            logits.Slice(i * _actionCount, _actionCount).CopyTo(_probabilities);
-            SimdOps.SoftmaxInPlace(_probabilities);
-
-            float logProbability = MathF.Log(MathF.Max(_probabilities[action], 1e-8f));
-            policyLoss += -logProbability * advantage;
-
-            // The plain policy gradient: no ratio, no clipping. The data came from exactly this
-            // policy, so the importance weight is 1 by construction.
-            CategoricalPolicy.AccumulateLogProbabilityGradient(
-                actorGradient.Slice(i * _actionCount, _actionCount),
-                _probabilities, action, -advantage / n);
-
-            float entropy = CategoricalPolicy.Entropy(_probabilities);
-            entropyTotal += entropy;
-
-            CategoricalPolicy.AccumulateEntropyGradient(
-                actorGradient.Slice(i * _actionCount, _actionCount),
-                _probabilities, entropy, _options.EntropyCoefficient / n);
-        }
-
-        _actor.ZeroGradients();
-        _actor.Backward(n);
-        _actor.ApplyGradients(_actorOptimizer);
-
-        // --- Critic --------------------------------------------------------------------------
-
-        var values = _critic.Forward(n);
-        var criticGradient = _critic.OutputGradientBuffer(n);
-
-        float valueLoss = 0f;
-        for (int i = 0; i < n; i++)
-        {
-            float error = values[i] - _rollout.Returns[i];
-            valueLoss += 0.5f * error * error;
-            criticGradient[i] = _options.ValueCoefficient * error / n;
-        }
-
-        _critic.ZeroGradients();
-        _critic.Backward(n);
-        _critic.ApplyGradients(_criticOptimizer);
-
-        Metrics.PolicyLoss = policyLoss / n;
-        Metrics.ValueLoss = valueLoss / n;
-        Metrics.Entropy = entropyTotal / n;
-        Metrics.UpdateCount++;
-
-        _rollout.Clear();
-    }
-
-    /// <summary>Copies the actor's parameters out, for saving a trained policy.</summary>
-    public float[] ExportParameters() => _actor.ExportParameters();
-
-    /// <summary>Loads actor parameters.</summary>
-    public void ImportParameters(ReadOnlySpan<float> parameters) => _actor.ImportParameters(parameters);
+    public override string Name => "A2C";
 }

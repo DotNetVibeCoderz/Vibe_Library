@@ -34,10 +34,10 @@ public enum Algorithm
     /// <summary>Deep Q-Network with double and dueling heads.</summary>
     Dqn,
 
-    /// <summary>Advantage Actor-Critic.</summary>
+    /// <summary>Advantage Actor-Critic. Discrete or continuous actions.</summary>
     A2C,
 
-    /// <summary>Proximal Policy Optimization.</summary>
+    /// <summary>Proximal Policy Optimization. Discrete or continuous actions.</summary>
     Ppo,
 
     /// <summary>Soft Actor-Critic. Continuous actions only.</summary>
@@ -81,7 +81,7 @@ public static class Catalog
         [Algorithm.Dqn, Algorithm.Ppo, Algorithm.A2C, Algorithm.QLearning];
 
     private static readonly Algorithm[] ContinuousAlgorithms =
-        [Algorithm.Sac, Algorithm.Td3];
+        [Algorithm.Sac, Algorithm.Td3, Algorithm.Ppo, Algorithm.A2C];
 
     private static readonly EnvironmentEntry[] Entries =
     [
@@ -161,6 +161,17 @@ public static class Catalog
         Find(name).Create() as IContinuousEnvironment
         ?? throw new ArgumentException($"'{name}' is not a continuous single-agent environment.", nameof(name));
 
+    /// <summary>
+    /// Creates <paramref name="count"/> copies of a discrete environment, stepped together, for
+    /// training a batched agent from <see cref="CreateVectorAgent(Algorithm, Space, DiscreteSpace, int?, IComputeBackend?)"/>.
+    /// </summary>
+    public static DiscreteVectorEnvironment CreateDiscreteVector(string name, int count, bool parallel = false) =>
+        new(() => CreateDiscrete(name), count, parallel);
+
+    /// <summary>Creates <paramref name="count"/> copies of a continuous environment, stepped together.</summary>
+    public static ContinuousVectorEnvironment CreateContinuousVector(string name, int count, bool parallel = false) =>
+        new(() => CreateContinuous(name), count, parallel);
+
     /// <summary>Creates a multi-agent environment by name.</summary>
     public static IMultiAgentEnvironment CreateMultiAgent(string name) =>
         Find(name).Create() as IMultiAgentEnvironment
@@ -187,8 +198,7 @@ public static class Catalog
                 seed: seed),
 
             Algorithm.Dqn => new DqnAgent(observationSpace, actionSpace, seed: seed, backend: backend),
-            Algorithm.Ppo => new PpoAgent(observationSpace, actionSpace, seed: seed, backend: backend),
-            Algorithm.A2C => new A2CAgent(observationSpace, actionSpace, seed: seed, backend: backend),
+            Algorithm.Ppo or Algorithm.A2C => CreateVectorAgent(algorithm, observationSpace, actionSpace, seed, backend),
 
             Algorithm.Sac or Algorithm.Td3 => throw new ArgumentException(
                 $"{algorithm} is a continuous-action algorithm; use the continuous overload.", nameof(algorithm)),
@@ -206,9 +216,78 @@ public static class Catalog
         {
             Algorithm.Sac => new SacAgent(observationSpace, actionSpace, seed: seed, backend: backend),
             Algorithm.Td3 => new Td3Agent(observationSpace, actionSpace, seed: seed, backend: backend),
+            Algorithm.Ppo or Algorithm.A2C => CreateVectorAgent(algorithm, observationSpace, actionSpace, seed, backend),
 
             _ => throw new ArgumentException(
                 $"{algorithm} is a discrete-action algorithm; use the discrete overload.", nameof(algorithm)),
+        };
+
+    /// <summary>
+    /// Builds a batched discrete agent — PPO or A2C — for a <see cref="DiscreteVectorEnvironment"/>.
+    /// It is also an ordinary <see cref="IDiscreteAgent"/>, so it evaluates on a single copy.
+    /// </summary>
+    public static IVectorDiscreteAgent CreateVectorAgent(
+        Algorithm algorithm,
+        Space observationSpace,
+        DiscreteSpace actionSpace,
+        int? seed = null,
+        IComputeBackend? backend = null) => algorithm switch
+        {
+            Algorithm.Ppo => new PpoAgent(observationSpace, actionSpace, seed: seed, backend: backend),
+            Algorithm.A2C => new A2CAgent(observationSpace, actionSpace, seed: seed, backend: backend),
+
+            _ => throw new ArgumentException(
+                $"{algorithm} learns off-policy from a replay buffer and is not batched; only PPO and A2C are.", nameof(algorithm)),
+        };
+
+    /// <summary>
+    /// Builds a batched continuous agent — PPO or A2C — for a <see cref="ContinuousVectorEnvironment"/>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Both normalise observations and rewards and drop the entropy bonus, which is what continuous
+    /// control needs from them: a Gaussian policy already explores through its spread, and reward
+    /// scales here range from Reacher's fractions to Pendulum's -16 per step.
+    /// </para>
+    /// <para>
+    /// A2C additionally uses a short horizon (γ = 0.9, λ = 0.9). Without a trust region its
+    /// gradient is noisy, and a shorter horizon is the cheapest way to cut that noise — measured on
+    /// Reacher, the difference between a policy that reaches the target and one that barely moves.
+    /// </para>
+    /// </remarks>
+    public static IVectorContinuousAgent CreateVectorAgent(
+        Algorithm algorithm,
+        Space observationSpace,
+        BoxSpace actionSpace,
+        int? seed = null,
+        IComputeBackend? backend = null) => algorithm switch
+        {
+            Algorithm.Ppo => new ContinuousPpoAgent(
+                observationSpace, actionSpace,
+                new PpoOptions
+                {
+                    LearningRate = 1e-3f,
+                    EntropyCoefficient = 0f,
+                    NormalizeObservations = true,
+                    NormalizeRewards = true,
+                },
+                seed, backend),
+
+            Algorithm.A2C => new ContinuousA2CAgent(
+                observationSpace, actionSpace,
+                new A2COptions
+                {
+                    LearningRate = 1e-3f,
+                    Gamma = 0.9f,
+                    GaeLambda = 0.9f,
+                    EntropyCoefficient = 0f,
+                    NormalizeObservations = true,
+                    NormalizeRewards = true,
+                },
+                seed, backend),
+
+            _ => throw new ArgumentException(
+                $"{algorithm} has no batched continuous form; only PPO and A2C do.", nameof(algorithm)),
         };
 
     /// <summary>

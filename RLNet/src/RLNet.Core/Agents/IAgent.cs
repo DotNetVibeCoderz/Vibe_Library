@@ -104,3 +104,45 @@ public interface IContinuousAgent : IAgent
         bool terminated,
         bool truncated);
 }
+
+/// <summary>
+/// A discrete agent that can act for several environments at once, with one network pass per
+/// step for all of them. Implemented by the on-policy agents; see <see cref="Environments.VectorEnvironment"/>.
+/// </summary>
+public interface IVectorDiscreteAgent : IDiscreteAgent
+{
+    /// <summary>Chooses one action per observation. <paramref name="observations"/> is <c>[count, observationSize]</c>.</summary>
+    void SelectActions(ReadOnlySpan<float> observations, Span<int> actions, bool deterministic = false);
+
+    /// <summary>Hands the agent one transition per environment, in the same order.</summary>
+    /// <param name="nextObservations">
+    /// The state each transition led to, before any automatic reset; see
+    /// <see cref="Environments.VectorEnvironment.NextObservations"/>.
+    /// </param>
+    void ObserveBatch(
+        ReadOnlySpan<float> observations,
+        ReadOnlySpan<int> actions,
+        ReadOnlySpan<float> rewards,
+        ReadOnlySpan<float> nextObservations,
+        ReadOnlySpan<bool> terminated,
+        ReadOnlySpan<bool> truncated);
+}
+
+/// <summary>Continuous counterpart of <see cref="IVectorDiscreteAgent"/>.</summary>
+public interface IVectorContinuousAgent : IContinuousAgent
+{
+    /// <summary>
+    /// Writes one action per observation into <paramref name="actions"/>, <c>[count, actionSize]</c>,
+    /// already scaled to the environment's bounds.
+    /// </summary>
+    void SelectActions(ReadOnlySpan<float> observations, Span<float> actions, bool deterministic = false);
+
+    /// <summary>Hands the agent one transition per environment, in the same order.</summary>
+    void ObserveBatch(
+        ReadOnlySpan<float> observations,
+        ReadOnlySpan<float> actions,
+        ReadOnlySpan<float> rewards,
+        ReadOnlySpan<float> nextObservations,
+        ReadOnlySpan<bool> terminated,
+        ReadOnlySpan<bool> truncated);
+}

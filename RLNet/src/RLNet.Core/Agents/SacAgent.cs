@@ -3,6 +3,7 @@
 
 using RLNet.Buffers;
 using RLNet.Neural;
+using RLNet.Persistence;
 using RLNet.Spaces;
 using RLNet.Utils;
 
@@ -82,7 +83,7 @@ public sealed class SacOptions
 /// to differentiate through it.
 /// </para>
 /// </remarks>
-public sealed class SacAgent : IContinuousAgent
+public sealed class SacAgent : IContinuousAgent, ICheckpointable
 {
     private const float LogStdMin = -20f;
     private const float LogStdMax = 2f;
@@ -413,4 +414,40 @@ public sealed class SacAgent : IContinuousAgent
 
     /// <summary>Loads actor parameters.</summary>
     public void ImportParameters(ReadOnlySpan<float> parameters) => _actor.ImportParameters(parameters);
+
+    /// <summary>
+    /// Writes the actor, all four critics, every optimiser, the learned temperature and the
+    /// generator. The replay buffer is not saved.
+    /// </summary>
+    public void WriteState(CheckpointWriter writer)
+    {
+        writer.Write("actor", _actor);
+        writer.Write("actorOptimizer", _actorOptimizer);
+        writer.WriteComponent("critics", _critics);
+        writer.Write("random", _random);
+        writer.Write("temperature", [_logTemperature, _logTemperatureMoment1, _logTemperatureMoment2]);
+        writer.Write("temperatureStep", _temperatureStep);
+        writer.Write("stepsSinceTrain", _stepsSinceTrain);
+        writer.Write("steps", Metrics.StepCount);
+        writer.Write("updates", Metrics.UpdateCount);
+    }
+
+    public void ReadState(CheckpointReader reader)
+    {
+        reader.Read("actor", _actor);
+        reader.Read("actorOptimizer", _actorOptimizer);
+        reader.ReadComponent("critics", _critics);
+        reader.Read("random", _random);
+
+        Span<float> temperature = stackalloc float[3];
+        reader.Read("temperature", temperature);
+        _logTemperature = temperature[0];
+        _logTemperatureMoment1 = temperature[1];
+        _logTemperatureMoment2 = temperature[2];
+        _temperatureStep = (int)reader.ReadInt64("temperatureStep");
+
+        _stepsSinceTrain = (int)reader.ReadInt64("stepsSinceTrain");
+        Metrics.StepCount = reader.ReadInt64("steps");
+        Metrics.UpdateCount = reader.ReadInt64("updates");
+    }
 }

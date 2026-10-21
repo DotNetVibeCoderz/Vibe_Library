@@ -2,6 +2,7 @@
 // Dibuat oleh Gravicode Studios, dipimpin oleh Kang Fadhil.
 
 using RLNet.Agents;
+using RLNet.Environments;
 using RLNet.Environments.Classic;
 using RLNet.Environments.Control;
 using RLNet.Environments.MultiAgent;
@@ -138,6 +139,52 @@ public class LearningTests
 
         float score = Trainer.Evaluate(environment, agent, episodes: 5, seed: 904);
         Assert.True(score > -900f, $"TD3 scored {score:F1} on Pendulum, expected above -900.");
+    }
+
+    [Fact]
+    public void ContinuousPpo_LearnsPendulum()
+    {
+        // The catalog's configuration, across four copies. A full run reaches about -200; -600
+        // is far below that and far above the -1200 of a policy that never swings up.
+        var environment = Catalog.CreateContinuousVector("Pendulum", 4);
+        var agent = Catalog.CreateVectorAgent(Algorithm.Ppo, environment.ObservationSpace, environment.ActionSpace, seed: 21);
+
+        Trainer.Train(environment, agent,
+            new TrainingOptions { MaxSteps = 100_000, MaxEpisodes = int.MaxValue, Seed = 21 });
+
+        float score = Trainer.Evaluate(new PendulumEnvironment(), agent, episodes: 5, seed: 906);
+        Assert.True(score > -600f, $"Continuous PPO scored {score:F1} on Pendulum, expected above -600.");
+    }
+
+    [Fact]
+    public void ContinuousA2C_LearnsReacher()
+    {
+        // An untrained arm scores about -220 on Reacher; the catalog's A2C reaches the -30s.
+        var environment = new ReacherEnvironment();
+        var agent = Catalog.CreateVectorAgent(Algorithm.A2C, environment.ObservationSpace, environment.ActionSpace, seed: 23);
+
+        Trainer.Train(environment, agent,
+            new TrainingOptions { MaxSteps = 200_000, MaxEpisodes = int.MaxValue, Seed = 23 });
+
+        float score = Trainer.Evaluate(environment, agent, episodes: 5, seed: 907);
+        Assert.True(score > -120f, $"Continuous A2C scored {score:F1} on Reacher, expected above -120.");
+    }
+
+    [Fact]
+    public void VectorPpo_LearnsCartPole()
+    {
+        // Same budget and threshold as the single-environment PPO test, spread over eight copies.
+        var environment = new DiscreteVectorEnvironment(() => new CartPoleEnvironment(), 8);
+        var agent = new PpoAgent(
+            environment.ObservationSpace, environment.ActionSpace,
+            new PpoOptions { RolloutLength = 1_024, Epochs = 10, LearningRate = 3e-4f },
+            seed: 25);
+
+        Trainer.Train(environment, agent,
+            new TrainingOptions { MaxSteps = 60_000, MaxEpisodes = int.MaxValue, Seed = 25 });
+
+        float score = Trainer.Evaluate(new CartPoleEnvironment(), agent, episodes: 10, seed: 908);
+        Assert.True(score > 150f, $"Vector PPO scored {score:F1} on CartPole, expected above 150.");
     }
 
     [Fact]

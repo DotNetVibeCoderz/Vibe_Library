@@ -52,6 +52,37 @@ public sealed class FastRandom
         _hasSpareGaussian = false;
     }
 
+    /// <summary>
+    /// Copies the generator's full state out, so a checkpoint can resume the exact same stream.
+    /// </summary>
+    /// <remarks>
+    /// Includes the cached Gaussian: dropping it would shift every later normal draw by one and
+    /// a resumed run would diverge from an uninterrupted one at the first exploration step.
+    /// </remarks>
+    internal void ExportState(Span<long> destination)
+    {
+        destination[0] = (long)_s0;
+        destination[1] = (long)_s1;
+        destination[2] = (long)_s2;
+        destination[3] = (long)_s3;
+        destination[4] = _hasSpareGaussian ? 1 : 0;
+        destination[5] = BitConverter.SingleToInt32Bits(_spareGaussian);
+    }
+
+    /// <summary>Restores a state written by <see cref="ExportState"/>.</summary>
+    internal void ImportState(ReadOnlySpan<long> source)
+    {
+        _s0 = (ulong)source[0];
+        _s1 = (ulong)source[1];
+        _s2 = (ulong)source[2];
+        _s3 = (ulong)source[3];
+        _hasSpareGaussian = source[4] != 0;
+        _spareGaussian = BitConverter.Int32BitsToSingle((int)source[5]);
+    }
+
+    /// <summary>Length of the array <see cref="ExportState"/> fills.</summary>
+    internal const int StateLength = 6;
+
     private static ulong SplitMix(ref ulong x)
     {
         ulong z = x += 0x9E3779B97F4A7C15UL;

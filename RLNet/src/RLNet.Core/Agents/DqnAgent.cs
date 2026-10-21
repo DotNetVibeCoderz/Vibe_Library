@@ -3,6 +3,7 @@
 
 using RLNet.Buffers;
 using RLNet.Neural;
+using RLNet.Persistence;
 using RLNet.Spaces;
 using RLNet.Utils;
 
@@ -78,7 +79,7 @@ public sealed class DqnOptions
 /// makes the regression stationary enough to converge.
 /// </para>
 /// </remarks>
-public sealed class DqnAgent : IDiscreteAgent
+public sealed class DqnAgent : IDiscreteAgent, ICheckpointable
 {
     private readonly DqnOptions _options;
     private readonly IReplayBuffer _buffer;
@@ -379,5 +380,36 @@ public sealed class DqnAgent : IDiscreteAgent
     {
         _online.ImportParameters(parameters);
         _target.CopyFrom(_online);
+    }
+
+    /// <summary>
+    /// Writes the online and target networks, optimiser, generator and schedule position. The
+    /// replay buffer is not saved: a resumed agent refills it, and waits
+    /// <see cref="DqnOptions.LearningStarts"/> transitions before training again.
+    /// </summary>
+    public void WriteState(CheckpointWriter writer)
+    {
+        writer.Write("online", _online);
+        writer.Write("target", _target);
+        writer.Write("optimizer", _optimizer);
+        writer.Write("random", _random);
+        writer.Write("progress", _progress);
+        writer.Write("stepsSinceTrain", _stepsSinceTrain);
+        writer.Write("updatesSinceSync", _updatesSinceSync);
+        writer.Write("steps", Metrics.StepCount);
+        writer.Write("updates", Metrics.UpdateCount);
+    }
+
+    public void ReadState(CheckpointReader reader)
+    {
+        reader.Read("online", _online);
+        reader.Read("target", _target);
+        reader.Read("optimizer", _optimizer);
+        reader.Read("random", _random);
+        _stepsSinceTrain = (int)reader.ReadInt64("stepsSinceTrain");
+        _updatesSinceSync = (int)reader.ReadInt64("updatesSinceSync");
+        Metrics.StepCount = reader.ReadInt64("steps");
+        Metrics.UpdateCount = reader.ReadInt64("updates");
+        SetProgress(reader.ReadSingle("progress"));
     }
 }

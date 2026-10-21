@@ -21,14 +21,29 @@ namespace RLNet.Buffers;
 /// log-probability has to be frozen when the action was taken; recomputing it later would make
 /// every ratio identically 1 and silently turn PPO into vanilla policy gradient.
 /// </para>
+/// <para>
+/// With several environments stepping in parallel the buffer holds one <em>stream</em> per
+/// environment, interleaved time-major: slot <c>t · Streams + s</c> is environment <c>s</c> at
+/// step <c>t</c>. Advantages are computed down each stream separately — a trajectory's next state
+/// is its own next step, never the neighbouring environment's.
+/// </para>
 /// </remarks>
 public sealed class RolloutBuffer
 {
     private int _count;
 
-    public RolloutBuffer(int capacity, int observationSize, int actionSize)
+    /// <param name="streams">
+    /// Number of environments feeding the buffer. <paramref name="capacity"/> must be a multiple
+    /// of it, since every step adds one transition per stream.
+    /// </param>
+    public RolloutBuffer(int capacity, int observationSize, int actionSize, int streams = 1)
     {
+        ArgumentOutOfRangeException.ThrowIfLessThan(streams, 1);
+        if (capacity % streams != 0)
+            throw new ArgumentException($"Capacity {capacity} is not a multiple of {streams} streams.", nameof(capacity));
+
         Capacity = capacity;
+        Streams = streams;
         ObservationSize = observationSize;
         ActionSize = actionSize;
 
@@ -46,6 +61,9 @@ public sealed class RolloutBuffer
 
     public int Capacity { get; }
     public int Count => _count;
+
+    /// <summary>Number of interleaved environment streams.</summary>
+    public int Streams { get; }
     public int ObservationSize { get; }
     public int ActionSize { get; }
 
@@ -63,10 +81,10 @@ public sealed class RolloutBuffer
 
     public float[] Rewards { get; }
 
-    /// <summary>GAE advantages, valid after <see cref="ComputeAdvantages"/>.</summary>
+    /// <summary>GAE advantages, valid after <see cref="ComputeAdvantages(float, float, float)"/>.</summary>
     public float[] Advantages { get; }
 
-    /// <summary>Value targets, valid after <see cref="ComputeAdvantages"/>.</summary>
+    /// <summary>Value targets, valid after <see cref="ComputeAdvantages(float, float, float)"/>.</summary>
     public float[] Returns { get; }
 
     public bool[] Terminated { get; }
@@ -141,32 +159,50 @@ public sealed class RolloutBuffer
     /// At 1 it is the full Monte-Carlo return — unbiased, high variance. 0.95 is the usual
     /// compromise and what both PPO and A2C default to here.
     /// </param>
-    public void ComputeAdvantages(float lastValue, float gamma, float lambda)
+    public void ComputeAdvantages(float lastValue, float gamma, float lambda) =>
+        ComputeAdvantages([lastValue], gamma, lambda);
+
+    /// <summary>Multi-stream form of <see cref="ComputeAdvantages(float, float, float)"/>.</summary>
+    /// <param name="lastValues">One bootstrap value per stream, for the state that stream stopped at.</param>
+    public void ComputeAdvantages(ReadOnlySpan<float> lastValues, float gamma, float lambda)
     {
-        float runningAdvantage = 0f;
+        if (lastValues.Length != Streams)
+            throw new ArgumentException($"Expected {Streams} last values, got {lastValues.Length}.", nameof(lastValues));
+        if (_count % Streams != 0)
+            throw new InvalidOperationException("Every stream must hold the same number of steps.");
 
-        for (int t = _count - 1; t >= 0; t--)
+        int steps = _count / Streams;
+
+        for (int stream = 0; stream < Streams; stream++)
         {
-            // Two distinct questions, and conflating them is the classic GAE bug:
-            //   what is the value of the next state?  -> zero only for a REAL terminal state
-            //   does the advantage chain continue?    -> no, for termination OR truncation
-            float nextValue;
-            if (Terminated[t]) nextValue = 0f;
-            else if (Truncated[t]) nextValue = BootstrapValues[t];
-            else nextValue = t == _count - 1 ? lastValue : Values[t + 1];
+            float runningAdvantage = 0f;
 
-            bool chainBroken = Terminated[t] || Truncated[t] || t == _count - 1;
-            float nextAdvantage = chainBroken ? 0f : runningAdvantage;
+            for (int step = steps - 1; step >= 0; step--)
+            {
+                int t = step * Streams + stream;
+                bool last = step == steps - 1;
 
-            float delta = Rewards[t] + gamma * nextValue - Values[t];
-            runningAdvantage = delta + gamma * lambda * nextAdvantage;
+                // Two distinct questions, and conflating them is the classic GAE bug:
+                //   what is the value of the next state?  -> zero only for a REAL terminal state
+                //   does the advantage chain continue?    -> no, for termination OR truncation
+                float nextValue;
+                if (Terminated[t]) nextValue = 0f;
+                else if (Truncated[t]) nextValue = BootstrapValues[t];
+                else nextValue = last ? lastValues[stream] : Values[t + Streams];
 
-            Advantages[t] = runningAdvantage;
+                bool chainBroken = Terminated[t] || Truncated[t] || last;
+                float nextAdvantage = chainBroken ? 0f : runningAdvantage;
 
-            // The value target is the advantage put back on top of the old estimate, which is
-            // the lambda-return. Regressing the critic on this rather than on the raw discounted
-            // return inherits GAE's variance reduction.
-            Returns[t] = runningAdvantage + Values[t];
+                float delta = Rewards[t] + gamma * nextValue - Values[t];
+                runningAdvantage = delta + gamma * lambda * nextAdvantage;
+
+                Advantages[t] = runningAdvantage;
+
+                // The value target is the advantage put back on top of the old estimate, which is
+                // the lambda-return. Regressing the critic on this rather than on the raw discounted
+                // return inherits GAE's variance reduction.
+                Returns[t] = runningAdvantage + Values[t];
+            }
         }
     }
 

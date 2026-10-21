@@ -1,6 +1,7 @@
 // RLNet - Reinforcement Learning for .NET
 // Dibuat oleh Gravicode Studios, dipimpin oleh Kang Fadhil.
 
+using RLNet.Persistence;
 using RLNet.Spaces;
 using RLNet.Utils;
 
@@ -48,7 +49,7 @@ public sealed class QTableOptions
 /// then on CartPole makes the trade-off concrete in a way no explanation does.
 /// </para>
 /// </remarks>
-public sealed class QTableAgent : IDiscreteAgent
+public sealed class QTableAgent : IDiscreteAgent, ICheckpointable
 {
     private readonly Dictionary<long, float[]> _table = [];
     private readonly StateKeyEncoder _encoder;
@@ -151,4 +152,51 @@ public sealed class QTableAgent : IDiscreteAgent
 
     /// <summary>Empties the table.</summary>
     public void Clear() => _table.Clear();
+
+    /// <summary>
+    /// Writes every table row with its state key. The <see cref="StateKeyEncoder"/> is code, not
+    /// data, and is not saved: load into an agent built with the same encoder, or the keys will
+    /// name different states.
+    /// </summary>
+    public void WriteState(CheckpointWriter writer)
+    {
+        var keys = new long[_table.Count];
+        var values = new float[_table.Count * _actionCount];
+        int row = 0;
+        foreach (var (key, rowValues) in _table)
+        {
+            keys[row] = key;
+            rowValues.CopyTo(values, row * _actionCount);
+            row++;
+        }
+
+        writer.Write("actions", _actionCount);
+        writer.WriteVariable("keys", keys);
+        writer.WriteVariable("values", values);
+        writer.Write("random", _random);
+        writer.Write("progress", _progress);
+        writer.Write("steps", Metrics.StepCount);
+        writer.Write("updates", Metrics.UpdateCount);
+    }
+
+    public void ReadState(CheckpointReader reader)
+    {
+        if (reader.ReadInt64("actions") != _actionCount)
+            throw new InvalidDataException("Checkpoint Q-table was saved for a different number of actions.");
+
+        var keys = reader.ReadInt64s("keys");
+        var values = reader.ReadSingles("values");
+        if (values.Length != keys.Length * _actionCount)
+            throw new InvalidDataException(
+                $"Checkpoint Q-table has {values.Length} values for {keys.Length} states; expected {keys.Length * _actionCount}.");
+
+        _table.Clear();
+        for (int row = 0; row < keys.Length; row++)
+            _table[keys[row]] = values.AsSpan(row * _actionCount, _actionCount).ToArray();
+
+        reader.Read("random", _random);
+        _progress = reader.ReadSingle("progress");
+        Metrics.StepCount = reader.ReadInt64("steps");
+        Metrics.UpdateCount = reader.ReadInt64("updates");
+    }
 }

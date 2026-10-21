@@ -3,6 +3,7 @@
 
 using RLNet.Buffers;
 using RLNet.Neural;
+using RLNet.Persistence;
 using RLNet.Spaces;
 using RLNet.Utils;
 
@@ -70,7 +71,7 @@ public sealed class Td3Options
 /// stronger of the two once tuned, and SAC is far more likely to work on the first attempt.
 /// </para>
 /// </remarks>
-public sealed class Td3Agent : IContinuousAgent
+public sealed class Td3Agent : IContinuousAgent, ICheckpointable
 {
     private readonly Td3Options _options;
     private readonly BoxSpace _actionSpace;
@@ -288,5 +289,35 @@ public sealed class Td3Agent : IContinuousAgent
     {
         _actor.ImportParameters(parameters);
         _actorTarget.CopyFrom(_actor);
+    }
+
+    /// <summary>
+    /// Writes the actor and its target, all four critics, every optimiser and the generator.
+    /// The replay buffer is not saved.
+    /// </summary>
+    public void WriteState(CheckpointWriter writer)
+    {
+        writer.Write("actor", _actor);
+        writer.Write("actorTarget", _actorTarget);
+        writer.Write("actorOptimizer", _actorOptimizer);
+        writer.WriteComponent("critics", _critics);
+        writer.Write("random", _random);
+        writer.Write("stepsSinceTrain", _stepsSinceTrain);
+        writer.Write("updatesSinceActor", _updatesSinceActor);
+        writer.Write("steps", Metrics.StepCount);
+        writer.Write("updates", Metrics.UpdateCount);
+    }
+
+    public void ReadState(CheckpointReader reader)
+    {
+        reader.Read("actor", _actor);
+        reader.Read("actorTarget", _actorTarget);
+        reader.Read("actorOptimizer", _actorOptimizer);
+        reader.ReadComponent("critics", _critics);
+        reader.Read("random", _random);
+        _stepsSinceTrain = (int)reader.ReadInt64("stepsSinceTrain");
+        _updatesSinceActor = (int)reader.ReadInt64("updatesSinceActor");
+        Metrics.StepCount = reader.ReadInt64("steps");
+        Metrics.UpdateCount = reader.ReadInt64("updates");
     }
 }

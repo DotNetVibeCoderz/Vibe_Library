@@ -156,6 +156,16 @@ public sealed class AdamOptimizer
         }
     }
 
+    /// <summary>Number of parameters this optimiser tracks.</summary>
+    public int ParameterCount => _m.Length;
+
+    // Exposed to the checkpoint code only. Resuming training without the moments restarts Adam
+    // with zero estimates and a step counter of 0, whose bias correction then takes full-size
+    // steps for the first few hundred updates - enough to visibly knock a trained policy back.
+    internal float[] FirstMoments => _m;
+    internal float[] SecondMoments => _v;
+    internal int StepCount { get => _step; set => _step = value; }
+
     /// <summary>Resets both moment estimates and the step counter.</summary>
     public void Reset()
     {
