@@ -127,6 +127,24 @@ Feed `[cos θ, sin θ]` instead. `Pendulum`, `Reacher` and `SupplyChain` all do.
 - **`TargetKl` too tight.** Check whether updates are stopping after one or two minibatches; if so,
   raise it or lower the learning rate.
 
+### Continuous PPO or A2C will not learn
+
+- **Rewards are badly scaled.** Turn on `NormalizeRewards`. Pendulum's −16 per step and Reacher's
+  fractions want very different critic learning rates otherwise; `Catalog` turns it on for both.
+- **A2C's horizon is too long.** Without PPO's trust region, `Gamma = 0.99` lets too much noise into
+  each step on control tasks. Try `0.9` with `GaeLambda = 0.9`, which is what `Catalog` uses.
+- **The spread collapsed early.** `Metrics.Entropy` falling steeply in the first few updates means
+  the log standard deviation is shrinking before the mean has found anything. Raise
+  `InitialLogStd`, or add a small `EntropyCoefficient`.
+
+### A checkpoint will not load
+
+`InvalidDataException` names the entry that differs. "No entry" means a different algorithm or an
+option that adds state — `NormalizeObservations` on one side only, for instance. A `.shape` entry
+means `HiddenSizes` differ. A type mismatch in the first line means the checkpoint holds a different
+agent class altogether. In every case the agent is left untouched, so it is safe to catch and fall
+back to training from scratch.
+
 ### SAC or TD3 will not learn
 
 - **The action scale is wrong.** Both agents work in `[-1, 1]` internally and rescale at the edge.

@@ -95,7 +95,7 @@ RLNet.Visualizer --help
 | | |
 |---|---|
 | `--env`, `-e` | Simulasi berdasarkan nama katalog (default CartPole) |
-| `--algo`, `-a` | `QLearning`, `Dqn`, `A2C`, `Ppo`, `Sac`, `Td3` |
+| `--algo`, `-a` | `QLearning`, `Dqn`, `A2C`, `Ppo`, `Sac`, `Td3` — PPO dan A2C juga di simulasi kontinu |
 | `--start`, `-s` | Langsung mulai training |
 | `--speed` | Langkah per frame; dibulatkan ke posisi slider terdekat |
 | `--list` | Cetak daftar simulasi lalu keluar |

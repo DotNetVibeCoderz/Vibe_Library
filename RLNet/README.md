@@ -43,10 +43,11 @@ the solve threshold, and a deterministic evaluation of the finished policy score
 
 | | |
 |---|---|
-| **Algorithms** | DQN (double + dueling + prioritised replay), PPO, A2C, SAC, TD3, tabular Q-learning |
+| **Algorithms** | DQN (double + dueling + prioritised replay), PPO and A2C (discrete or continuous), SAC, TD3, tabular Q-learning |
 | **Environments** | CartPole, MountainCar, GridWorld, LunarLander, Pendulum, Reacher, Trading, SupplyChain, PredatorPrey |
 | **Engine** | Dense MLP with Adam, vectorised through `Vector<T>` — AVX-512, AVX2 and NEON from one implementation |
 | **Multi-agent** | Simultaneous-move environments with independent or parameter-shared learners |
+| **Training** | Parallel environments with batched action selection, checkpoints that resume exactly, observation and reward normalisation, CSV / JSON Lines episode logs |
 | **Optional GPU** | `RLNet.Gpu` runs the dense kernels on CUDA or OpenCL via ILGPU, and falls back to CPU on its own |
 | **Console** | Avalonia desktop app — Windows, Linux, macOS |
 
@@ -127,7 +128,7 @@ console, benchmarks, and how to extend any of it.
 
 ```bash
 dotnet build RLNet.slnx -c Release
-dotnet run --project tests/RLNet.Tests -c Release          # 88 tests
+dotnet run --project tests/RLNet.Tests -c Release          # 162 tests
 dotnet run -c Release --project benchmarks/RLNet.Benchmarks
 ```
 
@@ -183,10 +184,11 @@ mendapat nilai sempurna 500.
 
 | | |
 |---|---|
-| **Algoritma** | DQN (double + dueling + prioritised replay), PPO, A2C, SAC, TD3, Q-learning tabular |
+| **Algoritma** | DQN (double + dueling + prioritised replay), PPO dan A2C (discrete atau kontinu), SAC, TD3, Q-learning tabular |
 | **Simulasi** | CartPole, MountainCar, GridWorld, LunarLander, Pendulum, Reacher, Trading, SupplyChain, PredatorPrey |
 | **Mesin** | MLP dense dengan Adam, divektorkan lewat `Vector<T>` — AVX-512, AVX2, dan NEON dari satu implementasi |
 | **Multi-agent** | Simulasi gerak-serentak dengan learner independen atau berbagi parameter |
+| **Training** | Simulasi paralel dengan pemilihan aksi ter-batch, checkpoint yang melanjutkan persis, normalisasi observasi dan reward, log episode CSV / JSON Lines |
 | **GPU opsional** | `RLNet.Gpu` menjalankan kernel dense di CUDA atau OpenCL lewat ILGPU, dan otomatis kembali ke CPU |
 | **Konsol** | Aplikasi desktop Avalonia — Windows, Linux, macOS |
 
@@ -269,7 +271,7 @@ memperluas semuanya.
 
 ```bash
 dotnet build RLNet.slnx -c Release
-dotnet run --project tests/RLNet.Tests -c Release          # 88 tes
+dotnet run --project tests/RLNet.Tests -c Release          # 162 tes
 dotnet run -c Release --project benchmarks/RLNet.Benchmarks
 ```
 

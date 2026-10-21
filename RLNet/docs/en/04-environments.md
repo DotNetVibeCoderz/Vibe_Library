@@ -99,8 +99,8 @@ Landing counts only on the pad, upright, and slow enough to survive.
 Swing a pendulum upright and hold it there with a torque too weak to lift it directly.
 
 Constants match Gymnasium's `Pendulum-v1`. The reference task for the continuous agents — SAC and
-TD3 both solve it in tens of thousands of steps, while no discrete agent can express the fine torque
-control it needs.
+TD3 both solve it in tens of thousands of steps, PPO in about a hundred thousand far cheaper ones,
+while no discrete agent can express the fine torque control it needs.
 
 **The observation is `[cos θ, sin θ, θ̇]`, not `[θ, θ̇]`.** The angle is periodic, so θ = −π and
 θ = π are the same state but the furthest apart two numbers can be. A network fed the raw angle has

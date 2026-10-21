@@ -38,15 +38,20 @@ Five projects. `RLNet.Core` is the library and the only one that matters for mos
 src/RLNet.Core/         the library (packs as "Gravicode.RLNet", assembly RLNet.Core)
   Spaces/               DiscreteSpace, BoxSpace - environments self-describe
   Environments/         IEnvironment + EnvironmentBase, then Classic/ Control/ Domain/ MultiAgent/
+  Environments/VectorEnvironment.cs   N copies, auto-reset, Observations vs NextObservations
   Neural/               MlpNetwork, DenseLayer, AdamOptimizer, IComputeBackend, QNetworkPair
-  Buffers/              IReplayBuffer, Uniform, Prioritized (SumTree), RolloutBuffer (GAE)
-  Policies/             CategoricalPolicy - shared by PPO and A2C
-  Agents/               QTable, Dqn, A2C, Ppo, Sac, Td3, IndependentLearners, Schedule
-  Training/             Trainer - the loop; TrainingReport
+  Buffers/              IReplayBuffer, Uniform, Prioritized (SumTree), RolloutBuffer (GAE, per-env streams)
+  Policies/             CategoricalPolicy, GaussianPolicy, PolicyHead (internal: the discrete/continuous seam)
+  Agents/               QTable, Dqn, Sac, Td3, IndependentLearners, Schedule;
+                        OnPolicyLearner (internal) = PPO + A2C once, wrapped by PpoAgent, A2CAgent,
+                        ContinuousPpoAgent, ContinuousA2CAgent
+  Normalization/        RunningMeanStd, ObservationNormalizer, RewardScaler - live inside agents
+  Persistence/          Checkpoint, ICheckpointable, CheckpointWriter/Reader
+  Training/             Trainer - the loops (single, vector, multi-agent); TrainingReport; MetricsLog
   Catalog.cs            name -> environment -> configured agent
 src/RLNet.Gpu/          optional ILGPU backend, packs as "Gravicode.RLNet.Gpu"
 src/RLNet.Visualizer/   Avalonia console (not packable)
-tests/RLNet.Tests/      xunit.v3, 88 tests
+tests/RLNet.Tests/      xunit.v3, 162 tests
 benchmarks/             BenchmarkDotNet
 ```
 
@@ -73,6 +78,23 @@ this matters most. `Done` is for loop control only.
 
 `EnvironmentBase.Advance(reward, terminated)` owns the step counter and the time limit, so no
 environment can forget to report truncation.
+
+`VectorEnvironment` auto-resets, so it has two buffers: `Observations` (post-reset, act from these)
+and `NextObservations` (where each transition actually ended - bootstrap from these). Same bug class.
+
+### On-policy agents are one implementation
+
+PPO and A2C, discrete and continuous, all run through `OnPolicyLearner`, generic over a
+`PolicyHead`. With one environment the batched path is draw-for-draw the old single-env path;
+`VectorEnvironmentTests.OneCopyReproducesTheSingleEnvironmentRunExactly` holds it to that. Keep it.
+
+### Checkpoints
+
+Every agent is `ICheckpointable` and must write *everything needed to resume training* (networks,
+targets, Adam moments, RNG, counters, normalisers) - not replay buffers or a half rollout.
+`Checkpoint.Load` validates against the agent's own `WriteState` output before calling `ReadState`.
+Adding a field to an agent means adding it to both methods; `CheckpointTests.ResumedRun...` catches
+a miss for on-policy agents.
 
 ### Swappable seams
 

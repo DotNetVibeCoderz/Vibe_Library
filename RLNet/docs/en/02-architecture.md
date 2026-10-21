@@ -160,6 +160,11 @@ public interface IDiscreteAgent : IAgent
 learns on a schedule (DQN, SAC, TD3), or accumulates a rollout and updates in bulk (PPO, A2C) is
 entirely internal — the calling loop is identical for all six.
 
+PPO and A2C each come in two forms over one implementation: `PpoAgent` and `A2CAgent` for a
+`DiscreteSpace`, `ContinuousPpoAgent` and `ContinuousA2CAgent` for a `BoxSpace`. The algorithm is
+written once against a *policy head* — categorical or Gaussian — that is the only part that
+differs.
+
 `deterministic` matters more than it looks. Training return and evaluation return are different
 numbers: an agent still exploring at 5% spends one step in twenty doing something it knows is
 wrong. Always evaluate deterministically before reporting a result.
@@ -187,6 +192,62 @@ var agent = new QTableAgent(act, StateDiscretizer.ForBox(box, [12, 12, 20, 20]))
 Each has a sensible default, so none of this is required to get started — but none of it requires
 forking an agent either.
 
+## Several environments at once
+
+`VectorEnvironment` steps several copies of one environment together and publishes their
+observations as one contiguous `[copies, observationSize]` buffer. PPO and A2C implement
+`IVectorDiscreteAgent` / `IVectorContinuousAgent`, which choose every copy's action in a single
+network pass. That makes collection cheaper, but for PPO the update dominates and the end-to-end
+gain is modest ([measured](09-benchmarks.md#several-environments-at-once)); the bigger win is a less
+correlated rollout.
+
+Automatic reset forces a second observation buffer, and it is the same kind of detail as the
+termination/truncation split:
+
+```
+   copy 2's episode ends on this step
+                 │
+                 ▼
+  NextObservations[2]  = the state the episode ended in    ← bootstrap a truncation from this
+  Observations[2]      = the first state of the next one   ← choose the next action from this
+```
+
+Treating the reset state as the successor of the final transition credits the agent with a fresh
+start it did not earn. `Trainer` passes `NextObservations` to `ObserveBatch` for exactly this reason.
+
+Inside the agent, the rollout holds one **stream** per copy, interleaved time-major — slot
+`t · copies + c`. Advantages are computed down each stream separately, so a trajectory's next state
+is always its own next step and never a neighbour's. With one copy this is, draw for draw, the
+single-environment algorithm; the test suite holds it to that.
+
+## Checkpoints
+
+`Checkpoint.Save` / `Checkpoint.Load` work on anything implementing `ICheckpointable`, which every
+agent does. A checkpoint is a versioned, little-endian list of named arrays:
+
+```
+  "RLNETCKP"  format version  component count
+  ┌ component type name ──────────────────────────────────────┐
+  │ "actor.shape"       int64[]  input width, (width, activation) per layer
+  │ "actor.parameters"  float[]
+  │ "actorOptimizer.m"  float[]  ".v"  ".step"
+  │ "random"            int64[]  the generator's exact position
+  │ ...                                                        │
+  └────────────────────────────────────────────────────────────┘
+```
+
+Named entries rather than a fixed record per agent keep the format independent of any one agent's
+fields: adding state adds an entry, and an old file that lacks it fails with that entry's name.
+Before anything is written into the agent, it describes what it expects by writing its own current
+state, and every entry, type, length and network shape is compared against the file — so a
+mismatch is reported while the agent is still intact. Network shapes are checked as layouts, not
+just as parameter counts: `[64, 32]` and `[32, 64]` can hold the same number of floats.
+
+**Normalisation lives inside the agent.** `PpoOptions.NormalizeObservations` and `NormalizeRewards`
+(and A2C's) keep running statistics in the agent, not in an environment wrapper. A policy trained on
+standardised inputs is meaningless on raw ones, so the statistics are part of the policy — and being
+inside the agent, they are saved and restored with it, with no second object to keep in step.
+
 ## Memory model
 
 Every buffer a run needs is allocated at construction:
@@ -197,7 +258,7 @@ Every buffer a run needs is allocated at construction:
 | `DenseLayer` | weights, biases, weight/bias gradients, activation cache | layer shape |
 | `AdamOptimizer` | two moment arrays | parameter count |
 | `UniformReplayBuffer` | five flat arrays, structure-of-arrays | capacity |
-| `RolloutBuffer` | ten flat arrays | rollout length |
+| `RolloutBuffer` | ten flat arrays | rollout length (shared across environment streams) |
 | `ReplayBatch` | one minibatch, reused every sample | batch size |
 
 A full forward-backward-update cycle allocates **zero bytes**. The

@@ -8,7 +8,7 @@
 
 | | |
 |---|---|
-| [01 — Getting started](01-getting-started.md) | Install, first training run, evaluation, saving a policy |
+| [01 — Getting started](01-getting-started.md) | Install, first training run, evaluation, logging, checkpoints, parallel environments |
 | [02 — Architecture](02-architecture.md) | How the pieces fit, and the two contracts that hold it together |
 | [03 — Algorithms](03-algorithms.md) | What each of the six does, when to pick it, what to tune |
 | [04 — Environments](04-environments.md) | All nine, what each teaches, and their reward structures |

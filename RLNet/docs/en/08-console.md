@@ -90,7 +90,7 @@ RLNet.Visualizer --help
 | | |
 |---|---|
 | `--env`, `-e` | Environment by catalog name (default CartPole) |
-| `--algo`, `-a` | `QLearning`, `Dqn`, `A2C`, `Ppo`, `Sac`, `Td3` |
+| `--algo`, `-a` | `QLearning`, `Dqn`, `A2C`, `Ppo`, `Sac`, `Td3` — PPO and A2C on continuous environments too |
 | `--start`, `-s` | Begin training immediately |
 | `--speed` | Steps per frame; snapped to the nearest slider position |
 | `--list` | Print the environments and exit |

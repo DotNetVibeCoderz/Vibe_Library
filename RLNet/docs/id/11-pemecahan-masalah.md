@@ -130,6 +130,26 @@ Berikan `[cos θ, sin θ]`. `Pendulum`, `Reacher`, dan `SupplyChain` semuanya be
 - **`TargetKl` terlalu ketat.** Periksa apakah pembaruan berhenti setelah satu-dua minibatch; kalau
   ya, naikkan atau turunkan learning rate.
 
+### PPO atau A2C kontinu tidak mau belajar
+
+- **Skala reward-nya buruk.** Nyalakan `NormalizeRewards`. Tanpanya, −16 per langkah milik Pendulum
+  dan pecahan milik Reacher menuntut learning rate critic yang sangat berbeda; `Catalog`
+  menyalakannya untuk keduanya.
+- **Horizon A2C terlalu panjang.** Tanpa trust region PPO, `Gamma = 0.99` meloloskan terlalu banyak
+  derau ke setiap langkah pada tugas kontrol. Coba `0.9` dengan `GaeLambda = 0.9`, seperti yang
+  dipakai `Catalog`.
+- **Sebarannya runtuh terlalu awal.** `Metrics.Entropy` yang turun tajam di beberapa update pertama
+  berarti log standar deviasi menyusut sebelum mean menemukan apa pun. Naikkan `InitialLogStd`, atau
+  tambahkan `EntropyCoefficient` kecil.
+
+### Checkpoint tidak mau dimuat
+
+`InvalidDataException` menyebut entri yang berbeda. "Tidak ada entri" berarti algoritma berbeda atau
+opsi yang menambah state — misalnya `NormalizeObservations` hanya di satu sisi. Entri `.shape` berarti
+`HiddenSizes` berbeda. Ketidakcocokan tipe di baris pertama berarti checkpoint itu berisi kelas agen
+yang sama sekali lain. Dalam setiap kasus agennya dibiarkan utuh, jadi aman untuk ditangkap lalu
+kembali melatih dari awal.
+
 ### SAC atau TD3 tidak mau belajar
 
 - **Skala aksinya salah.** Keduanya bekerja di `[-1, 1]` secara internal dan menskalakan ulang di

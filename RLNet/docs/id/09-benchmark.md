@@ -171,6 +171,14 @@ mengisolasi operasinya alih-alih menguburnya di dalam loop training. Pada ukuran
 agen-agen ini (32–256), tabel itu memprediksi 10% atau kurang — persis rezim tempat pengukuran di
 level agen tidak sanggup memisahkannya.
 
+Penulisan ulang PPO dan A2C di 0.2.0 ke satu implementasi bersama diperiksa dengan cara yang sama,
+dengan build lama dan baru diukur bergantian pada run panjang, bukan 2.000 langkah. A2C selama
+100.000 langkah: 1,92–2,15 s lama, 1,85–2,23 s baru — tidak ada perbedaan. PPO selama 50.000 langkah:
+5,6–6,8 s lama, 6,4–7,2 s baru — tumpang tindih, dengan build baru mungkin 5–10% lebih lambat, masih
+di dalam sebaran antar-run mesin ini. Satu iterasi 2.000 langkah sudah termasuk pemanasan JIT
+dari agen yang baru dibangun, dan itulah sebagian besar alasan benchmark pendek menunjukkan selisih
+yang lebih besar.
+
 Perlakukan angka di sini sebagai *mesin ini, sore ini* — berguna untuk melihat bentuk peringkat
 antar algoritma, yang stabil dan sangat besar selisihnya, dan bukan untuk perbandingan 20% antar-run.
 
@@ -189,6 +197,31 @@ mempelajari Pendulum. Itulah beda antara menonton agen belajar dan menonton gamb
 
 Default yang dipublikasikan disetel untuk hasil akhir terbaik pada run panjang, yang merupakan
 sasaran tepat untuk pekerjaan training sungguhan dan sasaran keliru untuk sebuah demonstrasi.
+
+## Beberapa simulasi sekaligus
+
+`VectorBenchmarks`: 16.384 langkah training, dibagi ke 1, 4, 8, dan 16 salinan. Panjang rollout
+adalah jumlah transisi per update apa pun sumbernya, jadi setiap baris melakukan kerja gradien yang
+sama dan hanya pengumpulannya yang berubah. Melangkah berurutan di semua baris.
+
+| | 1 salinan | 4 salinan | 8 salinan | 16 salinan |
+|---|---:|---:|---:|---:|
+| PPO / CartPole | 2,07 s | 1,80 s | 1,80 s | 1,86 s |
+| PPO / Pendulum (setelan katalog) | 1,99 s | 1,97 s | 1,84 s | 1,80 s |
+| A2C / CartPole | 260 ms | 284 ms | 281 ms | 331 ms |
+
+**Untung kecil bagi PPO, tidak ada bagi A2C, dan itulah hasil jujurnya.** Batching mengubah delapan
+forward pass menjadi satu, tapi PPO menghabiskan sebagian besar waktunya di sepuluh epoch update
+minibatch yang tidak tersentuh batching, jadi penghematannya 10–13%. Seluruh rollout A2C hanya 32
+langkah; dibagi ke 16 salinan menjadi dua langkah per salinan, dan pembukuan per langkahnya lebih
+berat daripada pass yang dihemat.
+
+Pakai beberapa salinan demi **sampelnya**, bukan demi jam: trajektori di titik episode yang
+berbeda-beda menghasilkan rollout yang kurang berkorelasi, dan itulah sebabnya konfigurasi rujukan
+PPO dan A2C memakainya. Melangkah paralel (`parallel: true`) malah lebih lambat pada simulasi-simulasi
+ini — sekitar enam kali, diukur pada delapan salinan LunarLander — karena setiap langkah jauh lebih
+murah daripada membangunkan worker thread pool. Opsi itu ada untuk simulasi yang langkahnya sendiri
+mahal.
 
 ## Alokasi
 
@@ -225,6 +258,7 @@ dotnet run -c Release --project benchmarks/RLNet.Benchmarks
 dotnet run -c Release --project benchmarks/RLNet.Benchmarks -- --filter '*SimdBenchmarks*'
 dotnet run -c Release --project benchmarks/RLNet.Benchmarks -- --filter '*ReplayBenchmarks*'
 dotnet run -c Release --project benchmarks/RLNet.Benchmarks -- --filter '*GpuBenchmarks*'
+dotnet run -c Release --project benchmarks/RLNet.Benchmarks -- --filter '*VectorBenchmarks*'
 
 # akselerator apa yang terlihat
 dotnet run -c Release --project benchmarks/RLNet.Benchmarks -- --devices

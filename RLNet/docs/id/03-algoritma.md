@@ -18,7 +18,9 @@ pilihan yang tepat, dan parameter mana yang penting.
                     │
                     └─ kontinu ──────────┬─ percobaan pertama ───────────▶ SAC
                                          │
-                                         └─ siap menyetel ───────────────▶ TD3
+                                         ├─ siap menyetel ───────────────▶ TD3
+                                         │
+                                         └─ simulasi murah, banyak salinan ▶ PPO
 ```
 
 | | Keluarga | On/off-policy | Efisiensi sampel | Kebutuhan penyetelan |
@@ -27,6 +29,9 @@ pilihan yang tepat, dan parameter mana yang penting.
 | **DQN** | value, neural | off | tinggi | sedang |
 | **A2C** | policy gradient | on | rendah | sedang |
 | **PPO** | policy gradient | on | menengah | rendah |
+
+PPO dan A2C menerima aksi discrete *maupun* kontinu; SAC dan TD3 hanya kontinu. Pasangan on-policy
+itu juga satu-satunya yang melakukan batching atas [beberapa simulasi](01-memulai.md#beberapa-simulasi-sekaligus).
 | **SAC** | actor-critic | off | tinggi | sangat rendah |
 | **TD3** | actor-critic | off | tinggi | tinggi |
 
@@ -131,9 +136,16 @@ mengumpulkannya dan clipping tidak diperlukan. Lebih sederhana, dan jelas kurang
 sampel — setiap transisi menyumbang tepat satu pembaruan.
 
 Ia layak ada karena dua alasan. Ia adalah actor-critic terlengkap yang paling ringkas di library
-ini, jadi paling enak dibaca lebih dulu; dan rollout 32 langkahnya membuat ia memperbarui diri jauh
+ini, jadi paling enak dibaca lebih dulu — update-nya adalah `UpdateA2C` di `OnPolicyLearner`, yang
+berbagi segala hal lainnya dengan PPO; dan rollout 32 langkahnya membuat ia memperbarui diri jauh
 lebih sering daripada PPO, sehingga pembelajaran awal terlihat dalam hitungan detik di konsol,
 bukan setelah rollout 2048 langkah pertama selesai.
+
+**Pada aksi kontinu** (`ContinuousA2CAgent`) ia adalah algoritma paling sensitif di sini. Tanpa
+trust region, derau setiap rollout langsung masuk ke langkahnya, dan obatnya adalah horizon yang
+lebih pendek: `Catalog` memakai `Gamma = 0.9` dan `GaeLambda = 0.9` untuknya. Diukur di Reacher
+selama 200.000 langkah, itulah beda antara −31 dan −141, sementara lengan yang belum dilatih bernilai
+sekitar −220.
 
 ## PPO
 
@@ -184,6 +196,37 @@ kedua loss lewat batang itu, dan value loss — yang jauh lebih besar magnitudon
 mendominasi gradien policy. Jaringan terpisah lebih boros memori dan jauh lebih mudah disetel.
 
 **Opsi penting:** `RolloutLength`, `Epochs`, `ClipRange`, `EntropyCoefficient`.
+
+### PPO pada aksi kontinu
+
+`ContinuousPpoAgent` adalah algoritma yang sama dengan distribusi kategorikal diganti Gaussian
+diagonal: actor mengeluarkan satu mean per dimensi aksi, dan satu log standar deviasi bebas yang tidak
+bergantung pada state per dimensi menentukan sebarannya (`InitialLogStd`, default 0 — sebaran 1 pada
+skala aksi satuan).
+
+```csharp
+var agent = new ContinuousPpoAgent(obs, act, new PpoOptions
+{
+    LearningRate = 1e-3f,
+    EntropyCoefficient = 0f,        // Gaussian sudah bereksplorasi lewat sebarannya
+    NormalizeObservations = true,
+    NormalizeRewards = true,        // Pendulum membayar hingga -16 per langkah; CartPole +1
+});
+```
+
+Dua pilihan yang perlu diketahui:
+
+- **Aksinya tidak di-squash.** SAC butuh `tanh` karena ia menurunkan gradien melalui aksi yang
+  disampel; PPO hanya butuh log-probabilitas dari aksi yang benar-benar ia tarik. Jadi sampelnya
+  disimpan tanpa clip, dan hanya salinan yang dikirim ke simulasi yang di-clip ke batasnya. Menyimpan
+  nilai yang sudah di-clip akan membuat log-probabilitasnya menggambarkan aksi yang tidak pernah
+  diambil.
+- **Sebarannya tidak bergantung pada state.** Sebaran yang bergantung pada state membiarkan policy
+  menjadi yakin di state yang nyaris belum pernah ia lihat, dan metode on-policy, yang tidak bisa
+  meninjau ulang data lama, paling sulit pulih dari hal itu.
+
+Dengan pengaturan `Catalog`, ia mencapai sekitar −170 di Pendulum dalam 100.000 langkah — sepuluh
+detik di laptop — dan sekitar −26 di Reacher dalam 200.000 langkah.
 
 ## SAC
 

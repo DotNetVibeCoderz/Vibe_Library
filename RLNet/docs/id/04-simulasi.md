@@ -101,8 +101,9 @@ Mengayun pendulum sampai tegak dan menahannya di sana dengan torsi yang terlalu 
 mengangkatnya langsung.
 
 Konstantanya sama dengan `Pendulum-v1` di Gymnasium. Tugas rujukan untuk agen kontinu — SAC dan TD3
-sama-sama menyelesaikannya dalam puluhan ribu langkah, sementara tidak ada agen discrete yang bisa
-mengekspresikan kontrol torsi halus yang dibutuhkannya.
+sama-sama menyelesaikannya dalam puluhan ribu langkah, PPO dalam sekitar seratus ribu langkah yang
+jauh lebih murah, sementara tidak ada agen discrete yang bisa mengekspresikan kontrol torsi halus
+yang dibutuhkannya.
 
 **Observasinya `[cos θ, sin θ, θ̇]`, bukan `[θ, θ̇]`.** Sudut itu periodik, jadi θ = −π dan θ = π
 adalah state yang sama tapi merupakan dua angka yang paling berjauhan. Jaringan yang diberi sudut

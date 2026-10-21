@@ -216,8 +216,9 @@ Things that are easy to get wrong, all of which the existing agents demonstrate:
   algorithm" — which is how a chart knows not to draw a trace.
 - **Read `SetProgress`.** Without it your schedules never move.
 
-Read `A2CAgent` first — it is the shortest complete actor-critic here, and the same skeleton scales
-up to PPO.
+Read `UpdateA2C` in `OnPolicyLearner` first — it is the shortest complete actor-critic here, and
+PPO is the same skeleton with a different update. Both are generic over a policy head, which is how
+one implementation serves discrete and continuous actions.
 
 For a value-based algorithm, `MlpNetwork` gives you everything except the loss:
 
@@ -228,6 +229,53 @@ _target = new MlpNetwork(obsSize, [128, 128], actionCount,
                          Activation.ReLU, Activation.Linear, batchSize, random);
 _target.CopyFrom(_online);
 ```
+
+## Making an agent checkpointable
+
+Implement `ICheckpointable` and write every piece of state the agent needs to *carry on training*,
+not just to act. The writer has overloads for the pieces RLNet itself is made of:
+
+```csharp
+public sealed class MyAgent : IDiscreteAgent, ICheckpointable
+{
+    public void WriteState(CheckpointWriter writer)
+    {
+        writer.Write("online", _online);             // network: shape + parameters
+        writer.Write("optimizer", _optimizer);       // Adam moments and step counter
+        writer.Write("random", _random);             // exact position in the stream
+        writer.Write("progress", _progress);
+        writer.Write("steps", Metrics.StepCount);
+    }
+
+    public void ReadState(CheckpointReader reader)
+    {
+        reader.Read("online", _online);
+        reader.Read("optimizer", _optimizer);
+        reader.Read("random", _random);
+        _progress = reader.ReadSingle("progress");
+        Metrics.StepCount = reader.ReadInt64("steps");
+    }
+}
+```
+
+`Checkpoint.Load` validates the file against what your own `WriteState` produces before calling
+`ReadState`, so a mismatch never reaches it half-applied. Use `WriteVariable` for anything whose
+length depends on what was learned rather than on configuration — a table's rows — and
+`WriteComponent` to nest another `ICheckpointable` under a prefix.
+
+The test worth copying is `CheckpointTests.ResumedRunMatchesAnUninterruptedOne`: save mid-run, load
+into an agent built with a *different* seed, continue both, and require identical returns. A missed
+optimiser moment or generator state fails it immediately.
+
+## Batching an agent across environments
+
+`IVectorDiscreteAgent` / `IVectorContinuousAgent` add `SelectActions` and `ObserveBatch`, which
+receive `[copies, observationSize]` blocks. Two things to get right:
+
+- `ObserveBatch`'s `nextObservations` are the states the transitions ended in, **before** automatic
+  reset. Bootstrap truncations from them, never from `VectorEnvironment.Observations`.
+- Keep per-copy trajectories apart. A rollout or n-step buffer that treats copy 3's next step as the
+  successor of copy 2's is computing returns across two unrelated episodes.
 
 ## A new state encoder
 
@@ -259,6 +307,8 @@ The existing suite is the template:
 | Environment | `EnvironmentTests` — seeded determinism, observation bounds, flag exclusivity |
 | Compute backend | `GpuBackendTests` — parity against the CPU backend |
 | Algorithm | `LearningTests` — does it actually learn, on a seeded short run |
+| Checkpoint support | `CheckpointTests` — resume matches an uninterrupted run |
+| A new distribution | `GaussianPolicyTests` — log-probability and entropy gradients against finite differences |
 | Anything with a gradient | `NeuralNetworkTests` — finite differences |
 
 `EnvironmentTests` is driven by `Catalog`, so a registered environment is covered by every property

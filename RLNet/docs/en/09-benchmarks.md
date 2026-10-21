@@ -165,6 +165,13 @@ the operation instead of burying it inside a training loop. At the batch sizes t
 (32–256) that table predicts 10% or less, which is exactly the regime where agent-level timings
 cannot resolve it.
 
+The 0.2.0 rewrite of PPO and A2C onto one shared implementation was checked the same way, with the
+old and new builds timed back to back over long runs rather than 2,000 steps. A2C over 100,000 steps:
+1.92–2.15 s old, 1.85–2.23 s new — no difference. PPO over 50,000: 5.6–6.8 s old, 6.4–7.2 s new —
+overlapping, with the new build perhaps 5–10% slower, which is inside this machine's run-to-run
+spread. A 2,000-step iteration includes JIT warm-up of a freshly built agent, which is most of why
+the short benchmark shows a larger gap.
+
 Treat the numbers here as *this machine, this afternoon* — useful for the shape of the ranking
 across algorithms, which is stable and enormous, and not for 20% comparisons between runs.
 
@@ -183,6 +190,29 @@ learn Pendulum. That is the difference between watching an agent learn and watch
 
 The published defaults are tuned for the best final result over a long run, which is the right
 target for a real training job and the wrong one for a demonstration.
+
+## Several environments at once
+
+`VectorBenchmarks`: 16,384 environment steps of training, split across 1, 4, 8 and 16 copies. The
+rollout length is the number of transitions per update whatever their source, so every row does the
+same gradient work and only collection changes. Sequential stepping throughout.
+
+| | 1 copy | 4 copies | 8 copies | 16 copies |
+|---|---:|---:|---:|---:|
+| PPO / CartPole | 2.07 s | 1.80 s | 1.80 s | 1.86 s |
+| PPO / Pendulum (catalog settings) | 1.99 s | 1.97 s | 1.84 s | 1.80 s |
+| A2C / CartPole | 260 ms | 284 ms | 281 ms | 331 ms |
+
+**A modest win for PPO, none for A2C, and that is the honest result.** Batching turns eight forward
+passes into one, but PPO spends most of its time in ten epochs of minibatch updates that batching
+does not touch, so the saving is 10–13%. A2C's whole rollout is 32 steps; split across 16 copies it
+is two steps per copy, and the per-step bookkeeping outweighs the saved passes.
+
+Use several copies for the **sample**, not the clock: trajectories at different points in their
+episodes make a less correlated rollout, which is why the reference PPO and A2C configurations use
+them. Parallel stepping (`parallel: true`) is slower still on these environments — about six times,
+measured on eight LunarLander copies — because each step is far cheaper than waking a thread-pool
+worker. It is there for environments whose own step is expensive.
 
 ## Allocation
 
@@ -219,6 +249,7 @@ dotnet run -c Release --project benchmarks/RLNet.Benchmarks
 dotnet run -c Release --project benchmarks/RLNet.Benchmarks -- --filter '*SimdBenchmarks*'
 dotnet run -c Release --project benchmarks/RLNet.Benchmarks -- --filter '*ReplayBenchmarks*'
 dotnet run -c Release --project benchmarks/RLNet.Benchmarks -- --filter '*GpuBenchmarks*'
+dotnet run -c Release --project benchmarks/RLNet.Benchmarks -- --filter '*VectorBenchmarks*'
 
 # what accelerators are visible
 dotnet run -c Release --project benchmarks/RLNet.Benchmarks -- --devices

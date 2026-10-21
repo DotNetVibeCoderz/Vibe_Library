@@ -8,7 +8,7 @@
 
 | | |
 |---|---|
-| [01 — Memulai](01-memulai.md) | Instalasi, training pertama, evaluasi, menyimpan policy |
+| [01 — Memulai](01-memulai.md) | Instalasi, training pertama, evaluasi, pencatatan, checkpoint, simulasi paralel |
 | [02 — Arsitektur](02-arsitektur.md) | Susunan bagian-bagiannya, dan dua kontrak yang menyatukannya |
 | [03 — Algoritma](03-algoritma.md) | Apa yang dilakukan keenam algoritma, kapan dipakai, apa yang disetel |
 | [04 — Simulasi](04-simulasi.md) | Kesembilan simulasi, apa yang diajarkan, dan struktur reward-nya |

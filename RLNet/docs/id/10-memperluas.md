@@ -219,8 +219,9 @@ Hal-hal yang mudah salah, yang semuanya dicontohkan agen-agen yang sudah ada:
   — begitulah cara sebuah grafik tahu untuk tidak menggambar sebuah trace.
 - **Baca `SetProgress`.** Tanpanya jadwal Anda tidak pernah bergerak.
 
-Baca `A2CAgent` lebih dulu — ia actor-critic terlengkap yang paling ringkas di sini, dan kerangka
-yang sama menskala sampai PPO.
+Baca `UpdateA2C` di `OnPolicyLearner` lebih dulu — ia actor-critic lengkap yang paling ringkas di
+sini, dan PPO adalah kerangka yang sama dengan update yang berbeda. Keduanya generik terhadap sebuah
+policy head, dan begitulah satu implementasi melayani aksi discrete maupun kontinu.
 
 Untuk algoritma berbasis nilai, `MlpNetwork` memberi Anda segalanya kecuali loss-nya:
 
@@ -231,6 +232,56 @@ _target = new MlpNetwork(obsSize, [128, 128], actionCount,
                          Activation.ReLU, Activation.Linear, batchSize, random);
 _target.CopyFrom(_online);
 ```
+
+## Membuat agen bisa di-checkpoint
+
+Implementasikan `ICheckpointable` dan tulis setiap bagian state yang dibutuhkan agen untuk
+*melanjutkan training*, bukan sekadar untuk bertindak. Writer-nya punya overload untuk bagian-bagian
+penyusun RLNet sendiri:
+
+```csharp
+public sealed class MyAgent : IDiscreteAgent, ICheckpointable
+{
+    public void WriteState(CheckpointWriter writer)
+    {
+        writer.Write("online", _online);             // jaringan: bentuk + parameter
+        writer.Write("optimizer", _optimizer);       // momen Adam dan penghitung langkah
+        writer.Write("random", _random);             // posisi persis di aliran acak
+        writer.Write("progress", _progress);
+        writer.Write("steps", Metrics.StepCount);
+    }
+
+    public void ReadState(CheckpointReader reader)
+    {
+        reader.Read("online", _online);
+        reader.Read("optimizer", _optimizer);
+        reader.Read("random", _random);
+        _progress = reader.ReadSingle("progress");
+        Metrics.StepCount = reader.ReadInt64("steps");
+    }
+}
+```
+
+`Checkpoint.Load` memvalidasi file terhadap apa yang dihasilkan `WriteState` Anda sendiri sebelum
+memanggil `ReadState`, jadi ketidakcocokan tidak pernah sampai ke sana dalam keadaan setengah
+diterapkan. Pakai `WriteVariable` untuk apa pun yang panjangnya bergantung pada apa yang dipelajari,
+bukan pada konfigurasi — baris-baris sebuah tabel — dan `WriteComponent` untuk menyarangkan
+`ICheckpointable` lain di bawah sebuah prefix.
+
+Tes yang layak ditiru adalah `CheckpointTests.ResumedRunMatchesAnUninterruptedOne`: simpan di
+tengah run, muat ke agen yang dibuat dengan seed *berbeda*, lanjutkan keduanya, lalu tuntut return
+yang identik. Momen optimizer atau state generator yang terlewat langsung membuatnya gagal.
+
+## Batching agen atas beberapa simulasi
+
+`IVectorDiscreteAgent` / `IVectorContinuousAgent` menambahkan `SelectActions` dan `ObserveBatch`,
+yang menerima blok `[salinan, observationSize]`. Dua hal yang harus benar:
+
+- `nextObservations` pada `ObserveBatch` adalah state tempat transisi berakhir, **sebelum** reset
+  otomatis. Bootstrap truncation dari situ, jangan pernah dari `VectorEnvironment.Observations`.
+- Jaga trajektori setiap salinan tetap terpisah. Rollout atau buffer n-step yang menganggap langkah
+  berikutnya salinan 3 sebagai penerus langkah salinan 2 sedang menghitung return lintas dua episode
+  yang tidak berhubungan.
 
 ## Encoder state baru
 
@@ -263,6 +314,8 @@ Suite yang sudah ada adalah templatnya:
 | Simulasi | `EnvironmentTests` — determinisme ber-seed, batas observasi, eksklusivitas flag |
 | Compute backend | `GpuBackendTests` — kesetaraan terhadap backend CPU |
 | Algoritma | `LearningTests` — apakah ia benar-benar belajar, pada run pendek ber-seed |
+| Dukungan checkpoint | `CheckpointTests` — run yang dilanjutkan sama dengan run tanpa jeda |
+| Distribusi baru | `GaussianPolicyTests` — gradien log-probabilitas dan entropi terhadap beda hingga |
 | Apa pun yang punya gradien | `NeuralNetworkTests` — beda hingga |
 
 `EnvironmentTests` digerakkan oleh `Catalog`, jadi environment yang terdaftar otomatis tercakup oleh

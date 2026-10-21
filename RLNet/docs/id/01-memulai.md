@@ -71,6 +71,26 @@ Untuk berhenti berdasarkan kondisi sendiri:
 ShouldStop = () => DateTime.UtcNow > batasWaktu,
 ```
 
+## Mencatat sebuah run
+
+`MetricsLog` menulis satu baris per episode, disertai diagnostik agen pada saat itu:
+
+```csharp
+using var log = MetricsLog.Create("ppo-cartpole.csv");     // .jsonl untuk JSON Lines
+
+Trainer.Train(environment, agent, new TrainingOptions
+{
+    MaxSteps = 150_000,
+    OnEpisode = log.For(agent),
+});
+```
+
+Kolomnya adalah `episode, steps, return, average_return, total_steps, terminated, value_loss,
+policy_loss, entropy, epsilon, temperature, td_error, updates`. Diagnostik yang tidak dihasilkan
+algoritmanya — policy loss untuk DQN, temperature untuk selain SAC — menjadi field CSV kosong atau
+`null` di JSON, sehingga grafik menampilkan celah, bukan garis di nol. Angka ditulis dengan invariant
+culture, jadi log dari mesin yang memakai koma desimal tetap bisa dibaca di mana saja.
+
 ## Evaluasi yang benar
 
 Return saat training dan return saat evaluasi adalah dua angka berbeda, dan melaporkan yang pertama
@@ -84,33 +104,46 @@ float skor = Trainer.Evaluate(environment, agent, episodes: 20, seed: 1234);
 `Evaluate` berjalan tanpa eksplorasi. Memberi seed membuat evaluasi dapat diulang, sambil tetap
 memberi setiap episode kondisi awal yang berbeda.
 
-## Menyimpan dan memuat policy
+## Menyimpan dan melanjutkan
+
+`Checkpoint` menulis state lengkap sebuah agen — setiap jaringan termasuk jaringan target, estimasi
+momen setiap optimizer, generator acak, statistik normalisasi, dan posisi jadwal:
 
 ```csharp
-float[] parameters = agent switch
-{
-    PpoAgent ppo => ppo.ExportParameters(),
-    DqnAgent dqn => dqn.ExportParameters(),
-    _ => throw new NotSupportedException(),
-};
+using RLNet.Persistence;
 
-File.WriteAllBytes("policy.bin", MemoryMarshal.AsBytes(parameters.AsSpan()).ToArray());
+Checkpoint.Save("cartpole.rlnet", agent);
 ```
 
-Untuk memuat, buat agen dengan bentuk yang sama lalu impor:
+Untuk memuat, buat agen dengan konfigurasi yang sama lalu pulihkan ke dalamnya:
 
 ```csharp
-var bytes = File.ReadAllBytes("policy.bin");
-var restored = MemoryMarshal.Cast<byte, float>(bytes).ToArray();
-
 var agent = new PpoAgent(environment.ObservationSpace, environment.ActionSpace);
-agent.ImportParameters(restored);
+Checkpoint.Load("cartpole.rlnet", agent);
 ```
 
-`ImportParameters` melempar exception jika panjangnya tidak cocok, sehingga kesalahan umum memuat
-policy ke jaringan berbeda bentuk langsung ketahuan. Perlu dicatat: yang disimpan adalah *policy*,
-bukan state optimizer atau replay buffer — cukup untuk menjalankan agen terlatih, tidak cukup untuk
-melanjutkan training persis dari titik berhenti.
+Semua agen di library ini mendukungnya. Agen PPO atau A2C yang dipulihkan melanjutkan persis dari
+titik agen yang disimpan berhenti: test suite melatih satu agen tanpa jeda dan satu lagi melalui
+simpan-dan-muat, lalu menuntut kedua run menghasilkan return yang identik. Yang *tidak* disimpan
+adalah pengalaman — DQN, SAC, dan TD3 kembali dengan replay buffer kosong dan menunggu
+`LearningStarts` transisi sebelum training lagi, dan agen on-policy membuang rollout yang baru
+setengah terkumpul.
+
+**Pemuatan memeriksa semuanya sebelum mengubah apa pun.** Checkpoint dari algoritma lain, atau dari
+jaringan berbentuk lain, melempar `InvalidDataException` yang menyebut entri yang berbeda, dan agen
+dibiarkan persis seperti semula. File ditulis di samping tujuannya lalu dipindahkan ke tempatnya,
+jadi crash di tengah penyimpanan tidak pernah merusak checkpoint sebelumnya.
+
+Beberapa komponen bisa berbagi satu file, dicocokkan berdasarkan urutan — sebuah agen dan apa pun
+yang dilatih bersamanya:
+
+```csharp
+Checkpoint.Save("run.rlnet", learners);          // IndependentLearners: setiap agen berbeda sekali
+```
+
+`ExportParameters` dan `ImportParameters` tetap ada untuk saat hanya bobot actor yang dibutuhkan,
+misalnya untuk diserahkan ke runtime lain. Keduanya tidak membawa state optimizer, statistik
+normalisasi, atau log standar deviasi PPO.
 
 ## Memilih algoritma
 
@@ -122,6 +155,7 @@ melanjutkan training persis dari titik berhenti.
 | Aksi discrete, ingin langsung melihat pembelajaran | `A2C` |
 | Aksi kontinu, percobaan pertama | `Sac` |
 | Aksi kontinu, siap menyetel | `Td3` |
+| Aksi kontinu, simulasi murah, banyak salinan | `Ppo` |
 
 [Algoritma](03-algoritma.md) menjelaskan apa yang sebenarnya dilakukan masing-masing dan arti
 setiap parameternya.
@@ -140,6 +174,39 @@ var report = Trainer.Train(environment, agent, new TrainingOptions { MaxSteps = 
 Reward Pendulum berupa biaya, jadi return-nya negatif dan policy yang baik mendekati nol dari bawah.
 Sekitar -150 berarti selesai; policy yang tidak pernah berhasil mengayun ke atas bernilai sekitar
 -1200.
+
+PPO dan A2C juga bekerja di sini, dengan policy Gaussian. Keduanya butuh lebih banyak langkah
+simulasi daripada SAC dan jauh lebih sedikit komputasi per langkah — tanpa replay, tanpa update critic
+di setiap langkah — sehingga pada simulasi yang murah keduanya sering selesai lebih cepat menurut jam:
+
+```csharp
+var agent = Catalog.CreateAgent(Algorithm.Ppo, environment.ObservationSpace, environment.ActionSpace);
+var report = Trainer.Train(environment, agent, new TrainingOptions { MaxSteps = 100_000 });
+```
+
+
+## Beberapa simulasi sekaligus
+
+PPO dan A2C bisa mengumpulkan data dari beberapa salinan simulasi bersamaan, memilih aksi setiap
+salinan dalam satu forward pass:
+
+```csharp
+var environments = Catalog.CreateDiscreteVector("CartPole", count: 8);
+var agent = Catalog.CreateVectorAgent(Algorithm.Ppo, environments.ObservationSpace, environments.ActionSpace, seed: 1);
+
+Trainer.Train(environments, agent, new TrainingOptions { MaxSteps = 150_000, Seed = 1 });
+
+// Tetap agen biasa: evaluasi pada satu salinan.
+float skor = Trainer.Evaluate(Catalog.CreateDiscrete("CartPole"), agent, episodes: 20);
+```
+
+`RolloutLength` tetap berarti jumlah transisi per update, dibagi rata ke semua salinan, jadi opsi
+yang sama menghasilkan jumlah pembelajaran yang sama, dari sampel yang kurang berkorelasi. Jangan
+berharap percepatan besar pada simulasi-simulasi ini: [terukur](09-benchmark.md#beberapa-simulasi-sekaligus),
+PPO hanya lebih cepat sekitar 10% karena update-nya dominan, dan A2C tidak sama sekali. Episode dihitung
+per salinan, jadi `MaxEpisodes` dan `SolveThreshold` tetap berarti seperti biasa.
+
+DQN, SAC, dan TD3 belajar dari replay buffer dan tidak di-batch; `CreateVectorAgent` menolaknya.
 
 ## Mengonfigurasi agen
 

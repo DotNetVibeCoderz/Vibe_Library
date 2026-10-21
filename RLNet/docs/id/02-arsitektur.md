@@ -161,6 +161,11 @@ public interface IDiscreteAgent : IAgent
 belajar terjadwal (DQN, SAC, TD3), atau mengumpulkan rollout lalu memperbarui sekaligus (PPO, A2C)
 sepenuhnya urusan internal — loop pemanggilnya identik untuk keenamnya.
 
+PPO dan A2C masing-masing hadir dalam dua bentuk di atas satu implementasi: `PpoAgent` dan
+`A2CAgent` untuk `DiscreteSpace`, `ContinuousPpoAgent` dan `ContinuousA2CAgent` untuk `BoxSpace`.
+Algoritmanya ditulis sekali terhadap sebuah *policy head* — kategorikal atau Gaussian — yang menjadi
+satu-satunya bagian yang berbeda.
+
 `deterministic` lebih penting daripada kelihatannya. Return training dan return evaluasi adalah dua
 angka berbeda: agen yang masih bereksplorasi 5% menghabiskan satu dari dua puluh langkah melakukan
 hal yang ia tahu salah. Selalu evaluasi secara deterministik sebelum melaporkan hasil.
@@ -188,6 +193,66 @@ var agent = new QTableAgent(act, StateDiscretizer.ForBox(box, [12, 12, 20, 20]))
 Masing-masing punya default yang masuk akal, jadi tidak ada yang wajib disetel untuk mulai — tapi
 tidak ada pula yang mengharuskan Anda mem-fork sebuah agen.
 
+## Beberapa simulasi sekaligus
+
+`VectorEnvironment` menjalankan beberapa salinan satu simulasi bersamaan dan menerbitkan
+observasinya sebagai satu buffer kontigu `[salinan, observationSize]`. PPO dan A2C
+mengimplementasikan `IVectorDiscreteAgent` / `IVectorContinuousAgent`, yang memilih aksi setiap
+salinan dalam satu forward pass. Itu membuat pengumpulan lebih murah, tapi pada PPO update-nya yang
+dominan dan percepatan ujung-ke-ujungnya sederhana ([terukur](09-benchmark.md#beberapa-simulasi-sekaligus));
+keuntungan yang lebih besar adalah rollout yang kurang berkorelasi.
+
+Reset otomatis memaksa adanya buffer observasi kedua, dan ini detail sejenis pemisahan
+termination/truncation:
+
+```
+   episode salinan 2 berakhir pada langkah ini
+                 │
+                 ▼
+  NextObservations[2]  = state tempat episode berakhir      ← bootstrap truncation dari sini
+  Observations[2]      = state pertama episode berikutnya    ← pilih aksi berikutnya dari sini
+```
+
+Memperlakukan state hasil reset sebagai penerus transisi terakhir berarti memberi agen awal baru
+yang tidak ia peroleh. `Trainer` meneruskan `NextObservations` ke `ObserveBatch` justru karena itu.
+
+Di dalam agen, rollout menyimpan satu **stream** per salinan, diselang-seling berurutan waktu —
+slot `t · salinan + c`. Advantage dihitung menyusuri setiap stream secara terpisah, jadi state
+berikutnya dari sebuah trajektori selalu langkahnya sendiri, tidak pernah milik tetangganya. Dengan
+satu salinan, ini adalah algoritma satu-simulasi, sama persis sampai setiap tarikan acaknya; test
+suite menuntut hal itu.
+
+## Checkpoint
+
+`Checkpoint.Save` / `Checkpoint.Load` bekerja pada apa pun yang mengimplementasikan
+`ICheckpointable`, dan semua agen mengimplementasikannya. Sebuah checkpoint adalah daftar array
+bernama yang berversi dan little-endian:
+
+```
+  "RLNETCKP"  versi format  jumlah komponen
+  ┌ nama tipe komponen ────────────────────────────────────────┐
+  │ "actor.shape"       int64[]  lebar input, (lebar, aktivasi) per layer
+  │ "actor.parameters"  float[]
+  │ "actorOptimizer.m"  float[]  ".v"  ".step"
+  │ "random"            int64[]  posisi persis generator
+  │ ...                                                        │
+  └────────────────────────────────────────────────────────────┘
+```
+
+Entri bernama, bukan rekaman tetap per agen, membuat formatnya tidak terikat pada field agen mana
+pun: menambah state berarti menambah entri, dan file lama yang tidak memilikinya gagal dengan menyebut
+nama entri itu. Sebelum apa pun ditulis ke dalam agen, agen menjabarkan apa yang ia harapkan dengan
+menulis state-nya sendiri saat ini, lalu setiap entri, tipe, panjang, dan bentuk jaringan dibandingkan
+dengan file — jadi ketidakcocokan dilaporkan selagi agen masih utuh. Bentuk jaringan diperiksa
+sebagai susunan, bukan sekadar jumlah parameter: `[64, 32]` dan `[32, 64]` bisa memuat jumlah float
+yang sama.
+
+**Normalisasi berada di dalam agen.** `PpoOptions.NormalizeObservations` dan `NormalizeRewards`
+(juga milik A2C) menyimpan statistik berjalan di dalam agen, bukan di wrapper simulasi. Policy yang
+dilatih dengan input terstandardisasi tidak bermakna pada input mentah, jadi statistiknya adalah
+bagian dari policy — dan karena berada di dalam agen, ia ikut disimpan dan dipulihkan, tanpa objek
+kedua yang harus dijaga tetap selaras.
+
 ## Model memori
 
 Setiap buffer yang dibutuhkan satu run dialokasikan saat konstruksi:
@@ -198,7 +263,7 @@ Setiap buffer yang dibutuhkan satu run dialokasikan saat konstruksi:
 | `DenseLayer` | weight, bias, gradien weight/bias, cache aktivasi | bentuk layer |
 | `AdamOptimizer` | dua array momen | jumlah parameter |
 | `UniformReplayBuffer` | lima array datar, structure-of-arrays | kapasitas |
-| `RolloutBuffer` | sepuluh array datar | panjang rollout |
+| `RolloutBuffer` | sepuluh array datar | panjang rollout (dibagi ke semua stream simulasi) |
 | `ReplayBatch` | satu minibatch, dipakai ulang tiap sampling | ukuran batch |
 
 Satu siklus penuh forward-backward-update mengalokasikan **nol byte**.

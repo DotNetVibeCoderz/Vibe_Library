@@ -18,7 +18,9 @@ which knobs matter.
                     │
                     └─ continuous ───────┬─ first attempt ────────────▶ SAC
                                          │
-                                         └─ willing to tune ─────────▶ TD3
+                                         ├─ willing to tune ─────────▶ TD3
+                                         │
+                                         └─ cheap env, many copies ──▶ PPO
 ```
 
 | | Family | On/off-policy | Sample efficiency | Tuning needed |
@@ -27,6 +29,9 @@ which knobs matter.
 | **DQN** | value, neural | off | high | moderate |
 | **A2C** | policy gradient | on | low | moderate |
 | **PPO** | policy gradient | on | medium | low |
+
+PPO and A2C take discrete *or* continuous actions; SAC and TD3 take continuous only. The on-policy
+pair are also the only ones that batch across [several environments](01-getting-started.md#several-environments-at-once).
 | **SAC** | actor-critic | off | high | very low |
 | **TD3** | actor-critic | off | high | high |
 
@@ -128,9 +133,14 @@ needed. Simpler, and markedly less sample-efficient — every transition contrib
 update.
 
 It earns its place twice over. It is the shortest complete actor-critic in the library, so it is the
-one to read first; and its 32-step rollout means it updates far more often than PPO, so early
-learning is visible within seconds in the console rather than after the first 2048-step rollout
-completes.
+one to read first — its update is `UpdateA2C` in `OnPolicyLearner`, which PPO shares everything
+else with; and its 32-step rollout means it updates far more often than PPO, so early learning is
+visible within seconds in the console rather than after the first 2048-step rollout completes.
+
+**On continuous actions** (`ContinuousA2CAgent`) it is the most sensitive algorithm here. With no
+trust region, every rollout's noise goes straight into the step, and the cure is a shorter horizon:
+`Catalog` uses `Gamma = 0.9` and `GaeLambda = 0.9` for it. Measured on Reacher over 200,000 steps,
+that is the difference between −31 and −141, where an untrained arm scores about −220.
 
 ## PPO
 
@@ -180,6 +190,36 @@ losses through it, and the value loss — much larger in magnitude — tends to 
 gradient. Separate networks cost more memory and are markedly easier to tune.
 
 **Key options:** `RolloutLength`, `Epochs`, `ClipRange`, `EntropyCoefficient`.
+
+### PPO on continuous actions
+
+`ContinuousPpoAgent` is the same algorithm with the categorical distribution replaced by a diagonal
+Gaussian: the actor emits a mean per action dimension, and a free, state-independent log standard
+deviation per dimension sets the spread (`InitialLogStd`, default 0 — a spread of 1 on the unit
+action scale).
+
+```csharp
+var agent = new ContinuousPpoAgent(obs, act, new PpoOptions
+{
+    LearningRate = 1e-3f,
+    EntropyCoefficient = 0f,        // the Gaussian already explores through its spread
+    NormalizeObservations = true,
+    NormalizeRewards = true,        // Pendulum pays up to -16 a step; CartPole pays +1
+});
+```
+
+Two choices worth knowing:
+
+- **The action is not squashed.** SAC needs a `tanh` because it differentiates through the sampled
+  action; PPO only ever needs the log-probability of an action it actually drew. So the sample is
+  stored unclipped, and only the copy sent to the environment is clipped to the bounds. Storing the
+  clipped value would make the log-probability describe an action that was never taken.
+- **The spread does not depend on the state.** A state-dependent spread lets the policy become
+  confident in states it has barely seen, and on-policy methods, which cannot revisit old data, are
+  the worst placed to recover from that.
+
+With `Catalog`'s settings it reaches about −170 on Pendulum in 100,000 steps — ten seconds on a
+laptop — and about −26 on Reacher in 200,000.
 
 ## SAC
 
