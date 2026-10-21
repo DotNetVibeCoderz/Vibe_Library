@@ -22,6 +22,7 @@ dotnet run --project src/ActorNet.Cli -c Release -- demo banking        # a work
 dotnet run --project src/ActorNet.Cli -c Release -- bench -n 2000000    # throughput
 dotnet run --project src/ActorNet.Dashboard                             # the web console
 dotnet run --project samples/ActorNet.Samples.Avalonia                  # desktop samples
+dotnet build samples/ActorNet.Samples.Android -t:Run                    # on a USB device; see below
 dotnet run -c Release --project benchmarks/ActorNet.Benchmarks -- --filter '*RoutingBenchmarks*'
 dotnet pack ActorNet.slnx -c Release -o artifacts
 dotnet run --project tests/ActorNet.Soak -c Release -- --minutes 30    # drift, not correctness
@@ -43,12 +44,21 @@ for this; do not delete it assuming it is unused.
 
 The suite is fast (~3s) and hermetic: networked tests bind port 0, so they never collide.
 
+**The Android sample is built by path, never through the solution.** CI builds `ActorNet.slnx` on
+three operating systems without the Android workload, so adding the project to it fails all three.
+On the development machine the SDK is not on the default path; pass
+`-p:AndroidSdkDirectory="C:\Program Files (x86)\Android\android-sdk"` and
+`-p:JavaSdkDirectory="C:\Program Files\Microsoft\jdk-21.0.12.101-hotspot"`. Over USB, the
+phone and the PC meet at 127.0.0.1 through `adb reverse tcp:9000 tcp:9000` and
+`adb forward tcp:9100 tcp:9100`. The phone is MIUI, which refuses `adb shell input`; drive it with
+`adb shell am start -n com.gravicode.actornet.sample/.MainActivity --ez autostart true`.
+
 **Long-running processes lock their DLLs.** A `dotnet build` will fail with MSB3021 while a node,
 the console or the samples are running. Kill them first (`taskkill //F //IM ActorNet.Cli.exe`).
 
 ## Architecture
 
-Twelve projects. `ActorNet.Core` is the library and the only one that matters for most work.
+Nineteen projects (`clients/` aside). `ActorNet.Core` is the library and the only one that matters for most work.
 
 ```
 src/ActorNet.Core/          the library (packs as "ActorNet")
@@ -68,6 +78,7 @@ src/ActorNet.Demo/          banking, telemetry, ordering domains, shared by all 
 src/ActorNet.Cli/           Spectre.Console, packs as the "actornet" dotnet tool
 src/ActorNet.Dashboard/     Blazor Server console; is itself a node
 samples/…Avalonia/          four desktop scenarios over one shared node
+samples/…Android/           the phone as a cluster node; NOT in ActorNet.slnx (needs the workload)
 tests/ActorNet.Tests/       xunit.v3, 197 tests
 benchmarks/                 BenchmarkDotNet
 clients/{nodejs,python,go}/ SDKs speaking the same wire protocol

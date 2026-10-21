@@ -1,0 +1,61 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    An ActorNet node on a phone. Not in ActorNet.slnx on purpose: CI builds the solution on three
+    operating systems without the Android workload, and one project it cannot restore would fail
+    every one of those builds. Build it by path:
+
+      dotnet build samples/ActorNet.Samples.Android -t:Run
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0-android</TargetFramework>
+    <SupportedOSPlatformVersion>24</SupportedOSPlatformVersion>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>ActorNet.Samples.Android</RootNamespace>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+
+    <ApplicationId>com.gravicode.actornet.sample</ApplicationId>
+    <ApplicationTitle>ActorNet</ApplicationTitle>
+    <ApplicationVersion>1</ApplicationVersion>
+    <ApplicationDisplayVersion>$(Version)</ApplicationDisplayVersion>
+    <AndroidPackageFormat>apk</AndroidPackageFormat>
+
+    <!--
+      Directory.Build.props turns these on for server-shaped processes. A phone is not one: the
+      Android runtime has its own collector and ignores the request, so say so rather than let
+      the setting look like it means something here.
+    -->
+    <ServerGarbageCollection>false</ServerGarbageCollection>
+    <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
+
+    <!--
+      Messages resolve through an allow-list built by scanning the demo assembly for
+      [ActorMessage], and are (de)serialised by reflection. The trimmer cannot see either use, so
+      a trimmed build would strip the types the wire needs and fail only when a peer sends one.
+    -->
+    <TrimMode>partial</TrimMode>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <AndroidResource Include="Resources\**\*" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia.Android" Version="11.3.7" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="11.3.7" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="11.3.7" />
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/ActorNet.Core/ActorNet.Core.csproj" />
+    <ProjectReference Include="../../src/ActorNet.Demo/ActorNet.Demo.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <TrimmerRootAssembly Include="ActorNet.Core" RootMode="All" />
+    <TrimmerRootAssembly Include="ActorNet.Demo" RootMode="All" />
+  </ItemGroup>
+
+</Project>

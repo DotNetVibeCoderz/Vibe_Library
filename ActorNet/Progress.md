@@ -142,6 +142,8 @@ works and something automated proves it** — not when the code exists.
 - [x] Placement ring visualisation with a key probe
 - [x] Read-only HTTP API (`/api/metrics`, `/api/cluster`)
 - [x] Avalonia desktop samples — banking, telemetry, ordering, supervision
+- [ ] Android sample (Avalonia) — the phone as a cluster node, over adb tunnels or Wi-Fi. Run by
+      hand on one device; nothing automated builds or runs it, so it stays unticked
 - [x] BenchmarkDotNet suite for messaging and routing
 - [x] `ActorNet.AspNetCore`: a cluster-aware health check, read-only diagnostics endpoints, and a
       readiness filter
@@ -280,6 +282,11 @@ Ticking a box means it works, not that it is finished. These are the caveats wor
   but increment. It measures the runtime's floor, not an application's throughput.
 - **Rebalancing deactivates rather than migrates.** An actor whose key moves is flushed and
   reactivated from the store on its new owner, so an actor with no persistent state loses it.
+- **The Android sample has run on one phone, by hand, over USB only.** A Xiaomi Poco F3 (arm64,
+  Android 11) joined a Windows node through `adb reverse`/`adb forward`, took 47% of the ring,
+  served asks for its device actors from the PC, survived the PC node being killed, and rejoined
+  when it came back. Wi-Fi mode was not exercised: the Windows network was marked Public and
+  refused inbound connections. CI does not build it - it needs the Android workload.
 - **A cluster has now run across three machines, but never in containers.** Windows x64, macOS 15
   on Intel and macOS 13 on Apple Silicon joined one cluster over a wireless LAN, agreed on the same
   three-member table, and routed tells and asks between them. Docker and Kubernetes remain

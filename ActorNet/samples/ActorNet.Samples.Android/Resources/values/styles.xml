@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Dibuat oleh Gravicode Studios, dipimpin oleh Kang Fadhil. -->
+<resources>
+  <color name="ground">#14161F</color>
+
+  <!-- The window is painted the app's own ground colour before Avalonia draws its first frame,
+       so launching does not flash white. -->
+  <style name="ActorNetTheme" parent="@style/Theme.AppCompat.NoActionBar">
+    <item name="android:windowActionBar">false</item>
+    <item name="android:windowNoTitle">true</item>
+    <item name="android:windowBackground">@color/ground</item>
+    <item name="android:statusBarColor">@color/ground</item>
+    <item name="android:navigationBarColor">@color/ground</item>
+  </style>
+</resources>

@@ -106,6 +106,10 @@ actornet cluster --port 9002 --seed 127.0.0.1:9000 --watch
 The first node needs `--cluster`: it has no seeds of its own, and without the flag it runs
 standalone and never gossips.
 
+A phone can be one of the nodes. `samples/ActorNet.Samples.Android` joins over USB through `adb`
+tunnels or over Wi-Fi, takes its own slice of the ring, and shows which of its device actors
+landed on the phone and which on the PC - see [Tooling](docs/en/09-tooling.md#the-android-sample).
+
 ## The console
 
 ```bash
@@ -392,6 +396,11 @@ actornet cluster --port 9002 --seed 127.0.0.1:9000 --watch
 
 Node pertama membutuhkan `--cluster`: ia tidak punya seed sendiri, dan tanpa flag itu ia berjalan
 standalone dan tidak pernah ber-gossip.
+
+Ponsel bisa menjadi salah satu node. `samples/ActorNet.Samples.Android` bergabung lewat USB melalui
+tunnel `adb` atau lewat Wi-Fi, mengambil potongan ring-nya sendiri, dan menunjukkan actor perangkat
+mana yang mendarat di ponsel dan mana yang di PC - lihat
+[Perkakas](docs/id/09-perkakas.md#sample-android).
 
 ## Tiga base class
 

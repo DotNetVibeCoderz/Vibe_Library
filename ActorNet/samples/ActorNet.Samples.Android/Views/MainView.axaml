@@ -1,0 +1,165 @@
+<!-- Dibuat oleh Gravicode Studios, dipimpin oleh Kang Fadhil. -->
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:ActorNet.Samples.Android.ViewModels"
+             x:Class="ActorNet.Samples.Android.Views.MainView"
+             x:DataType="vm:NodeViewModel">
+
+    <ScrollViewer>
+        <StackPanel Margin="16,18,16,28" Spacing="14">
+
+            <!-- Identity: what this phone is called in the cluster and where peers reach it. -->
+            <Grid ColumnDefinitions="*,Auto">
+                <StackPanel Spacing="2">
+                    <TextBlock FontFamily="{StaticResource MonoFont}" FontSize="24" FontWeight="Bold">
+                        <Run Text="actor" /><Run Text="net" Foreground="{StaticResource Brass}" />
+                    </TextBlock>
+                    <TextBlock Classes="label" Text="ANDROID NODE" />
+                </StackPanel>
+                <Border Grid.Column="1" VerticalAlignment="Center" CornerRadius="12" Padding="10,5"
+                        Background="{StaticResource Raised}">
+                    <TextBlock Classes="mono" FontSize="12" Text="{Binding Status}" />
+                </Border>
+            </Grid>
+
+            <Border Classes="card">
+                <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto">
+                    <TextBlock Classes="label" Text="NODE" VerticalAlignment="Center" Margin="0,0,14,6" />
+                    <TextBlock Grid.Column="1" Classes="mono" Foreground="{StaticResource Brass}"
+                               Text="{Binding NodeId}" TextWrapping="Wrap" Margin="0,0,0,6" />
+                    <TextBlock Grid.Row="1" Classes="label" Text="PEERS DIAL" VerticalAlignment="Center" Margin="0,0,14,6" />
+                    <TextBlock Grid.Row="1" Grid.Column="1" Classes="mono" Text="{Binding PeersDial}" Margin="0,0,0,6" />
+                    <TextBlock Grid.Row="2" Classes="label" Text="WI-FI" VerticalAlignment="Center" Margin="0,0,14,0" />
+                    <TextBlock Grid.Row="2" Grid.Column="1" Classes="mono" Foreground="{StaticResource Muted}" Text="{Binding WifiAddress}" />
+                </Grid>
+            </Border>
+
+            <!-- Connection. Locked while the node runs: changing a seed under a live node would
+                 say one thing on screen and do another on the wire. -->
+            <Border Classes="card">
+                <StackPanel Spacing="10">
+                    <TextBlock Classes="label" Text="JOIN A CLUSTER" />
+                    <StackPanel Orientation="Horizontal" Spacing="18" IsEnabled="{Binding !IsRunning}">
+                        <RadioButton GroupName="mode" Content="USB (adb)" IsChecked="{Binding Usb}" />
+                        <RadioButton GroupName="mode" Content="Wi-Fi" IsChecked="{Binding !Usb, Mode=OneWay}" />
+                    </StackPanel>
+
+                    <Grid ColumnDefinitions="*,10,90" IsEnabled="{Binding !IsRunning}">
+                        <StackPanel Spacing="4">
+                            <TextBlock Classes="label" Text="SEED (EMPTY = FIRST NODE)" />
+                            <TextBox Text="{Binding Seed}" Watermark="pc-address:9000" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="2" Spacing="4">
+                            <TextBlock Classes="label" Text="PORT" />
+                            <TextBox Text="{Binding Port}" />
+                        </StackPanel>
+                    </Grid>
+
+                    <StackPanel Spacing="4" IsEnabled="{Binding !IsRunning}">
+                        <TextBlock Classes="label" Text="ADVERTISE AS" />
+                        <TextBox Text="{Binding AdvertisedHost}" />
+                    </StackPanel>
+
+                    <Button Classes="primary" HorizontalAlignment="Stretch"
+                            Content="{Binding IsRunning, Converter={x:Static vm:Converters.NodeLabel}}"
+                            Command="{Binding ToggleNodeCommand}" />
+                </StackPanel>
+            </Border>
+
+            <!-- Vitals of this node alone. The PC keeps its own. -->
+            <Border Classes="card">
+                <Grid ColumnDefinitions="*,*,*">
+                    <StackPanel>
+                        <TextBlock Classes="label" Text="MSG/S" />
+                        <TextBlock Classes="stat" Foreground="{StaticResource Brass}" Text="{Binding Throughput}" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="1">
+                        <TextBlock Classes="label" Text="ACTORS HERE" />
+                        <TextBlock Classes="stat" Foreground="{StaticResource Teal}" Text="{Binding LocalActors}" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="2">
+                        <TextBlock Classes="label" Text="HANDLED" />
+                        <TextBlock Classes="stat" Text="{Binding Handled}" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <Border Classes="card">
+                <StackPanel Spacing="8">
+                    <TextBlock Classes="label" Text="MEMBERS · SHARE OF THE RING" />
+                    <TextBlock Classes="muted" FontSize="12" Text="Start the node to see the cluster."
+                               IsVisible="{Binding !IsRunning}" />
+                    <ItemsControl ItemsSource="{Binding Members}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vm:MemberRow">
+                                <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,5">
+                                    <Ellipse Width="9" Height="9" VerticalAlignment="Center" Margin="0,0,10,0"
+                                             Fill="{Binding Status, Converter={x:Static vm:Converters.StatusBrush}}" />
+                                    <StackPanel Grid.Column="1">
+                                        <TextBlock Classes="mono" FontSize="13" Text="{Binding NodeId}" TextTrimming="CharacterEllipsis" />
+                                        <TextBlock Classes="mono" FontSize="11" Foreground="{StaticResource Muted}">
+                                            <Run Text="{Binding Address}" /><Run Text=" · " /><Run Text="{Binding Status}" />
+                                        </TextBlock>
+                                    </StackPanel>
+                                    <TextBlock Grid.Column="2" Classes="stat" FontSize="15" VerticalAlignment="Center"
+                                               Text="{Binding Share, StringFormat={}{0:P0}}" />
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </Border>
+
+            <!-- The demonstration: one send call, and the hash ring decides which machine runs it. -->
+            <Border Classes="card">
+                <StackPanel Spacing="10">
+                    <TextBlock Classes="label" Text="DEVICE ACTORS · PLACED BY THE RING" />
+                    <Button HorizontalAlignment="Stretch" IsEnabled="{Binding IsRunning}"
+                            Content="{Binding IsStreaming, Converter={x:Static vm:Converters.StreamLabel}}"
+                            Command="{Binding ToggleStreamCommand}" />
+                    <ItemsControl ItemsSource="{Binding Devices}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vm:DeviceRow">
+                                <Grid ColumnDefinitions="96,*,64,52" Margin="0,4">
+                                    <TextBlock Classes="mono" FontSize="13" Text="{Binding Id}" VerticalAlignment="Center" />
+                                    <TextBlock Grid.Column="1" Classes="mono" FontSize="11" VerticalAlignment="Center"
+                                               TextTrimming="CharacterEllipsis" Margin="0,0,6,0"
+                                               Foreground="{Binding IsLocal, Converter={x:Static vm:Converters.OwnerBrush}}"
+                                               Text="{Binding Owner}" />
+                                    <TextBlock Grid.Column="2" Classes="mono" FontSize="13" HorizontalAlignment="Right" VerticalAlignment="Center"
+                                               Foreground="{Binding InAlarm, Converter={x:Static vm:Converters.AlarmBrush}}"
+                                               Text="{Binding Latest, StringFormat={}{0:N1}°}" />
+                                    <TextBlock Grid.Column="3" Classes="mono" FontSize="11" HorizontalAlignment="Right" VerticalAlignment="Center"
+                                               Foreground="{Binding Unanswered, Converter={x:Static vm:Converters.UnansweredBrush}}"
+                                               Text="{Binding Readings}" />
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <Border Height="1" Background="{StaticResource Line}" />
+                    <StackPanel Spacing="2">
+                        <TextBlock Classes="label" Text="ALARM DESK" />
+                        <TextBlock Classes="mono" FontSize="12" Foreground="{StaticResource Brass}"
+                                   TextWrapping="Wrap" Text="{Binding AlarmDesk}" />
+                    </StackPanel>
+                    <TextBlock Classes="muted" FontSize="12"
+                               Text="Teal lives on this phone, brass on a peer. The stream sends to all eight the same way and the ring decides where each lands. A red count means the owner did not answer. State is kept in memory per node, so a key that moves starts its count again." />
+                </StackPanel>
+            </Border>
+
+            <Border Classes="card">
+                <StackPanel Spacing="6">
+                    <TextBlock Classes="label" Text="LOG" />
+                    <ItemsControl ItemsSource="{Binding Log}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="x:String">
+                                <TextBlock Classes="mono" FontSize="11" TextWrapping="Wrap"
+                                           Foreground="{StaticResource Muted}" Text="{Binding}" Margin="0,0,0,5" />
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

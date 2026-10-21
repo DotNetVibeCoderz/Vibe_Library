@@ -3,7 +3,8 @@
 *Dibuat oleh Gravicode Studios, dipimpin oleh Kang Fadhil.*
 *[Bahasa Indonesia](../id/09-perkakas.md) · [Docs index](README.md)*
 
-Three surfaces over the same runtime: a terminal CLI, a web console, and desktop samples.
+Three surfaces over the same runtime: a terminal CLI, a web console, and desktop samples - plus
+an Android sample that joins the cluster as a node of its own.
 
 ## The CLI
 
@@ -186,6 +187,44 @@ oversell" fires more single-unit orders than there is stock and the number never
 same exception.
 
 ![Supervision](../images/samples-supervision.png)
+
+## The Android sample
+
+A phone as a full member of the cluster - not a client of one. It takes its own slice of the hash
+ring, and of the eight device actors it streams readings into, some activate on the phone and the
+rest on whichever peer owns their key. The code sending to them is the same for both.
+
+![Android sample, a phone and a PC sharing the ring](../images/samples-android.png)
+
+It needs the Android workload (`dotnet workload install android`), and it is not in
+`ActorNet.slnx`: CI builds the solution without that workload, so it is built by path.
+
+Over USB, `adb` tunnels one port each way, so both machines see each other at `127.0.0.1` and no
+firewall is involved:
+
+```bash
+adb reverse tcp:9000 tcp:9000      # the phone dials 127.0.0.1:9000 and reaches the PC
+adb forward tcp:9100 tcp:9100      # the PC dials 127.0.0.1:9100 and reaches the phone
+actornet run --host 127.0.0.1 --port 9000 --cluster --node-id pc-node
+dotnet build samples/ActorNet.Samples.Android -t:Run
+```
+
+Then tap **Start node**. Some phones refuse `adb shell input` (MIUI does), so the sample also
+starts from its launch intent, which makes a demo scriptable from the PC:
+
+```bash
+adb shell am start -n com.gravicode.actornet.sample/.MainActivity --ez autostart true --ez stream true
+```
+
+Over Wi-Fi, pick **Wi-Fi**: the phone advertises its LAN address, and the seed is the PC's. The PC
+must then accept inbound connections on its port, which a Windows network marked Public does not.
+Leave the seed empty and the phone is the first node, for a PC to join with
+`--seed <phone-address>:9100`.
+
+Stop the PC node while the stream runs: the phone marks it unreachable, then down, takes the whole
+ring, and keeps streaming. Start it again and the phone rejoins on its next beat. Device state is in
+memory per node, so a key that moves starts its count again - rebalancing deactivates rather than
+migrates.
 
 ## Benchmarks
 

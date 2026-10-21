@@ -3,7 +3,8 @@
 *Dibuat oleh Gravicode Studios, dipimpin oleh Kang Fadhil.*
 *[English](../en/09-tooling.md) · [Indeks dokumentasi](README.md)*
 
-Tiga permukaan di atas runtime yang sama: CLI terminal, konsol web, dan sample desktop.
+Tiga permukaan di atas runtime yang sama: CLI terminal, konsol web, dan sample desktop - ditambah
+sample Android yang bergabung ke cluster sebagai node tersendiri.
 
 ## CLI
 
@@ -192,6 +193,44 @@ pernah menjadi negatif.
 exception yang sama.
 
 ![Supervisi](../images/samples-supervision.png)
+
+## Sample Android
+
+Ponsel sebagai anggota penuh cluster - bukan klien. Ia mengambil potongan hash ring-nya sendiri, dan
+dari delapan actor perangkat yang menerima stream pembacaannya, sebagian aktif di ponsel dan sisanya
+di peer mana pun yang memiliki key-nya. Kode yang mengirim ke mereka sama untuk keduanya.
+
+![Sample Android, ponsel dan PC berbagi ring](../images/samples-android.png)
+
+Ia membutuhkan workload Android (`dotnet workload install android`), dan tidak ada di
+`ActorNet.slnx`: CI membangun solution tanpa workload itu, jadi sample ini dibangun lewat path-nya.
+
+Lewat USB, `adb` membuat tunnel satu port ke tiap arah, sehingga kedua mesin saling melihat di
+`127.0.0.1` dan firewall tidak terlibat sama sekali:
+
+```bash
+adb reverse tcp:9000 tcp:9000      # ponsel memanggil 127.0.0.1:9000 dan sampai ke PC
+adb forward tcp:9100 tcp:9100      # PC memanggil 127.0.0.1:9100 dan sampai ke ponsel
+actornet run --host 127.0.0.1 --port 9000 --cluster --node-id pc-node
+dotnet build samples/ActorNet.Samples.Android -t:Run
+```
+
+Lalu ketuk **Start node**. Sebagian ponsel menolak `adb shell input` (MIUI salah satunya), jadi
+sample ini juga bisa dijalankan dari intent peluncurannya, sehingga demo bisa di-script dari PC:
+
+```bash
+adb shell am start -n com.gravicode.actornet.sample/.MainActivity --ez autostart true --ez stream true
+```
+
+Lewat Wi-Fi, pilih **Wi-Fi**: ponsel mengiklankan alamat LAN-nya, dan seed-nya adalah alamat PC. PC
+lalu harus menerima koneksi masuk di port-nya, yang tidak dilakukan jaringan Windows berprofil
+Public. Kosongkan seed dan ponsel menjadi node pertama, untuk di-join oleh PC dengan
+`--seed <alamat-ponsel>:9100`.
+
+Matikan node PC saat stream berjalan: ponsel menandainya unreachable, lalu down, mengambil seluruh
+ring, dan tetap melanjutkan stream. Jalankan lagi dan ponsel bergabung kembali pada beat berikutnya.
+State perangkat disimpan di memori per node, jadi key yang berpindah memulai hitungannya dari awal -
+rebalancing menonaktifkan, bukan memigrasikan.
 
 ## Benchmark
 
