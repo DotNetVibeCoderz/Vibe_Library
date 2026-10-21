@@ -17,7 +17,7 @@
     <Title>RLNet - Reinforcement Learning for .NET</Title>
     <Description>Dependency-free reinforcement learning library for .NET 10. Gym-style environments, a SIMD neural-network engine, and prebuilt DQN, A2C, PPO, SAC and TD3 agents with multi-agent support. Dibuat oleh Gravicode Studios, dipimpin oleh Kang Fadhil.</Description>
     <PackageTags>reinforcement-learning;rl;machine-learning;ai;dqn;ppo;sac;td3;a2c;q-learning;gym;multi-agent;neural-network;simd</PackageTags>
-    <PackageReleaseNotes>First release: Gym-style environment API with Discrete/Box spaces, seeded determinism and truncation; SIMD MLP engine with Adam; DQN (double + dueling + prioritised replay), A2C, PPO, SAC, TD3; nine environments across classic control, robotics, finance, supply chain and multi-agent.</PackageReleaseNotes>
+    <PackageReleaseNotes>0.2.0: Checkpoint.Save/Load for every agent - complete, resumable state with shape-checked, atomic loading. PPO and A2C on continuous actions (Gaussian policy). VectorEnvironment with batched PPO/A2C action selection. Running observation and reward normalisation. MetricsLog for CSV / JSON Lines episode logs. NuGet icon.</PackageReleaseNotes>
   </PropertyGroup>
 
   <!--
@@ -33,6 +33,7 @@
   <ItemGroup>
     <None Include="$(MSBuildThisFileDirectory)../../README.md" Pack="true" PackagePath="\" Visible="false" />
     <None Include="$(MSBuildThisFileDirectory)../../LICENSE" Pack="true" PackagePath="\" Visible="false" />
+    <None Include="$(MSBuildThisFileDirectory)../../docs/images/icon.png" Pack="true" PackagePath="\" Visible="false" />
   </ItemGroup>
 
 </Project>
