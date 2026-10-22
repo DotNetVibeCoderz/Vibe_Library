@@ -196,9 +196,9 @@ tidak ada pula yang mengharuskan Anda mem-fork sebuah agen.
 ## Beberapa simulasi sekaligus
 
 `VectorEnvironment` menjalankan beberapa salinan satu simulasi bersamaan dan menerbitkan
-observasinya sebagai satu buffer kontigu `[salinan, observationSize]`. PPO dan A2C
-mengimplementasikan `IVectorDiscreteAgent` / `IVectorContinuousAgent`, yang memilih aksi setiap
-salinan dalam satu forward pass. Itu membuat pengumpulan lebih murah, tapi pada PPO update-nya yang
+observasinya sebagai satu buffer kontigu `[salinan, observationSize]`. Setiap agen neural — PPO,
+A2C, DQN, SAC, TD3 — mengimplementasikan `IVectorDiscreteAgent` / `IVectorContinuousAgent`, yang
+memilih aksi setiap salinan dalam satu forward pass. Itu membuat pengumpulan lebih murah, tapi pada PPO update-nya yang
 dominan dan percepatan ujung-ke-ujungnya sederhana ([terukur](09-benchmark.md#beberapa-simulasi-sekaligus));
 keuntungan yang lebih besar adalah rollout yang kurang berkorelasi.
 

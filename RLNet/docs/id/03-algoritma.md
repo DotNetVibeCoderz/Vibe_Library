@@ -30,8 +30,8 @@ pilihan yang tepat, dan parameter mana yang penting.
 | **A2C** | policy gradient | on | rendah | sedang |
 | **PPO** | policy gradient | on | menengah | rendah |
 
-PPO dan A2C menerima aksi discrete *maupun* kontinu; SAC dan TD3 hanya kontinu. Pasangan on-policy
-itu juga satu-satunya yang melakukan batching atas [beberapa simulasi](01-memulai.md#beberapa-simulasi-sekaligus).
+PPO dan A2C menerima aksi discrete *maupun* kontinu; SAC dan TD3 hanya kontinu. Setiap algoritma
+kecuali Q-learning tabular bisa dilatih atas [beberapa simulasi](01-memulai.md#beberapa-simulasi-sekaligus).
 | **SAC** | actor-critic | off | tinggi | sangat rendah |
 | **TD3** | actor-critic | off | tinggi | tinggi |
 
@@ -142,12 +142,48 @@ lebih sering daripada PPO, sehingga pembelajaran awal terlihat dalam hitungan de
 bukan setelah rollout 2048 langkah pertama selesai.
 
 **Pada aksi kontinu** (`ContinuousA2CAgent`) ia adalah algoritma paling sensitif di sini. Tanpa
-trust region, derau setiap rollout langsung masuk ke langkahnya, dan obatnya adalah horizon yang
-lebih pendek: `Catalog` memakai `Gamma = 0.9` dan `GaeLambda = 0.9` untuknya. Diukur di Reacher
-selama 200.000 langkah, satu seed mencapai −31 dengan setelan itu dibanding −141 pada `Gamma = 0.99`,
-sementara lengan yang belum dilatih bernilai sekitar −200. Meski begitu ia peka terhadap seed: enam
-seed pada setelan katalog berakhir di mana saja antara −28 dan −125. Kalau hasil kontinu penting,
-pilih PPO.
+trust region, derau setiap rollout langsung masuk ke langkahnya. `Catalog` menjinakkannya dengan dua
+setelan, keduanya diukur di Reacher selama 200.000 langkah, dengan lengan yang belum dilatih bernilai
+sekitar −220:
+
+- **Horizon yang lebih pendek**, `Gamma = 0.9` dan `GaeLambda = 0.9`. Enam seed rata-rata −87 pada
+  setelan itu, dibanding −129 pada `Gamma = 0.99`.
+- **gSDE** — eksplorasi bergantung-state yang digeneralisasi (`StateDependentExploration`, mengikuti
+  Raffin dkk., 2022). Policy Gaussian biasa menarik derau baru yang independen di setiap langkah,
+  yang dalam rollout pendek sebagian besar saling meniadakan: sendi didorong ke kiri, kanan, kiri.
+  gSDE justru menarik satu pemetaan linier acak dari lapisan tersembunyi terakhir aktor ke aksi
+  sekali per rollout, sehingga state yang sama selalu mendapat dorongan yang sama dan satu
+  trajektori menjelajahi satu variasi policy yang koheren.
+
+```csharp
+var agent = new ContinuousA2CAgent(obs, act, new A2COptions
+{
+    Gamma = 0.9f, GaeLambda = 0.9f,
+    StateDependentExploration = true,
+    InitialLogStd = -0.5f,          // per fitur tersembunyi, bukan per aksi
+    NormalizeObservations = true, NormalizeRewards = true,
+});
+```
+
+Yang dibeli gSDE adalah **keandalan, bukan plafon yang lebih tinggi**. Atas dua belas seed pada
+empat salinan:
+
+| | Sebaran tetap | gSDE |
+|---|---:|---:|
+| Reacher, 200 rb langkah — rata-rata ± sebaran antar-seed | −87 ± 35 | −87 ± 9 |
+| Reacher — seed terburuk | −147 | −100 |
+| Pendulum, 300 rb langkah — median | −568 | −220 |
+| Pendulum — seed yang tidak pernah berhasil mengayun naik | 0 | 1 dari 12 |
+
+Beri ia **beberapa salinan**: setiap salinan menarik perturbasinya sendiri, sehingga satu update
+melihat beberapa variasi koheren alih-alih satu. Pada satu simulasi gSDE lebih stabil tapi sekitar
+15 poin lebih buruk di Reacher. Ia juga tidak menggantikan horizon pendek — pada `Gamma = 0.99`
+rata-ratanya −133.
+
+gSDE hanya opsi A2C. Satu tarikan per rollout cocok untuk 32 langkah A2C; ditahan selama 2.048
+langkah PPO ia hanya menjelajahi satu arah, dan terukur ia membawa PPO di Pendulum dari −164 ke
+−799. Untuk kontrol kontinu PPO tetap pilihan yang lebih kuat — sekitar −26 di Reacher dalam
+200.000 langkah yang sama.
 
 ## PPO
 
@@ -225,7 +261,9 @@ Dua pilihan yang perlu diketahui:
   diambil.
 - **Sebarannya tidak bergantung pada state.** Sebaran yang bergantung pada state membiarkan policy
   menjadi yakin di state yang nyaris belum pernah ia lihat, dan metode on-policy, yang tidak bisa
-  meninjau ulang data lama, paling sulit pulih dari hal itu.
+  meninjau ulang data lama, paling sulit pulih dari hal itu. (gSDE pada A2C memang membuat derau
+  bervariasi menurut state, tapi tidak dengan cara itu: sebarannya dipelajari per fitur tersembunyi,
+  bukan dikeluarkan per state, dan tidak ada gradien yang mengalir darinya ke fitur-fitur itu.)
 
 Dengan pengaturan `Catalog`, ia mencapai sekitar −170 di Pendulum dalam 100.000 langkah — sepuluh
 detik di laptop — dan sekitar −26 di Reacher dalam 200.000 langkah.

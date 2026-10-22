@@ -133,6 +133,9 @@ Feed `[cos θ, sin θ]` instead. `Pendulum`, `Reacher` and `SupplyChain` all do.
   fractions want very different critic learning rates otherwise; `Catalog` turns it on for both.
 - **A2C's horizon is too long.** Without PPO's trust region, `Gamma = 0.99` lets too much noise into
   each step on control tasks. Try `0.9` with `GaeLambda = 0.9`, which is what `Catalog` uses.
+- **A2C's result depends on the seed.** With a fixed spread, twelve seeds on Reacher ended anywhere
+  from −36 to −147. Turn on `StateDependentExploration` and train on four or more copies; the same
+  twelve seeds then land between −70 and −100. See [A2C](03-algorithms.md#a2c).
 - **The spread collapsed early.** `Metrics.Entropy` falling steeply in the first few updates means
   the log standard deviation is shrinking before the mean has found anything. Raise
   `InitialLogStd`, or add a small `EntropyCoefficient`.
@@ -140,7 +143,8 @@ Feed `[cos θ, sin θ]` instead. `Pendulum`, `Reacher` and `SupplyChain` all do.
 ### A checkpoint will not load
 
 `InvalidDataException` names the entry that differs. "No entry" means a different algorithm or an
-option that adds state — `NormalizeObservations` on one side only, for instance. A `.shape` entry
+option that adds state — `NormalizeObservations` or `StateDependentExploration` on one side only, for
+instance. A `.shape` entry
 means `HiddenSizes` differ. A type mismatch in the first line means the checkpoint holds a different
 agent class altogether. In every case the agent is left untouched, so it is safe to catch and fall
 back to training from scratch.

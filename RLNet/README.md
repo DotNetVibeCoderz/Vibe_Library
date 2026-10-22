@@ -49,7 +49,7 @@ the solve threshold, and a deterministic evaluation of the finished policy score
 | **Multi-agent** | Simultaneous-move environments with independent or parameter-shared learners |
 | **Training** | Parallel environments with batched action selection, checkpoints that resume exactly, observation and reward normalisation, CSV / JSON Lines episode logs |
 | **Optional GPU** | `RLNet.Gpu` runs the dense kernels on CUDA or OpenCL via ILGPU, and falls back to CPU on its own |
-| **Console** | Avalonia desktop app — Windows, Linux, macOS |
+| **Console** | Avalonia desktop app — Windows, Linux, macOS; save, load and watch checkpoints, log runs to CSV |
 
 ## Install
 
@@ -67,6 +67,9 @@ dotnet run --project src/RLNet.Visualizer
 
 # or open straight onto something specific
 dotnet run --project src/RLNet.Visualizer -- --env Pendulum --algo Sac --start
+
+# or watch a policy you trained in code
+dotnet run --project src/RLNet.Visualizer -- --env Pendulum --algo Ppo --load pendulum.rlnet --watch --start
 ```
 
 ![The RLNet console training PPO on CartPole](docs/images/console-cartpole.png)
@@ -128,7 +131,7 @@ console, benchmarks, and how to extend any of it.
 
 ```bash
 dotnet build RLNet.slnx -c Release
-dotnet run --project tests/RLNet.Tests -c Release          # 162 tests
+dotnet run --project tests/RLNet.Tests -c Release          # 191 tests
 dotnet run -c Release --project benchmarks/RLNet.Benchmarks
 ```
 
@@ -190,7 +193,7 @@ mendapat nilai sempurna 500.
 | **Multi-agent** | Simulasi gerak-serentak dengan learner independen atau berbagi parameter |
 | **Training** | Simulasi paralel dengan pemilihan aksi ter-batch, checkpoint yang melanjutkan persis, normalisasi observasi dan reward, log episode CSV / JSON Lines |
 | **GPU opsional** | `RLNet.Gpu` menjalankan kernel dense di CUDA atau OpenCL lewat ILGPU, dan otomatis kembali ke CPU |
-| **Konsol** | Aplikasi desktop Avalonia — Windows, Linux, macOS |
+| **Konsol** | Aplikasi desktop Avalonia — Windows, Linux, macOS; simpan, muat, dan tonton checkpoint, catat run ke CSV |
 
 ## Instalasi
 
@@ -208,6 +211,9 @@ dotnet run --project src/RLNet.Visualizer
 
 # atau langsung membuka simulasi tertentu
 dotnet run --project src/RLNet.Visualizer -- --env Pendulum --algo Sac --start
+
+# atau menonton policy yang Anda latih lewat kode
+dotnet run --project src/RLNet.Visualizer -- --env Pendulum --algo Ppo --load pendulum.rlnet --watch --start
 ```
 
 ![Konsol RLNet melatih PPO pada CartPole](docs/images/console-cartpole.png)
@@ -271,7 +277,7 @@ memperluas semuanya.
 
 ```bash
 dotnet build RLNet.slnx -c Release
-dotnet run --project tests/RLNet.Tests -c Release          # 162 tes
+dotnet run --project tests/RLNet.Tests -c Release          # 191 tes
 dotnet run -c Release --project benchmarks/RLNet.Benchmarks
 ```
 

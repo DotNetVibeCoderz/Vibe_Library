@@ -15,7 +15,7 @@
 | [05 — Mesin neural](05-neural-network.md) | MLP, SIMD, Adam, dan kenapa bukan PyTorch |
 | [06 — GPU](06-gpu.md) | Backend opsional, dan kapan benar-benar berguna |
 | [07 — Multi-agent](07-multi-agent.md) | Simulasi gerak-serentak dan learner independen |
-| [08 — Konsol](08-konsol.md) | Membaca visualizer, dan arti setiap trace |
+| [08 — Konsol](08-konsol.md) | Membaca visualizer, arti setiap trace; simpan, muat, tonton, catat |
 | [09 — Benchmark](09-benchmark.md) | Throughput terukur, dan cara mengulanginya |
 | [10 — Memperluas](10-memperluas.md) | Simulasi, algoritma, buffer, dan backend baru |
 | [11 — Pemecahan masalah](11-pemecahan-masalah.md) | Kenapa agen tidak belajar, dan cara mengenali penyebabnya |

@@ -56,26 +56,40 @@ Progress against this plan is tracked in [Progress.md](Progress.md).
 - ✅ **Normalisation.** `RunningMeanStd`, `ObservationNormalizer`, `RewardScaler`, opt-in on PPO /
   A2C, saved in the agent's checkpoint.
 
-## Phase 6 — next 🔜
+## Phase 6 — 0.3.0: console and batching ✅
 
-Ordered by how much each one unblocks real use.
+- ✅ **Console: save / load / watch / log.** `SAVE` / `LOAD` checkpoints; a load the console's
+  lighter agent refuses is retried against a Catalog-configured one, so policies trained in code
+  can be watched. `WATCH` runs deterministically on a *second* environment copy, so training resumes
+  bit-identical. `LOG` writes a CSV per run. CLI: `--load`, `--watch`, `--log`, `--log-dir`.
+- ✅ **Batched off-policy agents.** DQN, SAC and TD3 implement the vector interfaces: one forward
+  pass for every copy's action, one replay buffer, `TrainFrequency` counted in transitions. One
+  copy reproduces the single-environment run exactly. (DQN has no n-step returns yet, so there was
+  no per-copy n-step state to keep apart — that is now Phase 7.)
+- ✅ **Continuous A2C robustness — gSDE.** `A2COptions.StateDependentExploration`, on by default in
+  `Catalog`. On four copies over twelve seeds: Reacher mean unchanged (−87) with the spread across
+  seeds cut from ±35 to ±9; Pendulum median at 300k steps −568 → −220. It does *not* remove the
+  need for γ = 0.9 (−133 at 0.99), and it is worse on a single environment.
+- ✅ Released as 0.3.0 (tag `RLNet-v0.3.0`).
+- ✅ Library fixes found on the way: deterministic Q-table action selection no longer draws from
+  the training generator or inserts table rows; deterministic calls no longer overwrite
+  `Metrics.Epsilon`; loading a checkpoint restores it.
 
-1. 🔜 **Console: save / load / watch.** Buttons for `Checkpoint.Save` / `Load`, a "watch only"
-   mode that runs a loaded agent deterministically, and a toggle that writes a `MetricsLog` next to
-   the run.
-2. 🔜 **Batched off-policy agents.** DQN, SAC and TD3 take one transition at a time; feeding them a
-   `VectorEnvironment` would need per-copy n-step handling and a batched `SelectActions`. Worth it
-   mainly for SAC on expensive environments.
-3. 🔜 **Continuous A2C robustness.** It needs γ = 0.9 to learn Reacher, 500k steps on Pendulum,
-   and still ends anywhere from −28 to −125 on Reacher depending on the seed.
-   Generalised state-dependent exploration (gSDE) is what the reference implementations use to fix
-   that; evaluate it against the current fixed log-std.
+## Phase 7 — next 🔜
+
+1. 🔜 **n-step returns for DQN.** Now that DQN takes vector batches, n-step needs one pending
+   window per copy — a window that runs across two copies computes returns over two unrelated
+   episodes. Measure against 1-step on CartPole and LunarLander.
+2. 🔜 **gSDE for PPO.** Needs a resample interval: one exploration draw held for PPO's whole
+   2,048-step rollout explores a single direction. Measured without it: Pendulum −164 → −799,
+   Reacher −26 → −118. The reference implementation resamples every few steps; evaluate that.
+3. 🔜 **0.4.0** with Phase 7.
 
 ## Later 💡
 
 - 💡 GPU: pipeline kernel launches so wide networks stop paying a sync per layer
   (`docs/en/06-gpu.md` names this as the current ceiling) — re-measure the crossover afterwards.
-- 💡 More algorithms: QR-DQN / C51 (distributional), n-step returns for DQN, Rainbow composition.
+- 💡 More algorithms: QR-DQN / C51 (distributional), Rainbow composition.
 - 💡 Multi-agent: centralised critic (MADDPG / MAPPO) on top of `IMultiAgentEnvironment`.
 - 💡 Hyper-parameter sweep helper over `Catalog` + seeds, reporting mean ± spread.
 - 💡 Recurrent policy (GRU) for partially observable tasks — needs BPTT in `Neural/`, so gradient

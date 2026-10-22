@@ -195,9 +195,9 @@ forking an agent either.
 ## Several environments at once
 
 `VectorEnvironment` steps several copies of one environment together and publishes their
-observations as one contiguous `[copies, observationSize]` buffer. PPO and A2C implement
-`IVectorDiscreteAgent` / `IVectorContinuousAgent`, which choose every copy's action in a single
-network pass. That makes collection cheaper, but for PPO the update dominates and the end-to-end
+observations as one contiguous `[copies, observationSize]` buffer. Every neural agent — PPO, A2C,
+DQN, SAC, TD3 — implements `IVectorDiscreteAgent` / `IVectorContinuousAgent`, which choose every
+copy's action in a single network pass. That makes collection cheaper, but for PPO the update dominates and the end-to-end
 gain is modest ([measured](09-benchmarks.md#several-environments-at-once)); the bigger win is a less
 correlated rollout.
 

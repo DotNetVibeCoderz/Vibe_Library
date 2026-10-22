@@ -276,6 +276,11 @@ receive `[copies, observationSize]` blocks. Two things to get right:
   reset. Bootstrap truncations from them, never from `VectorEnvironment.Observations`.
 - Keep per-copy trajectories apart. A rollout or n-step buffer that treats copy 3's next step as the
   successor of copy 2's is computing returns across two unrelated episodes.
+- Count work in transitions, not vector steps. The library's agents do — PPO and A2C's
+  `RolloutLength`, DQN / SAC / TD3's `TrainFrequency` — so the same options mean the same amount of
+  learning at any copy count.
+- Make one copy reproduce the single-environment run exactly, and test it: same draws in the same
+  order. `VectorEnvironmentTests` does this for every built-in agent.
 
 ## A new state encoder
 

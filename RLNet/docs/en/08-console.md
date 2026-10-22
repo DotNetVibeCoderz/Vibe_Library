@@ -76,6 +76,36 @@ becomes a blur and the recorder stack is the thing to read.
 algorithm and switching back replays the same run — which is what makes comparing two algorithms
 meaningful rather than a comparison of two different random worlds.
 
+### Save, load, watch, log
+
+The row under the transport acts on the agent rather than the clock.
+
+![Watching a PPO policy trained in code](../images/console-watch.png)
+
+- **SAVE** writes the agent's complete state to a `.rlnet` [checkpoint](01-getting-started.md#saving-and-resuming)
+  — networks, optimiser moments, generator, normalisers — so training can resume exactly.
+- **LOAD** reads one back into the selected environment and algorithm. Traces restart; the step
+  count picks up from the agent's own, so epsilon and the other schedules continue where they were
+  saved instead of jumping back to full exploration.
+
+  A checkpoint trained **in code with `Catalog` settings** usually has a different network layout
+  from the console's lighter presets (SAC is 256 × 256 there and much narrower here). Rather than
+  refuse it, the console retries the load against a Catalog-configured agent and, if that fits,
+  switches to it — the algorithm label gains `· Catalog`. A checkpoint for another algorithm is
+  refused with the reason, and the agent is left untouched.
+- **WATCH** runs the agent **deterministically and without learning** on a *second copy* of the
+  environment. The summary row switches to the mean return of the watched episodes. Leaving watch
+  mode resumes the training episode exactly where it stopped: watching on the training environment
+  itself would splice two trajectories into one rollout and the agent would learn from a transition
+  that never happened. `ConsoleSessionTests` holds every algorithm to this — a run that is watched
+  halfway through ends bit-identical to one that is not.
+- **LOG** writes every *training* episode to a CSV [metrics log](01-getting-started.md#logging-a-run)
+  under `Documents/RLNet/runs`, one file per run, opened when training starts. Watched episodes are
+  not logged: they evaluate a policy that is not changing, and mixing them in would make the curve
+  lie.
+
+The status line beside them says what happened and where the file went.
+
 ## Command line
 
 The console takes arguments, so a demonstration can be scripted and a screenshot reproduced:
@@ -83,6 +113,8 @@ The console takes arguments, so a demonstration can be scripted and a screenshot
 ```bash
 RLNet.Visualizer --env Pendulum --algo Sac --start
 RLNet.Visualizer --env PredatorPrey --start --speed 64
+RLNet.Visualizer --env Pendulum --algo Ppo --load pendulum.rlnet --watch --start
+RLNet.Visualizer --env CartPole --algo Dqn --start --log
 RLNet.Visualizer --list        # every environment and what it supports
 RLNet.Visualizer --help
 ```
@@ -93,6 +125,10 @@ RLNet.Visualizer --help
 | `--algo`, `-a` | `QLearning`, `Dqn`, `A2C`, `Ppo`, `Sac`, `Td3` — PPO and A2C on continuous environments too |
 | `--start`, `-s` | Begin training immediately |
 | `--speed` | Steps per frame; snapped to the nearest slider position |
+| `--load`, `-l` | Load a checkpoint into the agent (console or Catalog settings) |
+| `--watch`, `-w` | Open in watch mode |
+| `--log` | Write a CSV metrics log per run, to `Documents/RLNet/runs` |
+| `--log-dir` | Write the metrics logs to this folder instead |
 | `--list` | Print the environments and exit |
 
 ## The environments, as they appear

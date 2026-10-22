@@ -138,6 +138,10 @@ Berikan `[cos θ, sin θ]`. `Pendulum`, `Reacher`, dan `SupplyChain` semuanya be
 - **Horizon A2C terlalu panjang.** Tanpa trust region PPO, `Gamma = 0.99` meloloskan terlalu banyak
   derau ke setiap langkah pada tugas kontrol. Coba `0.9` dengan `GaeLambda = 0.9`, seperti yang
   dipakai `Catalog`.
+- **Hasil A2C bergantung pada seed.** Dengan sebaran tetap, dua belas seed di Reacher berakhir di
+  mana saja antara −36 dan −147. Nyalakan `StateDependentExploration` dan latih pada empat salinan
+  atau lebih; dua belas seed yang sama lalu mendarat di antara −70 dan −100. Lihat
+  [A2C](03-algoritma.md#a2c).
 - **Sebarannya runtuh terlalu awal.** `Metrics.Entropy` yang turun tajam di beberapa update pertama
   berarti log standar deviasi menyusut sebelum mean menemukan apa pun. Naikkan `InitialLogStd`, atau
   tambahkan `EntropyCoefficient` kecil.
@@ -145,7 +149,8 @@ Berikan `[cos θ, sin θ]`. `Pendulum`, `Reacher`, dan `SupplyChain` semuanya be
 ### Checkpoint tidak mau dimuat
 
 `InvalidDataException` menyebut entri yang berbeda. "Tidak ada entri" berarti algoritma berbeda atau
-opsi yang menambah state — misalnya `NormalizeObservations` hanya di satu sisi. Entri `.shape` berarti
+opsi yang menambah state — misalnya `NormalizeObservations` atau `StateDependentExploration` hanya di
+satu sisi. Entri `.shape` berarti
 `HiddenSizes` berbeda. Ketidakcocokan tipe di baris pertama berarti checkpoint itu berisi kelas agen
 yang sama sekali lain. Dalam setiap kasus agennya dibiarkan utuh, jadi aman untuk ditangkap lalu
 kembali melatih dari awal.

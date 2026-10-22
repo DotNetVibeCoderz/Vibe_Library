@@ -201,24 +201,28 @@ sasaran tepat untuk pekerjaan training sungguhan dan sasaran keliru untuk sebuah
 ## Beberapa simulasi sekaligus
 
 `VectorBenchmarks`: 16.384 langkah training, dibagi ke 1, 4, 8, dan 16 salinan. Panjang rollout
-adalah jumlah transisi per update apa pun sumbernya, jadi setiap baris melakukan kerja gradien yang
-sama dan hanya pengumpulannya yang berubah. Melangkah berurutan di semua baris.
+(dan untuk DQN, `TrainFrequency`) menghitung transisi apa pun sumbernya, jadi setiap baris melakukan
+kerja gradien yang sama dan hanya pengumpulannya yang berubah. Melangkah berurutan di semua baris.
 
 | | 1 salinan | 4 salinan | 8 salinan | 16 salinan |
 |---|---:|---:|---:|---:|
 | PPO / CartPole | 2,07 s | 1,80 s | 1,80 s | 1,86 s |
 | PPO / Pendulum (setelan katalog) | 1,99 s | 1,97 s | 1,84 s | 1,80 s |
 | A2C / CartPole | 260 ms | 284 ms | 281 ms | 331 ms |
+| DQN / CartPole (setelan katalog) | 23,7 s | 24,4 s | 29,9 s | 26,4 s |
 
 **Untung kecil bagi PPO, tidak ada bagi A2C, dan itulah hasil jujurnya.** Batching mengubah delapan
 forward pass menjadi satu, tapi PPO menghabiskan sebagian besar waktunya di sepuluh epoch update
 minibatch yang tidak tersentuh batching, jadi penghematannya 10–13%. Seluruh rollout A2C hanya 32
 langkah; dibagi ke 16 salinan menjadi dua langkah per salinan, dan pembukuan per langkahnya lebih
-berat daripada pass yang dihemat.
+berat daripada pass yang dihemat. DQN mengambil satu langkah gradien untuk setiap transisi, dan
+itulah hampir seluruh 24 detiknya, jadi mem-batch pemilihan aksi tidak bisa menggesernya — selisih
+antarbarisnya hanyalah derau antar-run di sekitar biaya yang sama. SAC dan TD3 berbentuk sama.
 
 Pakai beberapa salinan demi **sampelnya**, bukan demi jam: trajektori di titik episode yang
 berbeda-beda menghasilkan rollout yang kurang berkorelasi, dan itulah sebabnya konfigurasi rujukan
-PPO dan A2C memakainya. Melangkah paralel (`parallel: true`) malah lebih lambat pada simulasi-simulasi
+PPO dan A2C memakainya — dan untuk A2C dengan gSDE, setiap salinan menjelajahi variasinya sendiri,
+yang [membuatnya andal](03-algoritma.md#a2c). Melangkah paralel (`parallel: true`) malah lebih lambat pada simulasi-simulasi
 ini — sekitar enam kali, diukur pada delapan salinan LunarLander — karena setiap langkah jauh lebih
 murah daripada membangunkan worker thread pool. Opsi itu ada untuk simulasi yang langkahnya sendiri
 mahal.

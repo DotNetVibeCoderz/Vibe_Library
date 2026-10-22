@@ -30,8 +30,8 @@ which knobs matter.
 | **A2C** | policy gradient | on | low | moderate |
 | **PPO** | policy gradient | on | medium | low |
 
-PPO and A2C take discrete *or* continuous actions; SAC and TD3 take continuous only. The on-policy
-pair are also the only ones that batch across [several environments](01-getting-started.md#several-environments-at-once).
+PPO and A2C take discrete *or* continuous actions; SAC and TD3 take continuous only. Every
+algorithm except tabular Q-learning trains across [several environments](01-getting-started.md#several-environments-at-once).
 | **SAC** | actor-critic | off | high | very low |
 | **TD3** | actor-critic | off | high | high |
 
@@ -138,11 +138,44 @@ else with; and its 32-step rollout means it updates far more often than PPO, so 
 visible within seconds in the console rather than after the first 2048-step rollout completes.
 
 **On continuous actions** (`ContinuousA2CAgent`) it is the most sensitive algorithm here. With no
-trust region, every rollout's noise goes straight into the step, and the cure is a shorter horizon:
-`Catalog` uses `Gamma = 0.9` and `GaeLambda = 0.9` for it. Measured on Reacher over 200,000 steps,
-one seed reached −31 at that setting against −141 at `Gamma = 0.99`, where an untrained arm scores
-about −200. Even so it is seed-sensitive: six seeds at the catalog setting ended anywhere from −28
-to −125. If continuous results matter, prefer PPO.
+trust region, every rollout's noise goes straight into the step. `Catalog` tames it with two
+settings, both measured on Reacher at 200,000 steps, where an untrained arm scores about −220:
+
+- **A shorter horizon**, `Gamma = 0.9` and `GaeLambda = 0.9`. Six seeds averaged −87 at that setting
+  against −129 at `Gamma = 0.99`.
+- **gSDE** — generalised state-dependent exploration (`StateDependentExploration`, after Raffin et
+  al., 2022). A plain Gaussian policy draws fresh, independent noise every step, which over a short
+  rollout mostly cancels out: a joint pushed left, right, left. gSDE instead draws a random linear
+  map from the actor's last hidden layer to the action once per rollout, so the same state always
+  gets the same nudge and a trajectory explores one coherent variation of the policy.
+
+```csharp
+var agent = new ContinuousA2CAgent(obs, act, new A2COptions
+{
+    Gamma = 0.9f, GaeLambda = 0.9f,
+    StateDependentExploration = true,
+    InitialLogStd = -0.5f,          // per hidden feature, not per action
+    NormalizeObservations = true, NormalizeRewards = true,
+});
+```
+
+What gSDE buys is **reliability, not a higher ceiling**. Over twelve seeds on four copies:
+
+| | Fixed spread | gSDE |
+|---|---:|---:|
+| Reacher, 200k steps — mean ± spread across seeds | −87 ± 35 | −87 ± 9 |
+| Reacher — worst seed | −147 | −100 |
+| Pendulum, 300k steps — median | −568 | −220 |
+| Pendulum — seeds that never swing up | 0 | 1 of 12 |
+
+Give it **several copies**: each draws its own perturbation, so one update sees several coherent
+variations instead of one. On a single environment gSDE is steadier but about 15 points worse on
+Reacher. It does not replace the short horizon either — at `Gamma = 0.99` it averaged −133.
+
+gSDE is an A2C option only. One draw per rollout suits A2C's 32 steps; held for PPO's 2,048 it
+explores a single direction, and measured it took PPO on Pendulum from −164 to −799. For
+continuous control PPO remains the stronger choice — about −26 on Reacher in the same 200,000
+steps.
 
 ## PPO
 
@@ -218,7 +251,9 @@ Two choices worth knowing:
   clipped value would make the log-probability describe an action that was never taken.
 - **The spread does not depend on the state.** A state-dependent spread lets the policy become
   confident in states it has barely seen, and on-policy methods, which cannot revisit old data, are
-  the worst placed to recover from that.
+  the worst placed to recover from that. (A2C's gSDE varies the noise with the state but not in
+  that way: its spreads are learned per hidden feature rather than emitted per state, and no
+  gradient flows from them into the features.)
 
 With `Catalog`'s settings it reaches about −170 on Pendulum in 100,000 steps — ten seconds on a
 laptop — and about −26 on Reacher in 200,000.

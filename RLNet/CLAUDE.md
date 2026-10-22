@@ -41,7 +41,8 @@ src/RLNet.Core/         the library (packs as "Gravicode.RLNet", assembly RLNet.
   Environments/VectorEnvironment.cs   N copies, auto-reset, Observations vs NextObservations
   Neural/               MlpNetwork, DenseLayer, AdamOptimizer, IComputeBackend, QNetworkPair
   Buffers/              IReplayBuffer, Uniform, Prioritized (SumTree), RolloutBuffer (GAE, per-env streams)
-  Policies/             CategoricalPolicy, GaussianPolicy, PolicyHead (internal: the discrete/continuous seam)
+  Policies/             CategoricalPolicy, GaussianPolicy, PolicyHead (internal: the discrete/continuous seam;
+                        Categorical, Gaussian, StateDependent = gSDE for continuous A2C)
   Agents/               QTable, Dqn, Sac, Td3, IndependentLearners, Schedule;
                         OnPolicyLearner (internal) = PPO + A2C once, wrapped by PpoAgent, A2CAgent,
                         ContinuousPpoAgent, ContinuousA2CAgent
@@ -50,8 +51,8 @@ src/RLNet.Core/         the library (packs as "Gravicode.RLNet", assembly RLNet.
   Training/             Trainer - the loops (single, vector, multi-agent); TrainingReport; MetricsLog
   Catalog.cs            name -> environment -> configured agent
 src/RLNet.Gpu/          optional ILGPU backend, packs as "Gravicode.RLNet.Gpu"
-src/RLNet.Visualizer/   Avalonia console (not packable)
-tests/RLNet.Tests/      xunit.v3, 162 tests
+src/RLNet.Visualizer/   Avalonia console (not packable); TrainingSession is UI-free and tested
+tests/RLNet.Tests/      xunit.v3, 191 tests
 benchmarks/             BenchmarkDotNet
 ```
 
@@ -87,6 +88,21 @@ and `NextObservations` (where each transition actually ended - bootstrap from th
 PPO and A2C, discrete and continuous, all run through `OnPolicyLearner`, generic over a
 `PolicyHead`. With one environment the batched path is draw-for-draw the old single-env path;
 `VectorEnvironmentTests.OneCopyReproducesTheSingleEnvironmentRunExactly` holds it to that. Keep it.
+
+### Off-policy agents batch too
+
+DQN, SAC and TD3 implement the vector interfaces. `ObserveBatch` feeds transitions one at a time in
+copy order, so `TrainFrequency` counts transitions and the replay ratio is the same at any copy
+count; `SelectActions` decides exploration per copy before the batched forward pass, in the same
+draw order as `SelectAction`, which now delegates to it. Same one-copy-equals-single-env rule.
+
+### Deterministic means read-only
+
+A `deterministic: true` call must not draw from the training generator, mutate learned state, or
+overwrite training metrics — the console's watch mode and `Trainer.Evaluate` interleave with
+training. `ConsoleSessionTests.WatchingLeavesTheTrainingRunUntouched` checks this for every
+algorithm by comparing checkpoint bytes; it is what caught Q-learning's tie-breaking and lazy row
+insertion.
 
 ### Checkpoints
 
@@ -146,6 +162,11 @@ renderer reads live environment state and a background thread would race it.
 
 `DemoPresets.cs` deliberately uses lighter settings than the library defaults — SAC at its published
 hyper-parameters runs at ~20 steps/sec, which is unwatchable. Do not "fix" these to match `Catalog`.
+Because of that difference, LOAD retries a refused checkpoint against a `Catalog`-built agent
+(`MainWindow.LoadCheckpoint`) — that is how policies trained in code get watched.
+
+Watch mode runs on a second environment copy (`TrainingSession.SetWatching`), never the training
+one, so leaving it resumes the training episode exactly.
 
 ## Documentation
 

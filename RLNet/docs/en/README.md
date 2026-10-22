@@ -15,7 +15,7 @@
 | [05 — Neural engine](05-neural-network.md) | The MLP, SIMD, Adam, and why not PyTorch |
 | [06 — GPU](06-gpu.md) | The optional backend, and when it is actually worth using |
 | [07 — Multi-agent](07-multi-agent.md) | Simultaneous-move environments and independent learners |
-| [08 — The console](08-console.md) | Reading the visualizer, and what each trace means |
+| [08 — The console](08-console.md) | Reading the visualizer, what each trace means; save, load, watch, log |
 | [09 — Benchmarks](09-benchmarks.md) | Measured throughput, and how to reproduce it |
 | [10 — Extending](10-extending.md) | New environments, algorithms, buffers and backends |
 | [11 — Troubleshooting](11-troubleshooting.md) | Why an agent is not learning, and how to tell which cause |

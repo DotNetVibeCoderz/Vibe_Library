@@ -81,6 +81,36 @@ tinggi viewport menjadi kabur dan tumpukan perekamlah yang layak dibaca.
 algoritma lalu kembali akan memutar ulang run yang sama — dan itulah yang membuat perbandingan dua
 algoritma bermakna alih-alih menjadi perbandingan dua dunia acak yang berbeda.
 
+### Simpan, muat, tonton, catat
+
+Baris di bawah bar kendali bekerja pada agennya, bukan pada jamnya.
+
+![Menonton policy PPO yang dilatih lewat kode](../images/console-watch.png)
+
+- **SAVE** menulis seluruh state agen ke [checkpoint](01-memulai.md#menyimpan-dan-melanjutkan) `.rlnet`
+  — jaringan, momen optimizer, generator, normaliser — sehingga training bisa dilanjutkan persis.
+- **LOAD** membacanya kembali ke simulasi dan algoritma yang dipilih. Trace dimulai ulang; hitungan
+  langkah melanjutkan hitungan milik agen, sehingga epsilon dan jadwal lainnya berlanjut dari titik
+  saat disimpan, bukan melompat kembali ke eksplorasi penuh.
+
+  Checkpoint yang dilatih **lewat kode dengan setelan `Catalog`** biasanya punya susunan jaringan
+  yang berbeda dari preset konsol yang lebih ringan (SAC di sana 256 × 256, di sini jauh lebih
+  sempit). Alih-alih menolaknya, konsol mencoba lagi memuatnya ke agen bersetelan Catalog dan, jika
+  cocok, beralih ke agen itu — label algoritmanya bertambah `· Catalog`. Checkpoint untuk algoritma
+  lain ditolak beserta alasannya, dan agen tidak tersentuh.
+- **WATCH** menjalankan agen **secara deterministik dan tanpa belajar** pada *salinan kedua*
+  simulasi. Baris ringkasan beralih ke rata-rata return episode yang ditonton. Keluar dari mode
+  tonton melanjutkan episode training persis dari titik berhentinya: menonton di simulasi training
+  itu sendiri akan menyambung dua trajektori menjadi satu rollout, dan agen akan belajar dari
+  transisi yang tidak pernah terjadi. `ConsoleSessionTests` menuntut ini dari setiap algoritma —
+  run yang ditonton di tengah jalan berakhir identik bit demi bit dengan run yang tidak.
+- **LOG** menulis setiap episode *training* ke [log metrik](01-memulai.md#mencatat-sebuah-run) CSV di
+  `Documents/RLNet/runs`, satu file per run, dibuka saat training dimulai. Episode yang ditonton
+  tidak dicatat: episode itu mengevaluasi policy yang tidak berubah, dan mencampurnya akan membuat
+  kurvanya berbohong.
+
+Baris status di sebelahnya menjelaskan apa yang terjadi dan ke mana file-nya ditulis.
+
 ## Baris perintah
 
 Konsol menerima argumen, sehingga demonstrasi bisa diskripkan dan screenshot bisa diulang:
@@ -88,6 +118,8 @@ Konsol menerima argumen, sehingga demonstrasi bisa diskripkan dan screenshot bis
 ```bash
 RLNet.Visualizer --env Pendulum --algo Sac --start
 RLNet.Visualizer --env PredatorPrey --start --speed 64
+RLNet.Visualizer --env Pendulum --algo Ppo --load pendulum.rlnet --watch --start
+RLNet.Visualizer --env CartPole --algo Dqn --start --log
 RLNet.Visualizer --list        # semua simulasi dan apa yang didukungnya
 RLNet.Visualizer --help
 ```
@@ -98,6 +130,10 @@ RLNet.Visualizer --help
 | `--algo`, `-a` | `QLearning`, `Dqn`, `A2C`, `Ppo`, `Sac`, `Td3` — PPO dan A2C juga di simulasi kontinu |
 | `--start`, `-s` | Langsung mulai training |
 | `--speed` | Langkah per frame; dibulatkan ke posisi slider terdekat |
+| `--load`, `-l` | Muat checkpoint ke agen (setelan konsol atau Catalog) |
+| `--watch`, `-w` | Buka dalam mode tonton |
+| `--log` | Tulis log metrik CSV per run, ke `Documents/RLNet/runs` |
+| `--log-dir` | Tulis log metrik ke folder ini |
 | `--list` | Cetak daftar simulasi lalu keluar |
 
 ## Simulasinya, sebagaimana tampil

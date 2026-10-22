@@ -279,6 +279,11 @@ yang menerima blok `[salinan, observationSize]`. Dua hal yang harus benar:
 
 - `nextObservations` pada `ObserveBatch` adalah state tempat transisi berakhir, **sebelum** reset
   otomatis. Bootstrap truncation dari situ, jangan pernah dari `VectorEnvironment.Observations`.
+- Hitung kerja dalam transisi, bukan langkah vektor. Agen-agen pustaka melakukannya —
+  `RolloutLength` milik PPO dan A2C, `TrainFrequency` milik DQN / SAC / TD3 — sehingga opsi yang
+  sama berarti jumlah pembelajaran yang sama pada jumlah salinan berapa pun.
+- Buat satu salinan mereproduksi run satu-simulasi secara persis, dan uji itu: tarikan acak yang
+  sama dalam urutan yang sama. `VectorEnvironmentTests` melakukannya untuk setiap agen bawaan.
 - Jaga trajektori setiap salinan tetap terpisah. Rollout atau buffer n-step yang menganggap langkah
   berikutnya salinan 3 sebagai penerus langkah salinan 2 sedang menghitung return lintas dua episode
   yang tidak berhubungan.

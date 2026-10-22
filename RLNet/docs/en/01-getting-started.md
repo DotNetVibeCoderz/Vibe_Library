@@ -184,8 +184,8 @@ var report = Trainer.Train(environment, agent, new TrainingOptions { MaxSteps = 
 
 ## Several environments at once
 
-PPO and A2C can collect from several copies of an environment together, choosing every copy's
-action in one network pass:
+Every neural agent can collect from several copies of an environment together, choosing every
+copy's action in one network pass:
 
 ```csharp
 var environments = Catalog.CreateDiscreteVector("CartPole", count: 8);
@@ -203,7 +203,12 @@ large speed-up on these environments: [measured](09-benchmarks.md#several-enviro
 gains about 10% because its update dominates, and A2C none. Episodes are
 counted per copy, so `MaxEpisodes` and `SolveThreshold` mean what they always do.
 
-DQN, SAC and TD3 learn from a replay buffer and are not batched; `CreateVectorAgent` refuses them.
+DQN, SAC and TD3 batch the same way: every copy's transition goes into the one replay buffer, and
+`TrainFrequency` counts transitions, so the ratio of gradient steps to samples does not change with
+the copy count. That also means no speed-up — the gradient steps are the cost
+([measured](09-benchmarks.md#several-environments-at-once): DQN takes 24 seconds for 16,384 steps
+at any copy count). Batch them when the environment's own step is the expensive part, with
+`parallel: true`. Tabular Q-learning is the one algorithm with no batched form.
 
 ## Configuring an agent
 

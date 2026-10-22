@@ -29,6 +29,10 @@ Development checklist. Newest status first. See [PLAN.md](PLAN.md) for the roadm
 | `MetricsLog` (CSV / JSON Lines) | Done | `MetricsLogTests` |
 | Catalog pairs incl. continuous PPO / A2C | Done | `CatalogTests` — every advertised pair trains and checkpoints |
 | NuGet 0.2.0 | Done | tag `RLNet-v0.2.0` |
+| Console save / load / watch / log | Done | `ConsoleSessionTests` — watched run ends bit-identical for every algorithm; refused load leaves the agent untouched |
+| Batched DQN / SAC / TD3 | Done | `VectorEnvironmentTests` — one copy reproduces the single-env run exactly; same gradient steps at any copy count; `VectorSac_LearnsPendulum` |
+| NuGet 0.3.0 | Done | tag `RLNet-v0.3.0` |
+| gSDE for continuous A2C | Done | `StateDependentExplorationTests` (finite differences, variance); `ContinuousA2C_LearnsReacher` back on a fixed bar |
 
 ## Checklist — 0.2.0
 
@@ -44,13 +48,44 @@ Development checklist. Newest status first. See [PLAN.md](PLAN.md) for the roadm
 
 ## Checklist — Phase 6
 
-See [PLAN.md](PLAN.md#phase-6--next-).
+- [x] Console: save / load / watch, metrics log toggle, CLI flags, screenshot
+- [x] Batched off-policy agents (DQN, SAC, TD3) in `Catalog.CreateVectorAgent`
+- [x] Continuous A2C robustness: gSDE implemented, gradient-checked, evaluated over twelve seeds,
+      made the Catalog default
+- [x] Docs EN + ID updated together; benchmarks re-measured for the new row
+- [x] Version 0.3.0, release notes, tag `RLNet-v0.3.0`
 
-- [ ] Console: save / load / watch, metrics log toggle
-- [ ] Batched off-policy agents
-- [ ] Continuous A2C robustness (gSDE)
+## Checklist — Phase 7
+
+See [PLAN.md](PLAN.md#phase-7--next-).
+
+- [ ] n-step DQN with per-copy windows
+- [ ] gSDE resample interval; re-measure PPO
+- [ ] 0.4.0
 
 ## Log
+
+### 2026-10-23 (Phase 6, 0.3.0)
+- Console: SAVE / LOAD / WATCH / LOG plus `--load`, `--watch`, `--log`, `--log-dir`. Watch runs on a
+  second environment copy; `ConsoleSessionTests` (14) hold every algorithm to "watching changes
+  nothing". The test project now references the console for `TrainingSession`, which has no UI
+  dependency.
+- Writing those tests found three library bugs, now fixed: `QTableAgent` broke greedy ties with the
+  training generator even when deterministic, so any evaluation perturbed a Q-learning run; its
+  action selection inserted a table row for every unseen state it merely looked at; and DQN and
+  Q-learning wrote `Metrics.Epsilon = 0` on every deterministic call (and did not restore it on
+  load), so a chart or log sampled after an evaluation showed exploration switched off.
+- DQN, SAC and TD3 batched across copies. TrainFrequency counts transitions, so the replay ratio is
+  the same at any copy count; one copy is draw-for-draw the single-environment run.
+- gSDE (`StateDependentHead`). Evaluated before adopting, Reacher 200k / Pendulum 300k:
+  - single environment, six seeds: fixed −87 ± 30 vs gSDE −103 ± 7 (log σ −0.5) — steadier, worse;
+  - four copies, twelve seeds: Reacher −87 ± 35 → −87 ± 9 (worst −147 → −100); Pendulum median
+    −568 → −220, one seed in twelve failed to swing up (−1101) against none;
+  - γ 0.99 with gSDE: Reacher −133 — the short horizon is still needed;
+  - PPO with gSDE (no resample interval): Pendulum −164 → −799, Reacher −26 → −118. Not shipped
+    for PPO; logged as Phase 7.
+  Adopted for A2C in `Catalog` (log σ −0.5); the A2C learning test moved to four copies and a fixed
+  −140 bar again.
 
 ### 2026-10-21 (0.2.0)
 - Phase 5 complete. 162 tests (151 fast + 11 learning), all passing; full learning suite 6m 20s.

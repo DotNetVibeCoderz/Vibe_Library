@@ -194,23 +194,28 @@ target for a real training job and the wrong one for a demonstration.
 ## Several environments at once
 
 `VectorBenchmarks`: 16,384 environment steps of training, split across 1, 4, 8 and 16 copies. The
-rollout length is the number of transitions per update whatever their source, so every row does the
-same gradient work and only collection changes. Sequential stepping throughout.
+rollout length (and for DQN, `TrainFrequency`) counts transitions whatever their source, so every row
+does the same gradient work and only collection changes. Sequential stepping throughout.
 
 | | 1 copy | 4 copies | 8 copies | 16 copies |
 |---|---:|---:|---:|---:|
 | PPO / CartPole | 2.07 s | 1.80 s | 1.80 s | 1.86 s |
 | PPO / Pendulum (catalog settings) | 1.99 s | 1.97 s | 1.84 s | 1.80 s |
 | A2C / CartPole | 260 ms | 284 ms | 281 ms | 331 ms |
+| DQN / CartPole (catalog settings) | 23.7 s | 24.4 s | 29.9 s | 26.4 s |
 
 **A modest win for PPO, none for A2C, and that is the honest result.** Batching turns eight forward
 passes into one, but PPO spends most of its time in ten epochs of minibatch updates that batching
 does not touch, so the saving is 10–13%. A2C's whole rollout is 32 steps; split across 16 copies it
-is two steps per copy, and the per-step bookkeeping outweighs the saved passes.
+is two steps per copy, and the per-step bookkeeping outweighs the saved passes. DQN takes a gradient
+step on every transition, which is nearly all of its 24 seconds, so batching the action choice
+cannot move it — the spread between rows is run-to-run noise around the same cost. SAC and TD3 are
+the same shape.
 
 Use several copies for the **sample**, not the clock: trajectories at different points in their
 episodes make a less correlated rollout, which is why the reference PPO and A2C configurations use
-them. Parallel stepping (`parallel: true`) is slower still on these environments — about six times,
+them — and for A2C with gSDE, each copy explores its own variation, which is
+[what makes it reliable](03-algorithms.md#a2c). Parallel stepping (`parallel: true`) is slower still on these environments — about six times,
 measured on eight LunarLander copies — because each step is far cheaper than waking a thread-pool
 worker. It is there for environments whose own step is expensive.
 

@@ -187,8 +187,8 @@ var report = Trainer.Train(environment, agent, new TrainingOptions { MaxSteps = 
 
 ## Beberapa simulasi sekaligus
 
-PPO dan A2C bisa mengumpulkan data dari beberapa salinan simulasi bersamaan, memilih aksi setiap
-salinan dalam satu forward pass:
+Setiap agen neural bisa mengumpulkan data dari beberapa salinan simulasi bersamaan, memilih aksi
+setiap salinan dalam satu forward pass:
 
 ```csharp
 var environments = Catalog.CreateDiscreteVector("CartPole", count: 8);
@@ -206,7 +206,13 @@ berharap percepatan besar pada simulasi-simulasi ini: [terukur](09-benchmark.md#
 PPO hanya lebih cepat sekitar 10% karena update-nya dominan, dan A2C tidak sama sekali. Episode dihitung
 per salinan, jadi `MaxEpisodes` dan `SolveThreshold` tetap berarti seperti biasa.
 
-DQN, SAC, dan TD3 belajar dari replay buffer dan tidak di-batch; `CreateVectorAgent` menolaknya.
+DQN, SAC, dan TD3 di-batch dengan cara yang sama: transisi setiap salinan masuk ke satu replay
+buffer, dan `TrainFrequency` menghitung transisi, sehingga rasio langkah gradien terhadap sampel
+tidak berubah dengan jumlah salinan. Itu juga berarti tidak ada percepatan — langkah gradien itulah
+biayanya ([terukur](09-benchmark.md#beberapa-simulasi-sekaligus): DQN butuh 24 detik untuk 16.384
+langkah pada jumlah salinan berapa pun). Batch-lah mereka ketika langkah simulasinya sendiri yang
+mahal, dengan `parallel: true`. Q-learning tabular adalah satu-satunya algoritma tanpa bentuk
+ter-batch.
 
 ## Mengonfigurasi agen
 
