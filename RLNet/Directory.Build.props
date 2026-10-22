@@ -35,7 +35,7 @@
     <Company>Gravicode Studios</Company>
     <Product>RLNet</Product>
     <Copyright>Copyright (c) 2026 Gravicode Studios. Dibuat oleh Gravicode Studios, dipimpin oleh Kang Fadhil.</Copyright>
-    <Version>0.2.0</Version>
+    <Version>0.3.0</Version>
   </PropertyGroup>
 
   <ItemGroup>
