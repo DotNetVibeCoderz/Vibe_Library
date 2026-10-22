@@ -2,6 +2,7 @@
 // Dibuat oleh Gravicode Studios, dipimpin oleh Kang Fadhil.
 
 using RLNet.Persistence;
+using RLNet.Policies;
 using RLNet.Spaces;
 
 namespace RLNet.Agents;
@@ -109,6 +110,18 @@ public abstract class ContinuousOnPolicyAgent : IVectorContinuousAgent, ICheckpo
         _actionSpace = actionSpace;
         _actionSize = actionSpace.FlatSize;
         _unitActions = new float[_actionSize];
+    }
+
+    /// <summary>The Gaussian head, or the state-dependent one, sized for the actor it will sit on.</summary>
+    private protected static PolicyHead ContinuousHead(
+        bool stateDependent, BoxSpace actionSpace, Space observationSpace, int[] hiddenSizes,
+        float initialLogStd, float learningRate)
+    {
+        if (!stateDependent) return new GaussianHead(actionSpace.FlatSize, initialLogStd, learningRate);
+
+        // The features are what the actor's output layer reads: its last hidden layer.
+        int featureSize = hiddenSizes.Length > 0 ? hiddenSizes[^1] : observationSpace.FlatSize;
+        return new StateDependentHead(actionSpace.FlatSize, featureSize, initialLogStd, learningRate);
     }
 
     public abstract string Name { get; }

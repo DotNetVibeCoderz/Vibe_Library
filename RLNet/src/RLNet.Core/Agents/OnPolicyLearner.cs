@@ -163,6 +163,10 @@ internal sealed class OnPolicyLearner : ICheckpointable
         if (!deterministic) Configure(count);
         bool record = count == Streams;
 
+        // A rollout's first exploring step: a head that holds its exploration fixed across the
+        // rollout draws it now.
+        if (!deterministic && _rollout.Count == 0) _head.BeginRollout(Streams, _random);
+
         int actionSize = _head.ActionSize;
         int outputSize = _head.OutputSize;
 
@@ -179,12 +183,15 @@ internal sealed class OnPolicyLearner : ICheckpointable
             }
 
             var outputs = _actor.Forward(batch);
+            var features = _actor.HeadInput;
+            int featureSize = _actor.HeadInputSize;
             for (int i = 0; i < batch; i++)
             {
                 int stream = start + i;
                 var action = actions.Slice(stream * actionSize, actionSize);
                 float logProbability = _head.Sample(
-                    outputs.Slice(i * outputSize, outputSize), action, _random, deterministic, out float entropy);
+                    outputs.Slice(i * outputSize, outputSize), features.Slice(i * featureSize, featureSize),
+                    stream, action, _random, deterministic, out float entropy);
 
                 Metrics.Entropy = entropy;
                 if (record)
@@ -386,6 +393,8 @@ internal sealed class OnPolicyLearner : ICheckpointable
         // --- Actor ---------------------------------------------------------------------------
 
         var outputs = _actor.Forward(n);
+        var features = _actor.HeadInput;
+        int featureSize = _actor.HeadInputSize;
         var actorGradient = _actor.OutputGradientBuffer(n);
         actorGradient.Clear();
         _head.BeginUpdate();
@@ -403,7 +412,7 @@ internal sealed class OnPolicyLearner : ICheckpointable
             float oldLogProbability = _rollout.LogProbabilities[index];
             float advantage = _minibatchAdvantages[i];
 
-            float logProbability = _head.Evaluate(output, action, out float sampleEntropy);
+            float logProbability = _head.Evaluate(output, features.Slice(i * featureSize, featureSize), action, out float sampleEntropy);
             float ratio = MathF.Exp(logProbability - oldLogProbability);
 
             float unclipped = ratio * advantage;
@@ -458,6 +467,8 @@ internal sealed class OnPolicyLearner : ICheckpointable
         _rollout.Observations.AsSpan(0, n * _observationSize).CopyTo(_critic.InputBuffer(n));
 
         var outputs = _actor.Forward(n);
+        var features = _actor.HeadInput;
+        int featureSize = _actor.HeadInputSize;
         var actorGradient = _actor.OutputGradientBuffer(n);
         actorGradient.Clear();
         _head.BeginUpdate();
@@ -471,7 +482,7 @@ internal sealed class OnPolicyLearner : ICheckpointable
             var gradient = actorGradient.Slice(i * outputSize, outputSize);
             float advantage = _rollout.Advantages[i];
 
-            float logProbability = _head.Evaluate(output, action, out float entropy);
+            float logProbability = _head.Evaluate(output, features.Slice(i * featureSize, featureSize), action, out float entropy);
             policyLoss += -logProbability * advantage;
 
             // The plain policy gradient: no ratio, no clipping. The data came from exactly this

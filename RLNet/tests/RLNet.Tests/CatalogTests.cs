@@ -2,6 +2,7 @@
 // Dibuat oleh Gravicode Studios, dipimpin oleh Kang Fadhil.
 
 using RLNet.Agents;
+using RLNet.Environments;
 using RLNet.Persistence;
 using RLNet.Training;
 using Xunit;
@@ -65,10 +66,46 @@ public class CatalogTests
     }
 
     [Fact]
-    public void OffPolicyAlgorithmsHaveNoBatchedForm()
+    public void EveryAlgorithmButTabularQLearningHasABatchedForm()
     {
-        var environment = Catalog.CreateDiscrete("CartPole");
-        Assert.Throws<ArgumentException>(() =>
-            Catalog.CreateVectorAgent(Algorithm.Dqn, environment.ObservationSpace, environment.ActionSpace));
+        foreach (var entry in Catalog.Environments)
+        {
+            if (entry.Kind == EnvironmentKind.MultiAgent) continue;
+
+            foreach (var algorithm in entry.SupportedAlgorithms)
+            {
+                var vector = entry.Kind == EnvironmentKind.Discrete
+                    ? (VectorEnvironment)Catalog.CreateDiscreteVector(entry.Name, 2)
+                    : Catalog.CreateContinuousVector(entry.Name, 2);
+
+                if (algorithm == Algorithm.QLearning)
+                {
+                    var discrete = (DiscreteVectorEnvironment)vector;
+                    Assert.Throws<ArgumentException>(() =>
+                        Catalog.CreateVectorAgent(algorithm, discrete.ObservationSpace, discrete.ActionSpace));
+                    continue;
+                }
+
+                IAgent agent = vector switch
+                {
+                    DiscreteVectorEnvironment d => Catalog.CreateVectorAgent(algorithm, d.ObservationSpace, d.ActionSpace, seed: 1),
+                    ContinuousVectorEnvironment c => Catalog.CreateVectorAgent(algorithm, c.ObservationSpace, c.ActionSpace, seed: 1),
+                    _ => throw new InvalidOperationException(),
+                };
+
+                // A few hundred steps across two copies, so the off-policy agents pass
+                // LearningStarts on the short environments and actually reach a gradient step.
+                var options = new TrainingOptions { MaxSteps = 1_200, MaxEpisodes = int.MaxValue, Seed = 1 };
+                var report = vector switch
+                {
+                    DiscreteVectorEnvironment d => Trainer.Train(d, (IVectorDiscreteAgent)agent, options),
+                    ContinuousVectorEnvironment c => Trainer.Train(c, (IVectorContinuousAgent)agent, options),
+                    _ => throw new InvalidOperationException(),
+                };
+
+                Assert.Equal(1_200, report.TotalSteps);
+                Assert.Equal(1_200, agent.Metrics.StepCount);
+            }
+        }
     }
 }

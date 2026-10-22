@@ -61,4 +61,14 @@ public class VectorBenchmarks
         var agent = new A2CAgent(environment.ObservationSpace, environment.ActionSpace, seed: 1);
         Trainer.Train(environment, agent, new TrainingOptions { MaxSteps = Steps, MaxEpisodes = int.MaxValue, Seed = 1 });
     }
+
+    [Benchmark(Description = "DQN / CartPole")]
+    public void DqnCartPole()
+    {
+        // Off-policy: TrainFrequency counts transitions, so every row takes the same gradient
+        // steps on the same replay ratio and only action selection is batched.
+        var environment = new DiscreteVectorEnvironment(() => new CartPoleEnvironment(), Copies);
+        var agent = new DqnAgent(environment.ObservationSpace, environment.ActionSpace, seed: 1);
+        Trainer.Train(environment, agent, new TrainingOptions { MaxSteps = Steps, MaxEpisodes = int.MaxValue, Seed = 1 });
+    }
 }

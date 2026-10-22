@@ -39,7 +39,11 @@ public sealed class ContinuousPpoAgent : ContinuousOnPolicyAgent
     private ContinuousPpoAgent(PpoOptions options, Space observationSpace, BoxSpace actionSpace, int? seed, IComputeBackend? backend)
         : base(new OnPolicyLearner(
             options.ToSettings(),
-            new GaussianHead(actionSpace.FlatSize, options.InitialLogStd, options.LearningRate),
+            // Fixed spread only. gSDE draws its exploration once per rollout, and one draw held
+            // for PPO's 2,048 steps explores a single direction: measured, it took Pendulum from
+            // -164 to -799. It needs a resample interval first; see PLAN.md.
+            ContinuousHead(stateDependent: false, actionSpace, observationSpace, options.HiddenSizes,
+                           options.InitialLogStd, options.LearningRate),
             observationSpace.FlatSize, seed, backend), actionSpace)
     {
     }

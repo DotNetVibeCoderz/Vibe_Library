@@ -5,6 +5,8 @@ using System.Diagnostics;
 using RLNet.Agents;
 using RLNet.Environments;
 using RLNet.Environments.MultiAgent;
+using RLNet.Persistence;
+using RLNet.Training;
 
 namespace RLNet.Visualizer;
 
@@ -85,8 +87,15 @@ public sealed class TraceBuffer(int capacity)
 /// <see cref="FrameBudget"/> is the safety valve: however many steps are asked for, the slice
 /// stops when the budget is spent, so a slow environment cannot freeze the window.
 /// </para>
+/// <para>
+/// <b>Watching</b> runs the agent deterministically on a second copy of the environment, without
+/// learning. A separate copy rather than the training one, because pausing training mid-episode,
+/// driving its environment somewhere else and handing it back would splice two trajectories into
+/// one rollout. With two copies, leaving watch mode resumes the training episode exactly where it
+/// stopped.
+/// </para>
 /// </remarks>
-public sealed class TrainingSession
+public sealed class TrainingSession : IDisposable
 {
     private const int TraceCapacity = 400;
 
@@ -101,25 +110,48 @@ public sealed class TrainingSession
     private readonly IDiscreteAgent? _discreteAgent;
     private readonly IContinuousAgent? _continuousAgent;
     private readonly IndependentLearners? _learners;
+    private readonly ICheckpointable _checkpointable;
+    private readonly Func<object> _createEnvironment;
+
+    // The watch lane: its own environment copy, created on first use, and its own episode tally.
+    private object? _watchEnvironment;
+    private float _watchReturn;
+    private int _watchSteps;
+    private int _watchEpisodes;
+    private double _watchReturnSum;
+
+    private MetricsLog? _log;
 
     private float _episodeReturn;
     private int _episodeSteps;
     private long _totalSteps;
     private double _stepsPerSecond;
+    private long _rateSteps;
     private long _stepsAtLastSample;
     private readonly Stopwatch _rateClock = Stopwatch.StartNew();
 
-    private TrainingSession(string environmentName, string algorithmName, int observationSize, int actionCount)
+    private TrainingSession(
+        string environmentName, string algorithmName, int observationSize, int actionCount,
+        object agent, Func<object> createEnvironment)
     {
         EnvironmentName = environmentName;
         AlgorithmName = algorithmName;
         ActionCount = actionCount;
         _observation = new float[observationSize];
+        _createEnvironment = createEnvironment;
+
+        // Every agent in the library is checkpointable; the acting interfaces just do not say so,
+        // because acting and persisting are separate concerns.
+        _checkpointable = agent as ICheckpointable
+            ?? throw new ArgumentException($"{agent.GetType().Name} cannot be checkpointed.", nameof(agent));
     }
 
     /// <summary>Builds a session for a discrete environment.</summary>
-    public TrainingSession(IDiscreteEnvironment environment, IDiscreteAgent agent, string algorithmName)
-        : this(environment.Name, algorithmName, environment.ObservationSpace.FlatSize, environment.ActionSpace.Count)
+    /// <param name="createEnvironment">Makes another copy of the environment, for watch mode.</param>
+    public TrainingSession(
+        IDiscreteEnvironment environment, IDiscreteAgent agent, string algorithmName, Func<object> createEnvironment)
+        : this(environment.Name, algorithmName, environment.ObservationSpace.FlatSize, environment.ActionSpace.Count,
+               agent, createEnvironment)
     {
         _discreteEnvironment = environment;
         _discreteAgent = agent;
@@ -128,8 +160,10 @@ public sealed class TrainingSession
     }
 
     /// <summary>Builds a session for a continuous environment.</summary>
-    public TrainingSession(IContinuousEnvironment environment, IContinuousAgent agent, string algorithmName)
-        : this(environment.Name, algorithmName, environment.ObservationSpace.FlatSize, 0)
+    /// <param name="createEnvironment">Makes another copy of the environment, for watch mode.</param>
+    public TrainingSession(
+        IContinuousEnvironment environment, IContinuousAgent agent, string algorithmName, Func<object> createEnvironment)
+        : this(environment.Name, algorithmName, environment.ObservationSpace.FlatSize, 0, agent, createEnvironment)
     {
         _continuousEnvironment = environment;
         _continuousAgent = agent;
@@ -139,8 +173,11 @@ public sealed class TrainingSession
     }
 
     /// <summary>Builds a session for a multi-agent environment.</summary>
-    public TrainingSession(IMultiAgentEnvironment environment, IndependentLearners learners, string algorithmName)
-        : this(environment.Name, algorithmName, environment.ObservationSpace.FlatSize, environment.ActionSpace.Count)
+    /// <param name="createEnvironment">Makes another copy of the environment, for watch mode.</param>
+    public TrainingSession(
+        IMultiAgentEnvironment environment, IndependentLearners learners, string algorithmName, Func<object> createEnvironment)
+        : this(environment.Name, algorithmName, environment.ObservationSpace.FlatSize, environment.ActionSpace.Count,
+               learners, createEnvironment)
     {
         _multiAgentEnvironment = environment;
         _learners = learners;
@@ -160,8 +197,10 @@ public sealed class TrainingSession
     /// <summary>Display names for the actions, or for the action dimensions when continuous.</summary>
     public IReadOnlyList<string> ActionLabels { get; } = [];
 
-    /// <summary>The environment being rendered, whichever kind it is.</summary>
-    public object Environment =>
+    /// <summary>The environment being rendered, whichever kind it is: the watch copy while watching.</summary>
+    public object Environment => IsWatching ? _watchEnvironment! : TrainingEnvironment;
+
+    private object TrainingEnvironment =>
         (object?)_discreteEnvironment ?? _continuousEnvironment ?? (object)_multiAgentEnvironment!;
 
     /// <summary>The agent's live diagnostics.</summary>
@@ -186,9 +225,40 @@ public sealed class TrainingSession
 
     public bool IsRunning { get; private set; }
 
+    /// <summary>
+    /// Whether the agent is being watched rather than trained: deterministic actions on a separate
+    /// environment copy, nothing observed, nothing learned.
+    /// </summary>
+    public bool IsWatching { get; private set; }
+
+    /// <summary>Episodes completed in watch mode since it was last switched on.</summary>
+    public int WatchEpisodes => _watchEpisodes;
+
+    /// <summary>Mean return of the watched episodes, or NaN before the first one ends.</summary>
+    public float WatchAverage => _watchEpisodes > 0 ? (float)(_watchReturnSum / _watchEpisodes) : float.NaN;
+
+    /// <summary>
+    /// Where finished training episodes are written, or null. The session owns the log from here
+    /// on and disposes it when it is replaced or the session is.
+    /// </summary>
+    /// <remarks>
+    /// Training episodes only. A watched episode is a deterministic evaluation of a policy that is
+    /// not changing; interleaving those rows with training rows would make the curve lie.
+    /// </remarks>
+    public MetricsLog? Log
+    {
+        get => _log;
+        set
+        {
+            if (ReferenceEquals(value, _log)) return;
+            _log?.Dispose();
+            _log = value;
+        }
+    }
+
     public int Episode { get; private set; }
-    public int EpisodeSteps => _episodeSteps;
-    public float EpisodeReturn => _episodeReturn;
+    public int EpisodeSteps => IsWatching ? _watchSteps : _episodeSteps;
+    public float EpisodeReturn => IsWatching ? _watchReturn : _episodeReturn;
     public long TotalSteps => _totalSteps;
     public double StepsPerSecond => _stepsPerSecond;
 
@@ -216,7 +286,93 @@ public sealed class TrainingSession
     public string ExplorationLabel { get; private set; } = "EXPLORATION";
 
     public void Start() => IsRunning = true;
-    public void Stop() => IsRunning = false;
+
+    public void Stop()
+    {
+        IsRunning = false;
+        _log?.Flush();
+    }
+
+    /// <summary>
+    /// Switches between training and watching. Each switch into watch mode starts a fresh episode
+    /// on the watch copy and a fresh tally; the training episode is left exactly as it was.
+    /// </summary>
+    public void SetWatching(bool watching)
+    {
+        if (watching == IsWatching) return;
+
+        if (watching)
+        {
+            _watchEnvironment ??= _createEnvironment();
+            _watchReturn = 0f;
+            _watchSteps = 0;
+            _watchEpisodes = 0;
+            _watchReturnSum = 0;
+            ResetEnvironment(_watchEnvironment, WatchSeed(0));
+        }
+
+        IsWatching = watching;
+    }
+
+    /// <summary>Writes the agent's complete state, ready to resume training or to watch.</summary>
+    public void Save(string path)
+    {
+        Checkpoint.Save(path, _checkpointable);
+        _log?.Flush();
+    }
+
+    /// <summary>
+    /// Replaces the agent's state with a checkpoint. Throws <see cref="InvalidDataException"/>, and
+    /// leaves the agent untouched, when the file was written by a different agent or layout.
+    /// </summary>
+    /// <remarks>
+    /// The run starts over from the loaded agent: traces cleared, a fresh training episode. The
+    /// step count picks up from the agent's own, so annealing schedules continue from where they
+    /// were saved instead of jumping back to full exploration.
+    /// </remarks>
+    public void Load(string path)
+    {
+        Checkpoint.Load(path, _checkpointable);
+
+        long agentSteps = Metrics.StepCount;
+        if (_learners is { ParametersShared: true } && _multiAgentEnvironment is not null)
+            agentSteps /= _multiAgentEnvironment.AgentCount; // one shared agent observes every predator
+        _totalSteps = agentSteps;
+
+        Episode = 0;
+        BestReturn = float.NaN;
+        RecentAverage = float.NaN;
+        ReturnTrace.Clear();
+        LossTrace.Clear();
+        ExplorationTrace.Clear();
+        _episodeReturn = 0f;
+        _episodeSteps = 0;
+        ResetEnvironment(TrainingEnvironment, Seed);
+
+        if (IsWatching)
+        {
+            // Restart the watch tally too: the episodes counted so far were a different policy.
+            IsWatching = false;
+            SetWatching(true);
+        }
+    }
+
+    public void Dispose() => Log = null;
+
+    /// <summary>
+    /// Watched episodes are seeded apart from training, and differently each time, so watching
+    /// shows the policy on fresh starts rather than one memorised episode.
+    /// </summary>
+    private static int WatchSeed(int episode) => Seed + 1_000_000 + episode;
+
+    private static void ResetEnvironment(object environment, int seed)
+    {
+        switch (environment)
+        {
+            case IEnvironment single: single.Reset(seed); break;
+            case IMultiAgentEnvironment multi: multi.Reset(seed); break;
+        }
+    }
 
     /// <summary>
     /// Runs one slice of training. Returns the number of steps actually taken.
@@ -230,7 +386,8 @@ public sealed class TrainingSession
 
         while (taken < StepsPerFrame)
         {
-            Step();
+            if (IsWatching) WatchStep();
+            else Step();
             taken++;
 
             // Checking the clock costs a syscall on some platforms, so it is amortised over a
@@ -238,7 +395,7 @@ public sealed class TrainingSession
             if ((taken & 0x3F) == 0 && _clock.Elapsed > FrameBudget) break;
         }
 
-        _totalSteps += taken;
+        _rateSteps += taken;
         UpdateRate();
         return taken;
     }
@@ -249,9 +406,13 @@ public sealed class TrainingSession
         // over the whole run.
         if (_rateClock.ElapsedMilliseconds < 250) return;
 
-        _stepsPerSecond = (_totalSteps - _stepsAtLastSample) / _rateClock.Elapsed.TotalSeconds;
-        _stepsAtLastSample = _totalSteps;
+        _stepsPerSecond = (_rateSteps - _stepsAtLastSample) / _rateClock.Elapsed.TotalSeconds;
+        _stepsAtLastSample = _rateSteps;
         _rateClock.Restart();
+
+        // Same cadence for the log: following the file shows progress within a second, without a
+        // flush per episode at the dozens of episodes a second CartPole reaches early on.
+        _log?.Flush();
     }
 
     private void Step()
@@ -275,7 +436,7 @@ public sealed class TrainingSession
             if (step.Done)
             {
                 _discreteAgent.OnEpisodeEnd();
-                CompleteEpisode();
+                CompleteEpisode(step.Terminated);
                 _discreteEnvironment.Reset();
             }
         }
@@ -295,7 +456,7 @@ public sealed class TrainingSession
             if (step.Done)
             {
                 _continuousAgent.OnEpisodeEnd();
-                CompleteEpisode();
+                CompleteEpisode(step.Terminated);
                 _continuousEnvironment.Reset();
             }
         }
@@ -309,26 +470,78 @@ public sealed class TrainingSession
             var step = _multiAgentEnvironment.Step(actions);
             _learners.Observe(_multiAgentEnvironment, step);
 
-            float total = 0f;
-            foreach (float reward in _multiAgentEnvironment.LastRewards) total += reward;
-            Accumulate(total);
+            Accumulate(TotalReward(_multiAgentEnvironment));
 
             if (step.Done)
             {
                 _learners.OnEpisodeEnd();
-                CompleteEpisode();
+                CompleteEpisode(step.Terminated);
                 _multiAgentEnvironment.Reset();
             }
         }
+    }
+
+    /// <summary>One deterministic step on the watch copy. The agent is asked to act and nothing else.</summary>
+    private void WatchStep()
+    {
+        float reward;
+        bool done;
+
+        switch (_watchEnvironment)
+        {
+            case IDiscreteEnvironment environment when _discreteAgent is not null:
+            {
+                int action = _discreteAgent.SelectAction(environment.Observation, deterministic: true);
+                LastAction = action;
+                var step = environment.Step(action);
+                (reward, done) = (step.Reward, step.Done);
+                break;
+            }
+            case IContinuousEnvironment environment when _continuousAgent is not null:
+            {
+                _continuousAgent.SelectAction(environment.Observation, _continuousAction, deterministic: true);
+                var step = environment.Step(_continuousAction);
+                (reward, done) = (step.Reward, step.Done);
+                break;
+            }
+            case IMultiAgentEnvironment environment when _learners is not null:
+            {
+                var actions = _learners.SelectActions(environment, deterministic: true);
+                LastAction = actions[0];
+                var step = environment.Step(actions);
+                (reward, done) = (TotalReward(environment), step.Done);
+                break;
+            }
+            default:
+                return;
+        }
+
+        _watchReturn += reward;
+        _watchSteps++;
+        if (!done) return;
+
+        _watchEpisodes++;
+        _watchReturnSum += _watchReturn;
+        _watchReturn = 0f;
+        _watchSteps = 0;
+        ResetEnvironment(_watchEnvironment, WatchSeed(_watchEpisodes));
+    }
+
+    private static float TotalReward(IMultiAgentEnvironment environment)
+    {
+        float total = 0f;
+        foreach (float reward in environment.LastRewards) total += reward;
+        return total;
     }
 
     private void Accumulate(float reward)
     {
         _episodeReturn += reward;
         _episodeSteps++;
+        _totalSteps++;
     }
 
-    private void CompleteEpisode()
+    private void CompleteEpisode(bool terminated)
     {
         Episode++;
 
@@ -356,6 +569,10 @@ public sealed class TrainingSession
             ExplorationTrace.Add(metrics.Entropy);
             ExplorationLabel = "POLICY ENTROPY";
         }
+
+        _log?.Write(
+            new EpisodeReport(Episode, _episodeSteps, _episodeReturn, RecentAverage, _totalSteps, terminated),
+            metrics);
 
         _episodeReturn = 0f;
         _episodeSteps = 0;

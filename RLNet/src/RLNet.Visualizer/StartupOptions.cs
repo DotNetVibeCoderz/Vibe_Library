@@ -26,6 +26,18 @@ public sealed class StartupOptions
     /// <summary>Steps attempted per frame, or null for the slider's default.</summary>
     public int? Speed { get; private set; }
 
+    /// <summary>Checkpoint to load into the agent once the session is built, or null.</summary>
+    public string? CheckpointPath { get; private set; }
+
+    /// <summary>Open in watch mode: the agent acts deterministically and does not learn.</summary>
+    public bool Watch { get; private set; }
+
+    /// <summary>Write a metrics log for every run.</summary>
+    public bool Log { get; private set; }
+
+    /// <summary>Folder for metrics logs, or null for the default under the user's documents.</summary>
+    public string? LogDirectory { get; private set; }
+
     /// <summary>Set when the command line asked for help, or could not be understood.</summary>
     public string? Message { get; private set; }
 
@@ -55,6 +67,25 @@ public sealed class StartupOptions
 
                 case "--speed" when i + 1 < args.Length:
                     if (int.TryParse(args[++i], out int speed)) options.Speed = speed;
+                    break;
+
+                case "--load" or "-l" when i + 1 < args.Length:
+                    options.CheckpointPath = Path.GetFullPath(args[++i]);
+                    if (!File.Exists(options.CheckpointPath))
+                        options.Message = $"Checkpoint '{options.CheckpointPath}' does not exist.";
+                    break;
+
+                case "--watch" or "-w":
+                    options.Watch = true;
+                    break;
+
+                case "--log":
+                    options.Log = true;
+                    break;
+
+                case "--log-dir" when i + 1 < args.Length:
+                    options.Log = true;
+                    options.LogDirectory = Path.GetFullPath(args[++i]);
                     break;
 
                 case "--list":
@@ -94,11 +125,16 @@ public sealed class StartupOptions
           --algo,  -a <name>   Algorithm: QLearning, Dqn, A2C, Ppo, Sac, Td3
           --start, -s          Begin training immediately
           --speed     <n>      Steps attempted per frame (1 - 65536)
+          --load,  -l <file>   Load a checkpoint into the agent (console or Catalog settings)
+          --watch, -w          Watch: act deterministically on a separate copy, no learning
+          --log                Write a CSV metrics log per run (Documents/RLNet/runs)
+          --log-dir   <dir>    Write the metrics logs to <dir> instead
           --list               List the environments and what each supports
           --help,  -h          Show this
 
         Examples:
           RLNet.Visualizer --env Pendulum --algo Sac --start
           RLNet.Visualizer --env PredatorPrey --start --speed 64
+          RLNet.Visualizer --env CartPole --algo Ppo --load cartpole.rlnet --watch --start
         """;
 }

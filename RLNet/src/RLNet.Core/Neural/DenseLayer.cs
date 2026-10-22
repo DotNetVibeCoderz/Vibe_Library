@@ -32,6 +32,9 @@ public sealed class DenseLayer
     private float[] _lastInput = [];        // borrowed reference to the caller's input batch
     private int _lastBatch;
 
+    /// <summary>The batch the last forward pass read, <c>[batch, InputSize]</c>.</summary>
+    internal ReadOnlySpan<float> LastInput => _lastInput.AsSpan(0, _lastBatch * InputSize);
+
     public int InputSize { get; }
     public int OutputSize { get; }
     public Activation Activation { get; }

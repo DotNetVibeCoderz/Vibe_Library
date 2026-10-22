@@ -197,34 +197,23 @@ public static class Catalog
                     : StateDiscretizer.OneHot(),
                 seed: seed),
 
-            Algorithm.Dqn => new DqnAgent(observationSpace, actionSpace, seed: seed, backend: backend),
-            Algorithm.Ppo or Algorithm.A2C => CreateVectorAgent(algorithm, observationSpace, actionSpace, seed, backend),
-
-            Algorithm.Sac or Algorithm.Td3 => throw new ArgumentException(
-                $"{algorithm} is a continuous-action algorithm; use the continuous overload.", nameof(algorithm)),
-
-            _ => throw new ArgumentOutOfRangeException(nameof(algorithm)),
+            _ => CreateVectorAgent(algorithm, observationSpace, actionSpace, seed, backend),
         };
 
     /// <summary>Builds a continuous agent configured for an environment.</summary>
+    /// <remarks>Every continuous agent is batched, so this is <see cref="CreateVectorAgent(Algorithm, Space, BoxSpace, int?, IComputeBackend?)"/>.</remarks>
     public static IContinuousAgent CreateAgent(
         Algorithm algorithm,
         Space observationSpace,
         BoxSpace actionSpace,
         int? seed = null,
-        IComputeBackend? backend = null) => algorithm switch
-        {
-            Algorithm.Sac => new SacAgent(observationSpace, actionSpace, seed: seed, backend: backend),
-            Algorithm.Td3 => new Td3Agent(observationSpace, actionSpace, seed: seed, backend: backend),
-            Algorithm.Ppo or Algorithm.A2C => CreateVectorAgent(algorithm, observationSpace, actionSpace, seed, backend),
-
-            _ => throw new ArgumentException(
-                $"{algorithm} is a discrete-action algorithm; use the discrete overload.", nameof(algorithm)),
-        };
+        IComputeBackend? backend = null) =>
+        CreateVectorAgent(algorithm, observationSpace, actionSpace, seed, backend);
 
     /// <summary>
-    /// Builds a batched discrete agent — PPO or A2C — for a <see cref="DiscreteVectorEnvironment"/>.
+    /// Builds a batched discrete agent — DQN, PPO or A2C — for a <see cref="DiscreteVectorEnvironment"/>.
     /// It is also an ordinary <see cref="IDiscreteAgent"/>, so it evaluates on a single copy.
+    /// Tabular Q-learning is the one discrete algorithm with no batched form.
     /// </summary>
     public static IVectorDiscreteAgent CreateVectorAgent(
         Algorithm algorithm,
@@ -233,27 +222,39 @@ public static class Catalog
         int? seed = null,
         IComputeBackend? backend = null) => algorithm switch
         {
+            Algorithm.Dqn => new DqnAgent(observationSpace, actionSpace, seed: seed, backend: backend),
             Algorithm.Ppo => new PpoAgent(observationSpace, actionSpace, seed: seed, backend: backend),
             Algorithm.A2C => new A2CAgent(observationSpace, actionSpace, seed: seed, backend: backend),
 
-            _ => throw new ArgumentException(
-                $"{algorithm} learns off-policy from a replay buffer and is not batched; only PPO and A2C are.", nameof(algorithm)),
+            Algorithm.QLearning => throw new ArgumentException(
+                "Tabular Q-learning has no batched form; use CreateAgent and a single environment.", nameof(algorithm)),
+
+            Algorithm.Sac or Algorithm.Td3 => throw new ArgumentException(
+                $"{algorithm} is a continuous-action algorithm; use the continuous overload.", nameof(algorithm)),
+
+            _ => throw new ArgumentOutOfRangeException(nameof(algorithm)),
         };
 
     /// <summary>
-    /// Builds a batched continuous agent — PPO or A2C — for a <see cref="ContinuousVectorEnvironment"/>.
+    /// Builds a batched continuous agent — SAC, TD3, PPO or A2C — for a <see cref="ContinuousVectorEnvironment"/>.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// Both normalise observations and rewards and drop the entropy bonus, which is what continuous
-    /// control needs from them: a Gaussian policy already explores through its spread, and reward
-    /// scales here range from Reacher's fractions to Pendulum's -16 per step.
+    /// PPO and A2C both normalise observations and rewards and drop the entropy bonus, which is
+    /// what continuous control needs from them: a Gaussian policy already explores through its
+    /// spread, and reward scales here range from Reacher's fractions to Pendulum's -16 per step.
     /// </para>
     /// <para>
     /// A2C additionally uses a short horizon (γ = 0.9, λ = 0.9). Without a trust region its
-    /// gradient is noisy, and a shorter horizon is the cheapest way to cut that noise — on Reacher
-    /// one seed reached -31 with it against -141 without. It remains seed-sensitive (-28 to -125
-    /// across six seeds); PPO is the dependable choice for continuous actions.
+    /// gradient is noisy, and a shorter horizon is the cheapest way to cut that noise: over six
+    /// seeds on Reacher it averaged -87 against -129 at γ = 0.99.
+    /// </para>
+    /// <para>
+    /// It also explores with gSDE (<see cref="A2COptions.StateDependentExploration"/>), which is
+    /// what makes it dependable on several copies. Over twelve seeds on four copies it kept
+    /// Reacher's mean at -87 while the spread across seeds fell from ±35 to ±9 (worst seed -100
+    /// against -147), and took Pendulum's median at 300,000 steps from -568 to -220. On a single
+    /// environment it is steadier but worse; give it copies.
     /// </para>
     /// </remarks>
     public static IVectorContinuousAgent CreateVectorAgent(
@@ -263,6 +264,9 @@ public static class Catalog
         int? seed = null,
         IComputeBackend? backend = null) => algorithm switch
         {
+            Algorithm.Sac => new SacAgent(observationSpace, actionSpace, seed: seed, backend: backend),
+            Algorithm.Td3 => new Td3Agent(observationSpace, actionSpace, seed: seed, backend: backend),
+
             Algorithm.Ppo => new ContinuousPpoAgent(
                 observationSpace, actionSpace,
                 new PpoOptions
@@ -284,11 +288,13 @@ public static class Catalog
                     EntropyCoefficient = 0f,
                     NormalizeObservations = true,
                     NormalizeRewards = true,
+                    StateDependentExploration = true,
+                    InitialLogStd = -0.5f,
                 },
                 seed, backend),
 
             _ => throw new ArgumentException(
-                $"{algorithm} has no batched continuous form; only PPO and A2C do.", nameof(algorithm)),
+                $"{algorithm} is a discrete-action algorithm; use the discrete overload.", nameof(algorithm)),
         };
 
     /// <summary>

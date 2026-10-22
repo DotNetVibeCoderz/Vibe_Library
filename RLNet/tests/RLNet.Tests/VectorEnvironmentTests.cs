@@ -201,4 +201,140 @@ public class VectorEnvironmentTests
             }
         }
     }
+
+    // --- Off-policy agents -------------------------------------------------------------------
+
+    public static TheoryData<string> OffPolicy => ["Dqn", "Sac", "Td3"];
+
+    [Theory]
+    [MemberData(nameof(OffPolicy))]
+    public void OffPolicyOneCopyReproducesTheSingleEnvironmentRunExactly(string algorithm)
+    {
+        // Small networks and an early start, so a short run takes hundreds of gradient steps and
+        // any difference in draw order or update count would show.
+        var options = new TrainingOptions { MaxSteps = 1_500, MaxEpisodes = int.MaxValue, Seed = 4 };
+
+        TrainingReport single, batched;
+        byte[] singleState, batchedState;
+
+        if (algorithm == "Dqn")
+        {
+            var a = SmallDqn();
+            single = Trainer.Train(new CartPoleEnvironment(), (IDiscreteAgent)a, options);
+            var b = SmallDqn();
+            batched = Trainer.Train(new DiscreteVectorEnvironment(() => new CartPoleEnvironment(), 1), b, options);
+            (singleState, batchedState) = (Saved(a), Saved(b));
+        }
+        else
+        {
+            var a = SmallContinuous(algorithm);
+            single = Trainer.Train(new PendulumEnvironment(), (IContinuousAgent)a, options);
+            var b = SmallContinuous(algorithm);
+            batched = Trainer.Train(new ContinuousVectorEnvironment(() => new PendulumEnvironment(), 1), b, options);
+            (singleState, batchedState) = (Saved((Persistence.ICheckpointable)a), Saved((Persistence.ICheckpointable)b));
+        }
+
+        Assert.Equal(single.Returns, batched.Returns);
+        Assert.True(single.Metrics!.UpdateCount > 100);
+        Assert.Equal(single.Metrics.UpdateCount, batched.Metrics!.UpdateCount);
+        Assert.Equal(singleState, batchedState);
+    }
+
+    [Theory]
+    [MemberData(nameof(OffPolicy))]
+    public void OffPolicyTrainsOncePerTransitionWhateverTheCopyCount(string algorithm)
+    {
+        // TrainFrequency counts transitions: eight copies for 1,600 steps take as many gradient
+        // steps as one copy for 1,600, so the same options mean the same replay ratio. (A multiple
+        // of eight, because a vector run always completes the vector step it is in.)
+        var options = new TrainingOptions { MaxSteps = 1_600, MaxEpisodes = int.MaxValue, Seed = 4 };
+
+        IAgent one, eight;
+        if (algorithm == "Dqn")
+        {
+            var a = SmallDqn();
+            Trainer.Train(new DiscreteVectorEnvironment(() => new CartPoleEnvironment(), 1), a, options);
+            var b = SmallDqn();
+            Trainer.Train(new DiscreteVectorEnvironment(() => new CartPoleEnvironment(), 8), b, options);
+            (one, eight) = (a, b);
+        }
+        else
+        {
+            var a = SmallContinuous(algorithm);
+            Trainer.Train(new ContinuousVectorEnvironment(() => new PendulumEnvironment(), 1), a, options);
+            var b = SmallContinuous(algorithm);
+            Trainer.Train(new ContinuousVectorEnvironment(() => new PendulumEnvironment(), 8), b, options);
+            (one, eight) = (a, b);
+        }
+
+        Assert.Equal(1_600, eight.Metrics.StepCount);
+        Assert.Equal(one.Metrics.UpdateCount, eight.Metrics.UpdateCount);
+    }
+
+    [Theory]
+    [MemberData(nameof(OffPolicy))]
+    public void BatchedGreedyActionsMatchOneAtATime(string algorithm)
+    {
+        // Seventy rows, past the networks' 64-row batch, so the chunked path is exercised too.
+        const int count = 70;
+        var random = new Random(9);
+
+        if (algorithm == "Dqn")
+        {
+            var agent = SmallDqn();
+            var observations = RandomObservations(random, count, 4);
+            var actions = new int[count];
+            agent.SelectActions(observations, actions, deterministic: true);
+
+            for (int i = 0; i < count; i++)
+                Assert.Equal(agent.SelectAction(observations.AsSpan(i * 4, 4), deterministic: true), actions[i]);
+        }
+        else
+        {
+            var agent = SmallContinuous(algorithm);
+            var observations = RandomObservations(random, count, 3);
+            var actions = new float[count];
+            agent.SelectActions(observations, actions, deterministic: true);
+
+            var one = new float[1];
+            for (int i = 0; i < count; i++)
+            {
+                agent.SelectAction(observations.AsSpan(i * 3, 3), one, deterministic: true);
+                Assert.Equal(one[0], actions[i]);
+            }
+        }
+    }
+
+    private static DqnAgent SmallDqn()
+    {
+        var environment = new CartPoleEnvironment();
+        return new DqnAgent(
+            environment.ObservationSpace, environment.ActionSpace,
+            new DqnOptions { HiddenSizes = [32, 32], BatchSize = 64, LearningStarts = 200, TargetUpdateInterval = 100 },
+            seed: 3);
+    }
+
+    private static IVectorContinuousAgent SmallContinuous(string algorithm)
+    {
+        var environment = new PendulumEnvironment();
+        return algorithm == "Sac"
+            ? new SacAgent(environment.ObservationSpace, environment.ActionSpace,
+                new SacOptions { HiddenSizes = [32, 32], BatchSize = 64, LearningStarts = 200 }, seed: 3)
+            : new Td3Agent(environment.ObservationSpace, environment.ActionSpace,
+                new Td3Options { HiddenSizes = [32, 32], BatchSize = 64, LearningStarts = 200 }, seed: 3);
+    }
+
+    private static float[] RandomObservations(Random random, int count, int size)
+    {
+        var observations = new float[count * size];
+        for (int i = 0; i < observations.Length; i++) observations[i] = random.NextSingle() * 2f - 1f;
+        return observations;
+    }
+
+    private static byte[] Saved(Persistence.ICheckpointable agent)
+    {
+        using var stream = new MemoryStream();
+        Persistence.Checkpoint.Save(stream, agent);
+        return stream.ToArray();
+    }
 }

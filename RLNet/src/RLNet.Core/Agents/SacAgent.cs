@@ -83,7 +83,7 @@ public sealed class SacOptions
 /// to differentiate through it.
 /// </para>
 /// </remarks>
-public sealed class SacAgent : IContinuousAgent, ICheckpointable
+public sealed class SacAgent : IVectorContinuousAgent, ICheckpointable
 {
     private const float LogStdMin = -20f;
     private const float LogStdMax = 2f;
@@ -113,7 +113,6 @@ public sealed class SacAgent : IContinuousAgent, ICheckpointable
     private readonly float[] _noise;             // reparameterisation draws, kept for the backward pass
     private readonly float[] _targets;
     private readonly float[] _tdErrors;
-    private readonly float[] _scaledAction;      // single-action scratch for SelectAction
 
     private int _stepsSinceTrain;
 
@@ -155,7 +154,6 @@ public sealed class SacAgent : IContinuousAgent, ICheckpointable
         _noise = new float[_options.BatchSize * _actionSize];
         _targets = new float[_options.BatchSize];
         _tdErrors = new float[_options.BatchSize];
-        _scaledAction = new float[_actionSize];
 
         TargetEntropy = _options.TargetEntropy != 0f ? _options.TargetEntropy : -_actionSize;
     }
@@ -175,39 +173,58 @@ public sealed class SacAgent : IContinuousAgent, ICheckpointable
     /// <summary>SAC runs at a constant learning rate; progress is not used.</summary>
     public void SetProgress(float progress) { }
 
-    public void SelectAction(ReadOnlySpan<float> observation, Span<float> action, bool deterministic = false)
+    public void SelectAction(ReadOnlySpan<float> observation, Span<float> action, bool deterministic = false) =>
+        SelectActions(observation, action, deterministic);
+
+    public void SelectActions(ReadOnlySpan<float> observations, Span<float> actions, bool deterministic = false)
     {
+        int count = actions.Length / _actionSize;
+        if (actions.Length != count * _actionSize || observations.Length != count * _observationSize)
+            throw new ArgumentException(
+                $"Expected [count, {_observationSize}] observations and [count, {_actionSize}] actions.", nameof(actions));
+
         // Before learning starts, act uniformly at random. An untrained actor's output is not
         // random so much as arbitrary — it concentrates wherever its initial weights point — and
         // a replay buffer seeded from it covers the action space badly.
         if (!deterministic && Metrics.StepCount < _options.LearningStarts)
         {
-            for (int i = 0; i < _actionSize; i++) _scaledAction[i] = _random.NextRange(-1f, 1f);
+            for (int i = 0; i < actions.Length; i++) actions[i] = _random.NextRange(-1f, 1f);
         }
         else
         {
-            var output = _actor.Forward(observation);
-
-            for (int i = 0; i < _actionSize; i++)
+            for (int start = 0; start < count; start += _actor.MaxBatch)
             {
-                float mean = output[i];
+                int batch = Math.Min(_actor.MaxBatch, count - start);
+                observations.Slice(start * _observationSize, batch * _observationSize).CopyTo(_actor.InputBuffer(batch));
+                var outputs = _actor.Forward(batch);
 
-                if (deterministic)
+                for (int row = 0; row < batch; row++)
                 {
-                    // The tanh of the mean, not the mean of the tanh: evaluation wants the mode
-                    // of the squashed distribution, which is where the mean maps to.
-                    _scaledAction[i] = MathF.Tanh(mean);
-                }
-                else
-                {
-                    float logStd = Math.Clamp(output[_actionSize + i], LogStdMin, LogStdMax);
-                    _scaledAction[i] = MathF.Tanh(mean + MathF.Exp(logStd) * _random.NextGaussian());
+                    var output = outputs.Slice(row * _actionSize * 2, _actionSize * 2);
+                    var action = actions.Slice((start + row) * _actionSize, _actionSize);
+
+                    for (int i = 0; i < _actionSize; i++)
+                    {
+                        float mean = output[i];
+
+                        if (deterministic)
+                        {
+                            // The tanh of the mean, not the mean of the tanh: evaluation wants the
+                            // mode of the squashed distribution, which is where the mean maps to.
+                            action[i] = MathF.Tanh(mean);
+                        }
+                        else
+                        {
+                            float logStd = Math.Clamp(output[_actionSize + i], LogStdMin, LogStdMax);
+                            action[i] = MathF.Tanh(mean + MathF.Exp(logStd) * _random.NextGaussian());
+                        }
+                    }
                 }
             }
         }
 
-        _scaledAction.AsSpan(0, _actionSize).CopyTo(action);
-        _actionSpace.ScaleFromUnit(action);
+        for (int row = 0; row < count; row++)
+            _actionSpace.ScaleFromUnit(actions.Slice(row * _actionSize, _actionSize));
     }
 
     public void Observe(
@@ -236,6 +253,29 @@ public sealed class SacAgent : IContinuousAgent, ICheckpointable
 
         _stepsSinceTrain = 0;
         Train();
+    }
+
+    /// <summary>Hands the agent one transition per environment copy.</summary>
+    /// <remarks>
+    /// One transition at a time, in copy order, exactly as <see cref="Observe"/> would take them —
+    /// so <c>TrainFrequency</c> counts transitions, not vector steps, and the same options do the
+    /// same number of gradient steps per sample whether the experience came from one copy or eight.
+    /// </remarks>
+    public void ObserveBatch(
+        ReadOnlySpan<float> observations,
+        ReadOnlySpan<float> actions,
+        ReadOnlySpan<float> rewards,
+        ReadOnlySpan<float> nextObservations,
+        ReadOnlySpan<bool> terminated,
+        ReadOnlySpan<bool> truncated)
+    {
+        for (int i = 0; i < rewards.Length; i++)
+        {
+            Observe(
+                observations.Slice(i * _observationSize, _observationSize),
+                actions.Slice(i * _actionSize, _actionSize), rewards[i],
+                nextObservations.Slice(i * _observationSize, _observationSize), terminated[i], truncated[i]);
+        }
     }
 
     public void OnEpisodeEnd() { }

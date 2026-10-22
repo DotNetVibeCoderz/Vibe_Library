@@ -52,6 +52,21 @@ public sealed class A2COptions
     /// </summary>
     public float InitialLogStd { get; set; }
 
+    /// <summary>
+    /// Explore with generalised state-dependent exploration (gSDE) instead of independent
+    /// per-step noise — continuous actions only. The perturbation is a function of the state,
+    /// redrawn once per rollout, so a trajectory explores one coherent variation of the policy.
+    /// <see cref="InitialLogStd"/> then sets the per-feature spread.
+    /// </summary>
+    /// <remarks>
+    /// Train it on several copies of the environment: each copy draws its own perturbation, so
+    /// one update sees several coherent variations rather than one. Measured over twelve seeds on
+    /// four copies, it held Reacher's mean (−87) while cutting the spread across seeds from ±35 to
+    /// ±9, and took Pendulum's median from −568 to −220. On a single environment it is steadier
+    /// but scores worse. <see cref="Catalog"/> turns it on, at an initial log spread of −0.5.
+    /// </remarks>
+    public bool StateDependentExploration { get; set; }
+
     internal OnPolicySettings ToSettings() => new(
         OnPolicyMethod.A2C, HiddenSizes, LearningRate, Gamma, GaeLambda, RolloutLength,
         MinibatchSize: RolloutLength, Epochs: 1, ClipRange: 0f, ValueCoefficient, EntropyCoefficient,

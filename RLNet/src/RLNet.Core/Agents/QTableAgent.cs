@@ -59,6 +59,9 @@ public sealed class QTableAgent : IDiscreteAgent, ICheckpointable
 
     private float _progress;
 
+    /// <summary>What an unvisited state reads as. Never written; learning creates the real row.</summary>
+    private readonly float[] _unvisited;
+
     public QTableAgent(
         DiscreteSpace actionSpace,
         StateKeyEncoder encoder,
@@ -69,12 +72,15 @@ public sealed class QTableAgent : IDiscreteAgent, ICheckpointable
         _encoder = encoder;
         _options = options ?? new QTableOptions();
         _random = seed.HasValue ? new FastRandom(seed.Value) : new FastRandom();
+
+        _unvisited = new float[_actionCount];
+        if (_options.InitialValue != 0f) _unvisited.AsSpan().Fill(_options.InitialValue);
     }
 
     public string Name => "Q-Learning";
     public AgentMetrics Metrics { get; } = new();
 
-    /// <summary>Number of distinct states the agent has encountered.</summary>
+    /// <summary>Number of distinct states the agent has learned about.</summary>
     public int StateCount => _table.Count;
 
     public void SetProgress(float progress) => _progress = Math.Clamp(progress, 0f, 1f);
@@ -82,22 +88,32 @@ public sealed class QTableAgent : IDiscreteAgent, ICheckpointable
     public int SelectAction(ReadOnlySpan<float> observation, bool deterministic = false)
     {
         float epsilon = deterministic ? 0f : _options.Epsilon.At(_progress);
-        Metrics.Epsilon = epsilon;
+
+        // Only exploring calls report it. An evaluation in the middle of training would otherwise
+        // leave the metric at zero until the next training step, and a chart or log sampled in
+        // between would show exploration switched off when it is not.
+        if (!deterministic) Metrics.Epsilon = epsilon;
 
         if (epsilon > 0f && _random.NextSingle() < epsilon)
             return _random.NextInt(_actionCount);
 
-        var values = ValuesFor(_encoder(observation));
+        // Choosing an action only reads. Creating rows here would grow the table — and the
+        // checkpoint — every time a finished policy is merely watched.
+        ReadOnlySpan<float> values = _table.TryGetValue(_encoder(observation), out var row) ? row : _unvisited;
 
-        // Ties are broken at random rather than by taking the first maximum. An unvisited state
-        // has all-equal values, and always picking action 0 there would make the agent's early
-        // behaviour a systematic bias instead of a uniform prior.
+        // While training, ties are broken at random rather than by taking the first maximum. An
+        // unvisited state has all-equal values, and always picking action 0 there would make the
+        // agent's early behaviour a systematic bias instead of a uniform prior.
+        //
+        // A deterministic call takes the first maximum instead. It has to be reproducible, and it
+        // must not draw from the training generator: an evaluation run between training steps
+        // would otherwise change every exploration decision that followed it.
         float best = SimdOps.Max(values);
         int tieCount = 0;
         for (int a = 0; a < _actionCount; a++)
             if (values[a] >= best - 1e-6f) tieCount++;
 
-        if (tieCount == 1) { SimdOps.Max(values, out int single); return single; }
+        if (tieCount == 1 || deterministic) { SimdOps.Max(values, out int first); return first; }
 
         int choice = _random.NextInt(tieCount);
         for (int a = 0; a < _actionCount; a++)
@@ -196,6 +212,7 @@ public sealed class QTableAgent : IDiscreteAgent, ICheckpointable
 
         reader.Read("random", _random);
         _progress = reader.ReadSingle("progress");
+        Metrics.Epsilon = _options.Epsilon.At(_progress);
         Metrics.StepCount = reader.ReadInt64("steps");
         Metrics.UpdateCount = reader.ReadInt64("updates");
     }

@@ -78,8 +78,12 @@ public sealed class DqnOptions
 /// being updated is a moving target, and it diverges; freezing a copy for a few hundred steps
 /// makes the regression stationary enough to converge.
 /// </para>
+/// <para>
+/// It also trains on a <see cref="Environments.DiscreteVectorEnvironment"/>: every copy's action
+/// comes from one forward pass, and every copy's transition goes into the one replay buffer.
+/// </para>
 /// </remarks>
-public sealed class DqnAgent : IDiscreteAgent, ICheckpointable
+public sealed class DqnAgent : IVectorDiscreteAgent, ICheckpointable
 {
     private readonly DqnOptions _options;
     private readonly IReplayBuffer _buffer;
@@ -162,17 +166,56 @@ public sealed class DqnAgent : IDiscreteAgent, ICheckpointable
 
     public int SelectAction(ReadOnlySpan<float> observation, bool deterministic = false)
     {
+        Span<int> action = stackalloc int[1];
+        SelectActions(observation, action, deterministic);
+        return action[0];
+    }
+
+    public void SelectActions(ReadOnlySpan<float> observations, Span<int> actions, bool deterministic = false)
+    {
+        int count = actions.Length;
+        if (observations.Length != count * _observationSize)
+            throw new ArgumentException($"Expected {count} observations of {_observationSize} values.", nameof(observations));
+
         float epsilon = deterministic ? 0f : _options.Epsilon.At(_progress);
-        Metrics.Epsilon = epsilon;
 
-        if (epsilon > 0f && _random.NextSingle() < epsilon)
-            return _random.NextInt(_actionCount);
+        // Only exploring calls report it. An evaluation in the middle of training would otherwise
+        // leave the metric at zero until the next training step, and a chart or log sampled in
+        // between would show exploration switched off when it is not.
+        if (!deterministic) Metrics.Epsilon = epsilon;
 
-        var raw = _online.Forward(observation);
-        ToQValues(raw, _qScratch.AsSpan(0, _actionCount), 1);
+        // Exploration is decided per copy before any network work, with the same draws in the
+        // same order as a single-environment call — so one copy is the single-environment run.
+        bool anyGreedy = false;
+        for (int i = 0; i < count; i++)
+        {
+            if (epsilon > 0f && _random.NextSingle() < epsilon)
+            {
+                actions[i] = _random.NextInt(_actionCount);
+            }
+            else
+            {
+                actions[i] = -1;
+                anyGreedy = true;
+            }
+        }
 
-        SimdOps.Max(_qScratch.AsSpan(0, _actionCount), out int best);
-        return best;
+        if (!anyGreedy) return;
+
+        for (int start = 0; start < count; start += _online.MaxBatch)
+        {
+            int batch = Math.Min(_online.MaxBatch, count - start);
+
+            observations.Slice(start * _observationSize, batch * _observationSize).CopyTo(_online.InputBuffer(batch));
+            ToQValues(_online.Forward(batch), _qScratch.AsSpan(0, batch * _actionCount), batch);
+
+            for (int i = 0; i < batch; i++)
+            {
+                if (actions[start + i] >= 0) continue;
+                SimdOps.Max(_qScratch.AsSpan(i * _actionCount, _actionCount), out int best);
+                actions[start + i] = best;
+            }
+        }
     }
 
     public void Observe(
@@ -198,6 +241,28 @@ public sealed class DqnAgent : IDiscreteAgent, ICheckpointable
 
         _stepsSinceTrain = 0;
         Train();
+    }
+
+    /// <summary>Hands the agent one transition per environment copy.</summary>
+    /// <remarks>
+    /// One transition at a time, in copy order, exactly as <see cref="Observe"/> would take them —
+    /// so <c>TrainFrequency</c> counts transitions, not vector steps, and the same options do the
+    /// same number of gradient steps per sample whether the experience came from one copy or eight.
+    /// </remarks>
+    public void ObserveBatch(
+        ReadOnlySpan<float> observations,
+        ReadOnlySpan<int> actions,
+        ReadOnlySpan<float> rewards,
+        ReadOnlySpan<float> nextObservations,
+        ReadOnlySpan<bool> terminated,
+        ReadOnlySpan<bool> truncated)
+    {
+        for (int i = 0; i < rewards.Length; i++)
+        {
+            Observe(
+                observations.Slice(i * _observationSize, _observationSize), actions[i], rewards[i],
+                nextObservations.Slice(i * _observationSize, _observationSize), terminated[i], truncated[i]);
+        }
     }
 
     public void OnEpisodeEnd() { }
@@ -411,5 +476,6 @@ public sealed class DqnAgent : IDiscreteAgent, ICheckpointable
         Metrics.StepCount = reader.ReadInt64("steps");
         Metrics.UpdateCount = reader.ReadInt64("updates");
         SetProgress(reader.ReadSingle("progress"));
+        Metrics.Epsilon = _options.Epsilon.At(_progress);
     }
 }

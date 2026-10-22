@@ -71,7 +71,7 @@ public sealed class Td3Options
 /// stronger of the two once tuned, and SAC is far more likely to work on the first attempt.
 /// </para>
 /// </remarks>
-public sealed class Td3Agent : IContinuousAgent, ICheckpointable
+public sealed class Td3Agent : IVectorContinuousAgent, ICheckpointable
 {
     private readonly Td3Options _options;
     private readonly BoxSpace _actionSpace;
@@ -91,7 +91,6 @@ public sealed class Td3Agent : IContinuousAgent, ICheckpointable
     private readonly float[] _targets;
     private readonly float[] _tdErrors;
     private readonly float[] _policyActions;
-    private readonly float[] _scaledAction;
 
     private int _stepsSinceTrain;
     private int _updatesSinceActor;
@@ -140,7 +139,6 @@ public sealed class Td3Agent : IContinuousAgent, ICheckpointable
         _targets = new float[_options.BatchSize];
         _tdErrors = new float[_options.BatchSize];
         _policyActions = new float[_options.BatchSize * _actionSize];
-        _scaledAction = new float[_actionSize];
     }
 
     public string Name => "TD3";
@@ -152,29 +150,43 @@ public sealed class Td3Agent : IContinuousAgent, ICheckpointable
     /// <summary>TD3 runs at a constant learning rate; progress is not used.</summary>
     public void SetProgress(float progress) { }
 
-    public void SelectAction(ReadOnlySpan<float> observation, Span<float> action, bool deterministic = false)
+    public void SelectAction(ReadOnlySpan<float> observation, Span<float> action, bool deterministic = false) =>
+        SelectActions(observation, action, deterministic);
+
+    public void SelectActions(ReadOnlySpan<float> observations, Span<float> actions, bool deterministic = false)
     {
+        int count = actions.Length / _actionSize;
+        if (actions.Length != count * _actionSize || observations.Length != count * _observationSize)
+            throw new ArgumentException(
+                $"Expected [count, {_observationSize}] observations and [count, {_actionSize}] actions.", nameof(actions));
+
         if (!deterministic && Metrics.StepCount < _options.LearningStarts)
         {
-            for (int i = 0; i < _actionSize; i++) _scaledAction[i] = _random.NextRange(-1f, 1f);
+            for (int i = 0; i < actions.Length; i++) actions[i] = _random.NextRange(-1f, 1f);
         }
         else
         {
-            var output = _actor.Forward(observation);
-            for (int i = 0; i < _actionSize; i++)
+            for (int start = 0; start < count; start += _actor.MaxBatch)
             {
-                float value = output[i];
+                int batch = Math.Min(_actor.MaxBatch, count - start);
+                observations.Slice(start * _observationSize, batch * _observationSize).CopyTo(_actor.InputBuffer(batch));
+                var outputs = _actor.Forward(batch);
 
-                // The policy is deterministic, so all exploration is this noise. Its magnitude is
-                // the one hyper-parameter TD3 is genuinely sensitive to.
-                if (!deterministic) value += _random.NextGaussian() * _options.ExplorationNoise;
+                for (int i = 0; i < batch * _actionSize; i++)
+                {
+                    float value = outputs[i];
 
-                _scaledAction[i] = Math.Clamp(value, -1f, 1f);
+                    // The policy is deterministic, so all exploration is this noise. Its magnitude
+                    // is the one hyper-parameter TD3 is genuinely sensitive to.
+                    if (!deterministic) value += _random.NextGaussian() * _options.ExplorationNoise;
+
+                    actions[start * _actionSize + i] = Math.Clamp(value, -1f, 1f);
+                }
             }
         }
 
-        _scaledAction.AsSpan(0, _actionSize).CopyTo(action);
-        _actionSpace.ScaleFromUnit(action);
+        for (int row = 0; row < count; row++)
+            _actionSpace.ScaleFromUnit(actions.Slice(row * _actionSize, _actionSize));
     }
 
     public void Observe(
@@ -201,6 +213,29 @@ public sealed class Td3Agent : IContinuousAgent, ICheckpointable
 
         _stepsSinceTrain = 0;
         Train();
+    }
+
+    /// <summary>Hands the agent one transition per environment copy.</summary>
+    /// <remarks>
+    /// One transition at a time, in copy order, exactly as <see cref="Observe"/> would take them —
+    /// so <c>TrainFrequency</c> counts transitions, not vector steps, and the same options do the
+    /// same number of gradient steps per sample whether the experience came from one copy or eight.
+    /// </remarks>
+    public void ObserveBatch(
+        ReadOnlySpan<float> observations,
+        ReadOnlySpan<float> actions,
+        ReadOnlySpan<float> rewards,
+        ReadOnlySpan<float> nextObservations,
+        ReadOnlySpan<bool> terminated,
+        ReadOnlySpan<bool> truncated)
+    {
+        for (int i = 0; i < rewards.Length; i++)
+        {
+            Observe(
+                observations.Slice(i * _observationSize, _observationSize),
+                actions.Slice(i * _actionSize, _actionSize), rewards[i],
+                nextObservations.Slice(i * _observationSize, _observationSize), terminated[i], truncated[i]);
+        }
     }
 
     public void OnEpisodeEnd() { }

@@ -122,6 +122,45 @@
             <Setter Property="Foreground" Value="#14202C" />
         </Style>
 
+        <!--
+            Avalonia selectors match the exact type, so ToggleButton does not inherit the Button
+            look above and would fall back to Fluent's. Same face, stated again.
+        -->
+        <Style Selector="ToggleButton">
+            <Setter Property="FontFamily" Value="{StaticResource LabelFont}" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="CornerRadius" Value="2" />
+            <Setter Property="Padding" Value="14,9" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="Background" Value="{StaticResource PanelRaised}" />
+            <Setter Property="Foreground" Value="{StaticResource Ink}" />
+            <Setter Property="BorderBrush" Value="{StaticResource Rule}" />
+            <Setter Property="BorderThickness" Value="1" />
+        </Style>
+
+        <Style Selector="ToggleButton:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="#243447" />
+            <Setter Property="BorderBrush" Value="#33465C" />
+            <Setter Property="Foreground" Value="{StaticResource Ink}" />
+        </Style>
+
+        <!--
+            A latched switch: the lit state is an outline and teal ink rather than a filled face,
+            so it cannot be mistaken for the amber primary control beside it.
+        -->
+        <Style Selector="ToggleButton:checked /template/ ContentPresenter">
+            <Setter Property="Background" Value="#183A3A" />
+            <Setter Property="BorderBrush" Value="{StaticResource Teal}" />
+            <Setter Property="Foreground" Value="{StaticResource Teal}" />
+        </Style>
+
+        <Style Selector="ToggleButton:checked:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="#1F4747" />
+            <Setter Property="BorderBrush" Value="{StaticResource Teal}" />
+            <Setter Property="Foreground" Value="{StaticResource Teal}" />
+        </Style>
+
         <Style Selector="ComboBox">
             <Setter Property="FontFamily" Value="{StaticResource LabelFont}" />
             <Setter Property="FontSize" Value="12" />

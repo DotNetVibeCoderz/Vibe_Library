@@ -14,7 +14,8 @@ namespace RLNet.Agents;
 /// The continuous counterpart of <see cref="A2CAgent"/>. Plain policy gradient has no trust
 /// region, so on continuous control it is sensitive to the learning rate and benefits even more
 /// than PPO from reward normalisation and from several parallel environments, which average out
-/// the noise in each short rollout.
+/// the noise in each short rollout. <see cref="A2COptions.StateDependentExploration"/> on several
+/// copies is what makes its result stop depending on the seed; <see cref="Catalog"/> uses both.
 /// </remarks>
 public sealed class ContinuousA2CAgent : ContinuousOnPolicyAgent
 {
@@ -31,7 +32,8 @@ public sealed class ContinuousA2CAgent : ContinuousOnPolicyAgent
     private ContinuousA2CAgent(A2COptions options, Space observationSpace, BoxSpace actionSpace, int? seed, IComputeBackend? backend)
         : base(new OnPolicyLearner(
             options.ToSettings(),
-            new GaussianHead(actionSpace.FlatSize, options.InitialLogStd, options.LearningRate),
+            ContinuousHead(options.StateDependentExploration, actionSpace, observationSpace, options.HiddenSizes,
+                           options.InitialLogStd, options.LearningRate),
             observationSpace.FlatSize, seed, backend), actionSpace)
     {
     }

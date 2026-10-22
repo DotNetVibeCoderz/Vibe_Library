@@ -108,6 +108,16 @@ public sealed class MlpNetwork
     public Span<float> InputBuffer(int batch) => _input.AsSpan(0, batch * InputSize);
 
     /// <summary>
+    /// What the output layer read on the last forward pass — the final hidden layer's activations,
+    /// <c>[batch, HeadInputSize]</c> — valid until the next one. State-dependent exploration uses
+    /// these as its features.
+    /// </summary>
+    internal ReadOnlySpan<float> HeadInput => _layers[^1].LastInput;
+
+    /// <summary>Width of <see cref="HeadInput"/>.</summary>
+    internal int HeadInputSize => _layers[^1].InputSize;
+
+    /// <summary>
     /// Runs the network over the batch currently in <see cref="InputBuffer"/> and returns the
     /// result, valid until the next forward pass.
     /// </summary>

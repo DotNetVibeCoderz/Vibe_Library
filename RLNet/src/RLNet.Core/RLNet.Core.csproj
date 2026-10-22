@@ -17,7 +17,7 @@
     <Title>RLNet - Reinforcement Learning for .NET</Title>
     <Description>Dependency-free reinforcement learning library for .NET 10. Gym-style environments, a SIMD neural-network engine, and prebuilt DQN, A2C, PPO, SAC and TD3 agents with multi-agent support. Dibuat oleh Gravicode Studios, dipimpin oleh Kang Fadhil.</Description>
     <PackageTags>reinforcement-learning;rl;machine-learning;ai;dqn;ppo;sac;td3;a2c;q-learning;gym;multi-agent;neural-network;simd</PackageTags>
-    <PackageReleaseNotes>0.2.0: Checkpoint.Save/Load for every agent - complete, resumable state with shape-checked, atomic loading. PPO and A2C on continuous actions (Gaussian policy). VectorEnvironment with batched PPO/A2C action selection. Running observation and reward normalisation. MetricsLog for CSV / JSON Lines episode logs. NuGet icon.</PackageReleaseNotes>
+    <PackageReleaseNotes>0.3.0: DQN, SAC and TD3 train across a VectorEnvironment (every neural agent is now batched; Catalog.CreateVectorAgent builds them). Generalised state-dependent exploration (gSDE) for continuous A2C, on by default in Catalog: same mean on Reacher with a quarter of the seed-to-seed spread. Fixes: deterministic action selection no longer draws from the training generator or inserts Q-table rows, and no longer overwrites Metrics.Epsilon; loading a checkpoint restores it. Behaviour change: a deterministic Q-learning agent breaks ties toward the lowest action index.</PackageReleaseNotes>
   </PropertyGroup>
 
   <!--

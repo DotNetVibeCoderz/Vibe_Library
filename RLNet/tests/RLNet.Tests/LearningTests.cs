@@ -159,21 +159,19 @@ public class LearningTests
     [Fact]
     public void ContinuousA2C_LearnsReacher()
     {
-        // Measured against the same agent before training rather than a fixed bar. Continuous A2C
-        // is the highest-variance algorithm here: over six seeds the same 200,000 steps ended
-        // anywhere from -28 to -125, and floating-point differences between x64, AVX-512 and NEON
-        // move a given seed across that range. Untrained it scores about -200 on every seed.
-        var environment = new ReacherEnvironment();
+        // Catalog settings on four copies, which is how gSDE is meant to run. Over twelve seeds
+        // these 200,000 steps ended between -70 and -100 (untrained: about -220), so a fixed bar
+        // is safe again. With the old fixed spread the same twelve seeds ranged -36 to -147 and
+        // floating-point differences between x64, AVX-512 and NEON moved a seed across that range,
+        // which is why this test once had to compare against the untrained agent instead.
+        var environment = new ContinuousVectorEnvironment(() => new ReacherEnvironment(), 4);
         var agent = Catalog.CreateVectorAgent(Algorithm.A2C, environment.ObservationSpace, environment.ActionSpace, seed: 23);
-
-        float untrained = Trainer.Evaluate(environment, agent, episodes: 5, seed: 907);
 
         Trainer.Train(environment, agent,
             new TrainingOptions { MaxSteps = 200_000, MaxEpisodes = int.MaxValue, Seed = 23 });
 
-        float score = Trainer.Evaluate(environment, agent, episodes: 5, seed: 907);
-        Assert.True(score > untrained + 30f,
-            $"Continuous A2C went from {untrained:F1} to {score:F1} on Reacher, expected an improvement of more than 30.");
+        float score = Trainer.Evaluate(new ReacherEnvironment(), agent, episodes: 10, seed: 907);
+        Assert.True(score > -140f, $"Continuous A2C scored {score:F1} on Reacher, expected above -140.");
     }
 
     [Fact]
@@ -191,6 +189,24 @@ public class LearningTests
 
         float score = Trainer.Evaluate(new CartPoleEnvironment(), agent, episodes: 10, seed: 908);
         Assert.True(score > 150f, $"Vector PPO scored {score:F1} on CartPole, expected above 150.");
+    }
+
+    [Fact]
+    public void VectorSac_LearnsPendulum()
+    {
+        // The single-environment SAC test's budget, settings and bar, spread over four copies.
+        // TrainFrequency counts transitions, so this takes the same number of gradient steps.
+        var environment = new ContinuousVectorEnvironment(() => new PendulumEnvironment(), 4);
+        var agent = new SacAgent(
+            environment.ObservationSpace, environment.ActionSpace,
+            new SacOptions { HiddenSizes = [128, 128], BatchSize = 128, LearningStarts = 500 },
+            seed: 27);
+
+        Trainer.Train(environment, agent,
+            new TrainingOptions { MaxSteps = 12_000, MaxEpisodes = int.MaxValue, Seed = 27 });
+
+        float score = Trainer.Evaluate(new PendulumEnvironment(), agent, episodes: 5, seed: 909);
+        Assert.True(score > -900f, $"Vector SAC scored {score:F1} on Pendulum, expected above -900.");
     }
 
     [Fact]

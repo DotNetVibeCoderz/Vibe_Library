@@ -26,6 +26,12 @@
   <ItemGroup>
     <ProjectReference Include="../../src/RLNet.Core/RLNet.Core.csproj" />
     <ProjectReference Include="../../src/RLNet.Gpu/RLNet.Gpu.csproj" />
+
+    <!--
+      For TrainingSession, the console's run logic, which has no UI dependency and is tested
+      directly (ConsoleSessionTests). Nothing here opens a window.
+    -->
+    <ProjectReference Include="../../src/RLNet.Visualizer/RLNet.Visualizer.csproj" />
   </ItemGroup>
 
 </Project>
