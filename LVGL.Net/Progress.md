@@ -13,7 +13,9 @@ penutup berisi hal-hal yang *tidak* dibuktikan oleh centang-centang itu.
 Last verified / Terakhir diverifikasi: 2026-10-26, Windows x64, LVGL 9.6.0, with
 `LVGLNET_REQUIRE_NATIVE=1`: `tests/LVGL.Net.Tests` 362 passed, `tests/LVGL.Designer.Tests` 224
 passed, 0 failed; Release build of the whole solution with 0 warnings. The live-model tests passed
-against Claude Sonnet 5.5 (`claude-sonnet-5-5`) on the same day.
+against Claude Sonnet 5.5 (`claude-sonnet-5-5`) on the same day. CI run 40240742761 then built and
+ran both suites green on **Windows x64, Ubuntu 24.04 x64 and macOS 26 Arm64** (LVGL built natively
+on each).
 
 ## Requirements / Kebutuhan (requirements.txt)
 
@@ -74,7 +76,7 @@ against Claude Sonnet 5.5 (`claude-sonnet-5-5`) on the same day.
 - [x] LVGL 9.6.0: every imported prototype compared with 9.2.2; renamed and retyped imports fixed; all tests pass against it
 - [x] TTF fonts at run time (above)
 - [~] `DrmBackend`: ioctl numbers and struct sizes equal the kernel's (`DrmBackendTests`); mode choice and damage tracking tested. **Not yet run on a display** - no Linux machine with KMS was available
-- [~] macOS in the CI test matrix: added to `lvgl-net-ci.yml`; **not yet run** (needs a push)
+- [x] macOS in the CI test matrix: both suites and the bench pass on macOS Arm64 (CI run 40240742761). The first run caught a timing assumption in one designer test, since fixed
 - [~] Hardware-in-the-loop: `lvgl-net-pi4.yml` and `--bench` exist; `--bench` verified off-screen (`docs/benchmarks/dashboard-headless-windows-x64.json`). **No Pi run yet** - needs a self-hosted runner
 - [x] `LVGLNET_REQUIRE_NATIVE=1` makes a missing or broken native library fail the run. Set in CI
 
@@ -107,13 +109,14 @@ against Claude Sonnet 5.5 (`claude-sonnet-5-5`) on the same day.
 | Chart sample / bar value / colour change | 129 / 133 / 272 ns, 0 B | same |
 | Dashboard, continuous redraw, off-screen | 63.6 fps, p99 2.1 ms, 0 GC, 34.7 MiB working set | `docs/benchmarks/dashboard-headless-windows-x64.json` |
 | Pi dashboard draw buffers | 200 KiB at 800 × 480 | `--bench` report (the old docs said ~100 KiB; corrected) |
+| Dashboard bench in CI, off-screen | Ubuntu x64 228.9 fps, p99 0.42 ms; macOS Arm64 56.9 fps, p99 1.30 ms; 0 GC on both | CI artifacts `bench-*.json`, run 40240742761 |
 
 ## What the ticks do not prove / Yang tidak dibuktikan oleh centang
 
 - **Real hardware.** Nothing has run on a Raspberry Pi or on a KMS display yet; the Pi workflow
   is ready but needs a runner. *Belum ada yang berjalan di Pi atau layar KMS sungguhan.*
-- **macOS and Linux at run time.** The new CI matrix runs the tests there, but it has not run yet;
-  everything above was verified on Windows. *Matriks CI macOS/Linux belum dijalankan.*
+- **Desktop Linux and macOS by hand.** CI runs every test on both, but nobody has used the
+  designer interactively there yet. *Designer belum dicoba manual di Linux/macOS.*
 - **The SDL window.** Rendering is verified off-screen; SDL's window and texture upload are checked
   by eye. *Jendela SDL diperiksa secara manual.*
 - **Designer gestures not automated:** drag-to-reparent in the outline, the colour picker flyout,
