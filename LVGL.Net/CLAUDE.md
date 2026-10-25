@@ -29,6 +29,7 @@ dotnet test  tests/LVGL.Net.Tests --filter "FullyQualifiedName~LvCoordTests"
 # Run
 dotnet run --project samples/LVGL.Desktop            # SDL demo browser
 dotnet run --project samples/LVGL.Raspi -- --sdl --simulate
+dotnet run --project samples/LVGL.Gallery -- --demo snake   # --screenshots <dir> renders all
 dotnet run --project tools/LVGL.Designer             # Avalonia - Windows, macOS, Linux
 dotnet run --project tools/LVGL.ApiDocs              # regenerate docs/api after a public API change
 dotnet run -c Release --project benchmarks/LVGL.Net.Benchmarks -- --filter '*' --job short

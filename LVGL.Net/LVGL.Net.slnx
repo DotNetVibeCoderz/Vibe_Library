@@ -4,6 +4,7 @@
   </Folder>
   <Folder Name="/samples/">
     <Project Path="samples/LVGL.Desktop/LVGL.Desktop.csproj" />
+    <Project Path="samples/LVGL.Gallery/LVGL.Gallery.csproj" />
     <Project Path="samples/LVGL.Raspi/LVGL.Raspi.csproj" />
   </Folder>
   <Folder Name="/src/">

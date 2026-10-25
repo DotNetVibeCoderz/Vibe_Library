@@ -1,0 +1,101 @@
+{
+  "$schema": "http://json.schemastore.org/template",
+  "author": "Kang Fadhil (Gravicode Studios)",
+  "classifications": [
+    "LVGL",
+    "Embedded",
+    "IoT",
+    "Raspberry Pi",
+    "GUI"
+  ],
+  "identity": "LVGL.Net.App",
+  "groupIdentity": "LVGL.Net.App",
+  "name": "LVGL.Net application",
+  "description": "An LVGL user interface that runs in a desktop window while you develop it, and on a Raspberry Pi display (DRM/KMS or framebuffer) when you deploy it.",
+  "shortName": "lvgl",
+  "sourceName": "Company.LvglTemplateApp",
+  "preferNameDirectory": true,
+  "tags": {
+    "language": "C#",
+    "type": "project"
+  },
+  "symbols": {
+    "Layout": {
+      "type": "parameter",
+      "datatype": "choice",
+      "defaultValue": "code",
+      "description": "How the main screen is defined.",
+      "choices": [
+        {
+          "choice": "code",
+          "description": "Widgets built in C#."
+        },
+        {
+          "choice": "json",
+          "description": "A .lvgl.json layout, editable in the LVGL.Net designer and loaded at run time."
+        }
+      ]
+    },
+    "Width": {
+      "type": "parameter",
+      "datatype": "integer",
+      "defaultValue": "800",
+      "replaces": "DESIGN_WIDTH",
+      "description": "Screen width the UI is designed for (default: the Raspberry Pi Touch Display)."
+    },
+    "Height": {
+      "type": "parameter",
+      "datatype": "integer",
+      "defaultValue": "480",
+      "replaces": "DESIGN_HEIGHT",
+      "description": "Screen height the UI is designed for."
+    },
+    "LvglNetVersion": {
+      "type": "parameter",
+      "datatype": "text",
+      "defaultValue": "0.2.0",
+      "replaces": "LVGLNET_VERSION",
+      "description": "Version of the LVGL.Net packages to reference."
+    },
+    "UseJson": {
+      "type": "computed",
+      "value": "(Layout == \"json\")"
+    },
+    "skipRestore": {
+      "type": "parameter",
+      "datatype": "bool",
+      "defaultValue": "false",
+      "description": "Do not restore packages after creating the project."
+    }
+  },
+  "sources": [
+    {
+      "modifiers": [
+        {
+          "condition": "(!UseJson)",
+          "exclude": [
+            "Screens/**"
+          ]
+        }
+      ]
+    }
+  ],
+  "primaryOutputs": [
+    {
+      "path": "Company.LvglTemplateApp.csproj"
+    }
+  ],
+  "postActions": [
+    {
+      "description": "Restore the LVGL.Net packages.",
+      "manualInstructions": [
+        {
+          "text": "Run 'dotnet restore'"
+        }
+      ],
+      "actionId": "210D431B-A78B-4D2F-B762-4ED3E3EA9025",
+      "continueOnError": true,
+      "condition": "(!skipRestore)"
+    }
+  ]
+}

@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>Lvgl.Gallery</RootNamespace>
+    <AssemblyName>LVGL.Gallery</AssemblyName>
+    <IsPackable>false</IsPackable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+
+    <!-- Runs on a Pi as well as a desk: workstation GC, no ICU. -->
+    <ServerGarbageCollection>false</ServerGarbageCollection>
+    <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/LVGL.Net/LVGL.Net.csproj" />
+    <ProjectReference Include="../../src/LVGL.Net.Sdl/LVGL.Net.Sdl.csproj" />
+    <ProjectReference Include="../../src/LVGL.Net.Linux/LVGL.Net.Linux.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The Work demos keep their records in SQLite. -->
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.13" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Every demo carries its own source, shown by the Source view. Keyed by file name. -->
+    <EmbeddedResource Include="Demos/**/*.cs" LogicalName="source/%(Filename)%(Extension)" />
+    <None Include="Assets/**" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The demos' engines and the demos themselves are exercised by tests/LVGL.Net.Tests. -->
+    <InternalsVisibleTo Include="LVGL.Net.Tests" />
+  </ItemGroup>
+
+</Project>

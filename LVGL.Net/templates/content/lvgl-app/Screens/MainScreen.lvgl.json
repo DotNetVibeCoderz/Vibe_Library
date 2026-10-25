@@ -1,0 +1,32 @@
+{
+  "Version": 2,
+  "Name": "MainScreen",
+  "Width": DESIGN_WIDTH,
+  "Height": DESIGN_HEIGHT,
+  "BackgroundColor": "#0F1720",
+  "Styles": [
+    { "Name": "Card", "BackgroundColor": "#1A2430", "BorderWidth": 0, "Radius": 12, "Padding": 16 },
+    { "Name": "Caption", "TextColor": "#8B9AAA" }
+  ],
+  "Children": [
+    { "Type": "Label", "Name": "TitleLabel", "X": 24, "Y": 20, "Align": "TopLeft", "Text": "Company.LvglTemplateApp", "TextColor": "#E6EDF3", "FontSize": 24 },
+    { "Type": "Label", "Name": "ClockLabel", "X": -24, "Y": 26, "Align": "TopRight", "Text": "--:--:--", "Styles": [ "Caption" ] },
+    {
+      "Type": "Panel", "Name": "LevelCard", "X": 24, "Y": 10, "Align": "LeftMid", "Width": 340, "Height": 150, "Styles": [ "Card" ],
+      "Children": [
+        { "Type": "Label", "Name": "LevelTitle", "Text": "Level", "Styles": [ "Caption" ] },
+        { "Type": "Label", "Name": "LevelValue", "Align": "TopRight", "Text": "40%", "TextColor": "#E6EDF3", "FontSize": 20 },
+        { "Type": "Bar", "Name": "LevelBar", "Y": 44, "Align": "TopLeft", "Width": 300, "Height": 12, "Minimum": 0, "Maximum": 100, "Value": 40, "AccentColor": "#38BDF8" },
+        { "Type": "Slider", "Name": "LevelSlider", "Y": -10, "Align": "BottomLeft", "Width": 300, "Height": 10, "Minimum": 0, "Maximum": 100, "Value": 40, "AccentColor": "#38BDF8" }
+      ]
+    },
+    {
+      "Type": "Panel", "Name": "PowerCard", "X": -24, "Y": 10, "Align": "RightMid", "Width": 260, "Height": 150, "Styles": [ "Card" ],
+      "Children": [
+        { "Type": "Label", "Name": "PowerTitle", "Text": "Power", "Styles": [ "Caption" ] },
+        { "Type": "Led", "Name": "PowerLed", "X": 4, "Y": 14, "Align": "LeftMid", "Width": 22, "Height": 22, "AccentColor": "#4ADE80", "Value": 255 },
+        { "Type": "Switch", "Name": "PowerSwitch", "Y": 14, "Align": "RightMid", "Value": 1, "AccentColor": "#38BDF8" }
+      ]
+    }
+  ]
+}

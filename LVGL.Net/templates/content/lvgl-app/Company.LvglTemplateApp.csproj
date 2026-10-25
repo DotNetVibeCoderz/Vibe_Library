@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+
+    <!--
+      Settings that matter on a Raspberry Pi: workstation GC without the background thread (both
+      cost memory and compete with rendering on a small board), and no ICU dependency.
+    -->
+    <ServerGarbageCollection>false</ServerGarbageCollection>
+    <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <TieredPGO>true</TieredPGO>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- LVGL.Net carries the native lvglnet library for Windows, Linux (x64, arm64, arm) and macOS. -->
+    <PackageReference Include="LVGL.Net" Version="LVGLNET_VERSION" />
+    <!-- A desktop window while developing. SDL2 itself must be installed: see README.md. -->
+    <PackageReference Include="LVGL.Net.Sdl" Version="LVGLNET_VERSION" />
+    <!-- The Pi display: DRM/KMS with page flipping, or the framebuffer, plus touch input. -->
+    <PackageReference Include="LVGL.Net.Linux" Version="LVGLNET_VERSION" />
+<!--#if (UseJson) -->
+    <!-- Loads Screens/*.lvgl.json at run time. -->
+    <PackageReference Include="LVGL.Net.Ui" Version="LVGLNET_VERSION" />
+<!--#endif -->
+  </ItemGroup>
+<!--#if (UseJson) -->
+
+  <ItemGroup>
+    <None Update="Screens/*.lvgl.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Update="Screens/assets/**" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+<!--#endif -->
+
+</Project>

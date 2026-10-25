@@ -27,11 +27,11 @@ untuk `UiBuilder`, yang memiliki style dan font dari layout yang dibangunnya.
 | Kelas | Widget LVGL | Catatan |
 |-------|-------------|---------|
 | `LvPanel` | `lv_obj` | Kontainer polos; balok penyusun layout |
-| `LvLabel` | `lv_label` | `Text`, `LongMode` |
+| `LvLabel` | `lv_label` | `Text`, `LongMode`, `Recolor` untuk warna di dalam teks `#RRGGBB teks#` |
 | `LvButton` | `lv_button` | `Text` mengelola label anak yang terpusat; `IsToggle` |
 | `LvSlider` | `lv_slider` | `Value`, `SetRange`, `SetValue(v, animate)` |
 | `LvBar` | `lv_bar` | Indikator progres hanya-baca |
-| `LvArc` | `lv_arc` | Dial atau input putar; `IsReadOnly` |
+| `LvArc` | `lv_arc` | Dial atau input putar; `IsReadOnly`, `Mode` (`Symmetrical` untuk gauge bertitik nol di tengah) |
 | `LvSwitch` | `lv_switch` | `IsOn` |
 | `LvCheckbox` | `lv_checkbox` | `Text`, `IsChecked` |
 | `LvDropdown` | `lv_dropdown` | `Options`, `SelectedIndex`, `SelectedOption` |
@@ -49,6 +49,7 @@ untuk `UiBuilder`, yang memiliki style dan font dari layout yang dibangunnya.
 | `LvScale` | `lv_scale` | Tick dan label untuk gauge dan penggaris; `Mode`, `SetRange`, jumlah tick |
 | `LvTable` | `lv_table` | `this[row, column]`, `SetRows`, `SetColumnWidth` |
 | `LvSpinbox` | `lv_spinbox` | Nilai integer yang ditampilkan dengan titik desimal; `Increment`/`Decrement` |
+| `LvCanvas` | `lv_canvas` | Buffer piksel yang digambar dari kode managed; lihat [Canvas](#canvas) |
 | `LvScreen` | objek screen | `Create()`, `Load()` untuk aplikasi banyak halaman |
 
 Beberapa widget yang lebih baru dalam penggunaan:
@@ -204,6 +205,30 @@ ditangkap di batas callback dan dilaporkan melalui `LvglRuntime.CallbackFailed` 
 pada event itu untuk mencatatnya. Tangani kegagalan yang sudah diperkirakan di dalam handler itu
 sendiri.
 
+Sebagian event membawa lebih dari sekadar kodenya. Baca nilai-nilai ini di dalam handler - nilainya
+berasal dari keadaan input LVGL saat itu:
+
+```csharp
+// Tombol keyboard sampai ke widget yang sedang fokus; masukkan dulu ke grup keyboard.
+app.FocusGroup!.Add(board);
+LvGroup.Focus(board);
+board.AddHandler(LvEventCode.Key, (_, e) =>
+{
+    if (e.Key == LvKey.Left) MoveLeft();         // LvKey.*, atau code point Unicode
+});
+
+// Usapan (swipe) dikirim ke widget terdekat yang tidak meneruskan gesture ke induknya - padahal
+// setiap widget meneruskannya secara bawaan, jadi matikan pada widget sasaran.
+board.SetFlag(LvObjFlag.GestureBubble, false);
+board.AddHandler(LvEventCode.Gesture, (_, e) => Slide(e.GestureDirection));   // LvDir.Left, ...
+
+// Lokasi ketukan, dalam koordinat layar.
+canvas.Clicked += (_, e) =>
+{
+    if (e.TryGetPointer(out var x, out var y)) ZoomAt(x - canvas.GetBounds().X1, y - canvas.GetBounds().Y1);
+};
+```
+
 ## Chart
 
 Dirancang untuk data mengalir:
@@ -229,6 +254,40 @@ native dan tidak mengalokasikan apa pun.
 Sejak LVGL 9.5, garis pembagi grid digambar dengan gaya garis milik part **main**, sehingga
 `chart.SetLineColor(color)` mewarnainya (di 9.2 dulu `LvPart.Items`). LVGL juga menggambar penanda
 pada setiap titik secara bawaan; `SetPartSize(0, 0, LvPart.Indicator)` mematikannya.
+
+## Canvas
+
+`LvCanvas` adalah widget yang menampilkan buffer piksel yang digambari langsung oleh kode managed:
+plot, heat map, fraktal, papan permainan, gelombang - apa pun yang lebih murah sebagai piksel
+daripada sebagai widget.
+
+```csharp
+var plot = new LvCanvas(parent, 400, 240);       // ARGB8888, awalnya transparan
+plot.Fill(LvColor.White);
+plot.FillRect(0, 119, 400, 1, LvColor.FromRgb(0xCCCCCCu));
+plot.DrawLine(0, 200, 399, 40, LvColor.Blue);
+plot.FillCircle(200, 120, 6, LvColor.Red);
+
+Span<uint> pixels = plot.Pixels;                 // atau tulis nilai 0xAARRGGBB secara langsung
+pixels[10 * plot.BufferWidth + 10] = 0xFFFF8800u;
+
+plot.Invalidate();                               // setelah satu frame selesai digambar
+```
+
+Buffer-nya berada di memori unmanaged milik canvas dan dibebaskan saat LVGL menghapusnya, jadi
+tidak ada yang perlu di-dispose. Menggambar tidak mengalokasikan apa pun; `Invalidate()` memberi
+tahu LVGL untuk menggambar ulang pada refresh berikutnya. Demo Mandelbrot, Visualizer, Photo lab
+dan Snake di galeri dibangun di atasnya.
+
+## Scroll
+
+```csharp
+log.ScrollToBottom(animate: true);      // ujung log, chat, atau daftar
+panel.ScrollTo(0, 120);                 // offset konten
+panel.ScrollBy(0, -40);                 // nilai positif menggeser konten ke bawah
+row.ScrollIntoView();                   // scroll setiap leluhur sampai widget ini terlihat
+var offset = panel.ScrollY;
+```
 
 ## Simbol
 

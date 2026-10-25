@@ -325,6 +325,23 @@ internal static unsafe partial class LvglNative
     [LibraryImport(Library)]
     internal static partial void lv_obj_set_scrollbar_mode(nint obj, int mode);
 
+    // lv_anim_enable_t is a typedef of bool in LVGL 9.6, so it is marshalled as one byte.
+
+    [LibraryImport(Library)]
+    internal static partial void lv_obj_scroll_to(nint obj, int x, int y, [MarshalAs(UnmanagedType.U1)] bool animate);
+
+    [LibraryImport(Library)]
+    internal static partial void lv_obj_scroll_by(nint obj, int dx, int dy, [MarshalAs(UnmanagedType.U1)] bool animate);
+
+    [LibraryImport(Library)]
+    internal static partial void lv_obj_scroll_to_view(nint obj, [MarshalAs(UnmanagedType.U1)] bool animate);
+
+    [LibraryImport(Library)]
+    internal static partial int lv_obj_get_scroll_y(nint obj);
+
+    [LibraryImport(Library)]
+    internal static partial int lv_obj_get_scroll_bottom(nint obj);
+
     #endregion
 
     #region Styles - local properties
@@ -476,6 +493,25 @@ internal static unsafe partial class LvglNative
     [LibraryImport(Library)]
     internal static partial void* lv_event_get_user_data(nint e);
 
+    [LibraryImport(Library)]
+    internal static partial uint lv_event_get_key(nint e);
+
+    /// <summary>The input device being processed, or 0 outside input handling.</summary>
+    [LibraryImport(Library)]
+    internal static partial nint lv_indev_active();
+
+    /// <summary>Returns <c>lv_indev_type_t</c>, an int-sized enum with explicit values.</summary>
+    [LibraryImport(Library)]
+    internal static partial int lv_indev_get_type(nint indev);
+
+    /// <summary>Returns <c>lv_dir_t</c>, an int-sized enum of explicit bit flags.</summary>
+    [LibraryImport(Library)]
+    internal static partial int lv_indev_get_gesture_dir(nint indev);
+
+    /// <summary><c>lv_point_t</c> is two <c>int32_t</c>s, so it is read through a pointer rather than the shim.</summary>
+    [LibraryImport(Library)]
+    internal static partial void lv_indev_get_point(nint indev, LvPoint* point);
+
     #endregion
 
     #region Widgets
@@ -491,6 +527,13 @@ internal static unsafe partial class LvglNative
 
     [LibraryImport(Library)]
     internal static partial void lv_label_set_long_mode(nint obj, int mode);
+
+    [LibraryImport(Library)]
+    internal static partial void lv_label_set_recolor(nint obj, [MarshalAs(UnmanagedType.U1)] bool enable);
+
+    [LibraryImport(Library)]
+    [return: MarshalAs(UnmanagedType.U1)]
+    internal static partial bool lv_label_get_recolor(nint obj);
 
     [LibraryImport(Library)]
     internal static partial nint lv_button_create(nint parent);
@@ -536,6 +579,13 @@ internal static unsafe partial class LvglNative
 
     [LibraryImport(Library)]
     internal static partial void lv_arc_set_rotation(nint obj, int rotation);
+
+    /// <summary><c>lv_arc_mode_t</c> is an int-sized enum: normal, symmetrical, reverse.</summary>
+    [LibraryImport(Library)]
+    internal static partial void lv_arc_set_mode(nint obj, int mode);
+
+    [LibraryImport(Library)]
+    internal static partial int lv_arc_get_mode(nint obj);
 
     [LibraryImport(Library)]
     internal static partial nint lv_switch_create(nint parent);
@@ -853,6 +903,13 @@ internal static unsafe partial class LvglNative
     #region Images
 
     [LibraryImport(Library)]
+    internal static partial nint lv_canvas_create(nint parent);
+
+    /// <summary><c>lv_color_format_t</c> is an int-sized enum; the value is <see cref="Lvgl.Drawing.LvImageSource"/>'s ARGB8888.</summary>
+    [LibraryImport(Library)]
+    internal static partial void lv_canvas_set_buffer(nint obj, void* buffer, int width, int height, uint colorFormat);
+
+    [LibraryImport(Library)]
     internal static partial nint lv_image_create(nint parent);
 
     /// <summary>Sets a descriptor (<c>lv_image_dsc_t*</c>) as the source.</summary>
@@ -993,4 +1050,12 @@ internal static unsafe partial class LvglNative
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal static string ReadUtf8(nint pointer) =>
         pointer == 0 ? string.Empty : Marshal.PtrToStringUTF8(pointer) ?? string.Empty;
+}
+
+/// <summary>Layout of <c>lv_point_t</c>.</summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct LvPoint
+{
+    public int X;
+    public int Y;
 }

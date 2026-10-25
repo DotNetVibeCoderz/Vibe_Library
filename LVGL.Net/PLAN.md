@@ -72,6 +72,15 @@ Prinsip ini berlaku di setiap tahap. Fitur yang harus melanggarnya dirancang ula
 - Allocation benchmarks (BenchmarkDotNet) and a zero-allocation test
 - Generated API reference (`docs/api`), kept fresh by a test
 
+### Templates and gallery / Template dan galeri — delivered / sudah dikirim
+- `dotnet new lvgl` (C# or designer-layout UI) and `dotnet new lvgl-screen`, in `LVGL.Net.Templates`
+  *Template proyek `dotnet new` untuk memulai aplikasi dan menambah layar.*
+- `LVGL.Gallery`: seventeen use-case demos - scientific, work and data on SQLite, multimedia,
+  games, tools, home/IoT - each showing its own source
+  *Galeri kasus penggunaan, masing-masing dengan kode sumbernya.*
+- In the core for it: `LvCanvas`, key codes, swipe direction, pointer position, label recolouring,
+  scrolling, centre-zero arcs
+
 ### 0.5: next / berikutnya
 - **Close the hardware gap.** Register the Pi 4 runner, run the HIL workflow, and put the Pi's own
   bench numbers and a photo of `DrmBackend` on a panel into the docs.

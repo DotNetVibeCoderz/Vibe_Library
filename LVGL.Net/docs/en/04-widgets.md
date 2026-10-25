@@ -26,11 +26,11 @@ styles and fonts of a layout it built.
 | Class | LVGL widget | Notes |
 |-------|-------------|-------|
 | `LvPanel` | `lv_obj` | Plain container; the layout building block |
-| `LvLabel` | `lv_label` | `Text`, `LongMode` |
+| `LvLabel` | `lv_label` | `Text`, `LongMode`, `Recolor` for in-line `#RRGGBB text#` colours |
 | `LvButton` | `lv_button` | `Text` maintains a centred child label; `IsToggle` |
 | `LvSlider` | `lv_slider` | `Value`, `SetRange`, `SetValue(v, animate)` |
 | `LvBar` | `lv_bar` | Read-only progress |
-| `LvArc` | `lv_arc` | Dial or rotary input; `IsReadOnly` |
+| `LvArc` | `lv_arc` | Dial or rotary input; `IsReadOnly`, `Mode` (`Symmetrical` for centre-zero gauges) |
 | `LvSwitch` | `lv_switch` | `IsOn` |
 | `LvCheckbox` | `lv_checkbox` | `Text`, `IsChecked` |
 | `LvDropdown` | `lv_dropdown` | `Options`, `SelectedIndex`, `SelectedOption` |
@@ -48,6 +48,7 @@ styles and fonts of a layout it built.
 | `LvScale` | `lv_scale` | Ticks and labels for gauges and rulers; `Mode`, `SetRange`, tick counts |
 | `LvTable` | `lv_table` | `this[row, column]`, `SetRows`, `SetColumnWidth` |
 | `LvSpinbox` | `lv_spinbox` | Integer value shown with a decimal point; `Increment`/`Decrement` |
+| `LvCanvas` | `lv_canvas` | A pixel buffer drawn from managed code; see [Canvas](#canvas) |
 | `LvScreen` | screen object | `Create()`, `Load()` for multi-page apps |
 
 A few of the newer ones in use:
@@ -200,6 +201,30 @@ An exception thrown from a handler cannot be allowed to unwind into LVGL's C sta
 at the boundary and reported through `LvglRuntime.CallbackFailed` - subscribe to log it. Handle
 expected failures inside the handler.
 
+Some events carry more than their code. Read these inside the handler - they come from LVGL's
+current input state:
+
+```csharp
+// Keys reach the focused widget; put it in the keyboard group first.
+app.FocusGroup!.Add(board);
+LvGroup.Focus(board);
+board.AddHandler(LvEventCode.Key, (_, e) =>
+{
+    if (e.Key == LvKey.Left) MoveLeft();         // LvKey.*, or a Unicode code point
+});
+
+// A swipe goes to the nearest widget that does not pass gestures up - which every widget does
+// by default, so turn that off on the swipe target.
+board.SetFlag(LvObjFlag.GestureBubble, false);
+board.AddHandler(LvEventCode.Gesture, (_, e) => Slide(e.GestureDirection));   // LvDir.Left, ...
+
+// Where a tap landed, in screen coordinates.
+canvas.Clicked += (_, e) =>
+{
+    if (e.TryGetPointer(out var x, out var y)) ZoomAt(x - canvas.GetBounds().X1, y - canvas.GetBounds().Y1);
+};
+```
+
 ## Charts
 
 Built for streaming data:
@@ -224,6 +249,38 @@ LVGL keeps the ring buffer internally, so a sample costs one native call and all
 Since LVGL 9.5 the grid's division lines are drawn with the **main** part's line style, so
 `chart.SetLineColor(color)` colours them (in 9.2 it was `LvPart.Items`). LVGL also draws a marker
 on every point by default; `SetPartSize(0, 0, LvPart.Indicator)` turns them off.
+
+## Canvas
+
+`LvCanvas` is a widget showing a pixel buffer that managed code draws into: plots, heat maps,
+fractals, game boards, waveforms - anything cheaper as pixels than as widgets.
+
+```csharp
+var plot = new LvCanvas(parent, 400, 240);       // ARGB8888, cleared to transparent
+plot.Fill(LvColor.White);
+plot.FillRect(0, 119, 400, 1, LvColor.FromRgb(0xCCCCCCu));
+plot.DrawLine(0, 200, 399, 40, LvColor.Blue);
+plot.FillCircle(200, 120, 6, LvColor.Red);
+
+Span<uint> pixels = plot.Pixels;                 // or write 0xAARRGGBB values directly
+pixels[10 * plot.BufferWidth + 10] = 0xFFFF8800u;
+
+plot.Invalidate();                               // once the frame is complete
+```
+
+The buffer lives in unmanaged memory owned by the canvas and is freed when LVGL deletes it, so
+there is nothing to dispose. Drawing allocates nothing; `Invalidate()` tells LVGL to redraw on its
+next refresh. The gallery's Mandelbrot, Visualizer, Photo lab and Snake demos are built on it.
+
+## Scrolling
+
+```csharp
+log.ScrollToBottom(animate: true);      // the end of a log, chat or list
+panel.ScrollTo(0, 120);                 // content offset
+panel.ScrollBy(0, -40);                 // positive moves the content down
+row.ScrollIntoView();                   // scroll every ancestor until this widget shows
+var offset = panel.ScrollY;
+```
 
 ## Symbols
 

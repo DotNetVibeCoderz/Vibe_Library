@@ -1,0 +1,25 @@
+{
+  "$schema": "http://json.schemastore.org/template",
+  "author": "Kang Fadhil (Gravicode Studios)",
+  "classifications": [ "LVGL", "Embedded", "GUI" ],
+  "identity": "LVGL.Net.Screen",
+  "name": "LVGL.Net screen",
+  "description": "Adds a screen to an LVGL.Net application: a .lvgl.json layout for the designer and a class that builds it and wires its widgets.",
+  "shortName": "lvgl-screen",
+  "sourceName": "ScreenName",
+  "tags": {
+    "language": "C#",
+    "type": "item"
+  },
+  "symbols": {
+    "namespace": {
+      "type": "bind",
+      "binding": "msbuild:RootNamespace",
+      "replaces": "ScreenNamespace",
+      "defaultValue": "App"
+    }
+  },
+  "primaryOutputs": [
+    { "path": "ScreenName.cs" }
+  ]
+}

@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    dotnet new templates for LVGL.Net: `lvgl` (an application) and `lvgl-screen` (one more screen).
+
+      dotnet new install LVGL.Net.Templates
+      dotnet new lvgl -n Thermostat
+
+    The content under content/ is copied verbatim into the package; the template engine does the
+    substitution when a project is created. This project compiles nothing.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <PackageId>LVGL.Net.Templates</PackageId>
+    <PackageType>Template</PackageType>
+    <Title>LVGL.Net templates</Title>
+    <Description>dotnet new templates for LVGL.Net: an LVGL application that runs in a desktop window and on a Raspberry Pi display, and a screen item template. Di port oleh Kang Fadhil dari Gravicode Studios.</Description>
+    <PackageTags>$(PackageTags);dotnet-new;templates</PackageTags>
+
+    <IncludeContentInPack>true</IncludeContentInPack>
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <ContentTargetFolders>content</ContentTargetFolders>
+    <NoDefaultExcludes>true</NoDefaultExcludes>
+    <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
+    <IncludeSymbols>false</IncludeSymbols>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <!-- No assembly goes into a template package, so NuGet's "no lib folder" warning does not apply. -->
+    <NoWarn>$(NoWarn);NU5128</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Content Include="content/**/*" Exclude="content/**/bin/**;content/**/obj/**" />
+    <Compile Remove="**/*" />
+  </ItemGroup>
+
+</Project>

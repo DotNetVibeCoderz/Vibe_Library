@@ -133,6 +133,17 @@ public enum LvEventCode
     ScreenUnloaded = 27,
 }
 
+/// <summary>Where an <see cref="Widgets.LvArc"/>'s indicator starts.</summary>
+public enum LvArcMode
+{
+    /// <summary>From the start angle, clockwise.</summary>
+    Normal = 0,
+    /// <summary>From the middle of the range, towards the value on either side.</summary>
+    Symmetrical = 1,
+    /// <summary>From the end angle, counter-clockwise.</summary>
+    Reverse = 2,
+}
+
 /// <summary>How LVGL hands rendered pixels to the backend.</summary>
 public enum LvRenderMode
 {

@@ -5,8 +5,8 @@
 > **Di port oleh Kang Fadhil dari Gravicode Studios.**
 
 LVGL.Net adalah wrapper .NET 10 multi-platform untuk [LVGL](https://github.com/lvgl/lvgl) v9.6,
-library grafis untuk sistem tertanam, dilengkapi designer visual lintas platform dan dua aplikasi
-contoh.
+library grafis untuk sistem tertanam, dilengkapi designer visual lintas platform dan tiga aplikasi
+contoh, salah satunya galeri kasus penggunaan.
 
 ![Designer](../images/screenshots/designer-design.png)
 
@@ -24,6 +24,8 @@ contoh.
 | 10 | [Ruang kerja designer](10-ruang-kerja-designer.md) | Pintasan, inspector, mode Design/Code, panel asisten |
 | 11 | [Gambar, font, dan animasi](11-gambar-font-animasi.md) | `LvImage`, font TrueType, `LvAnimation`, `LvTimer` |
 | 12 | [Pengujian dan benchmark](12-pengujian-dan-benchmark.md) | Rangkaian test, screenshot, angka benchmark, referensi API |
+| 13 | [Template proyek](13-template-proyek.md) | `dotnet new lvgl` dan `dotnet new lvgl-screen` |
+| 14 | [Galeri](14-galeri.md) | Tujuh belas demo kasus penggunaan, susunan demo, menambah demo |
 | - | [Referensi API](../api/README.md) (bahasa Inggris) | Setiap tipe dan member publik, dihasilkan dari kode |
 
 ## Struktur repositori
@@ -37,6 +39,7 @@ src/LVGL.Net.Assistant Jack The Code Bender - asisten Semantic Kernel, penyedia 
 tools/LVGL.Designer    Designer visual Avalonia (Windows, macOS, Linux)
 tools/LVGL.ApiDocs     Menghasilkan docs/api dari dokumentasi XML
 samples/LVGL.Desktop   Peramban demo komponen lintas platform
+samples/LVGL.Gallery   Galeri kasus penggunaan: tujuh belas demo, masing-masing dengan kodenya
 samples/LVGL.Raspi     Dasbor sensor realtime untuk Raspberry Pi 4, dengan mode bench
 samples/layouts        Contoh dokumen layout
 tests/LVGL.Net.Tests   Test library - unit test berjalan tanpa library native

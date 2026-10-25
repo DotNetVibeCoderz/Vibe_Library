@@ -23,6 +23,8 @@
     <ProjectReference Include="../../src/LVGL.Net.Linux/LVGL.Net.Linux.csproj" />
     <ProjectReference Include="../../tools/LVGL.ApiDocs/LVGL.ApiDocs.csproj" />
     <ProjectReference Include="../../src/LVGL.Net.Assistant/LVGL.Net.Assistant.csproj" />
+    <!-- The gallery's demo engines and every demo, mounted against the real LVGL build. -->
+    <ProjectReference Include="../../samples/LVGL.Gallery/LVGL.Gallery.csproj" />
   </ItemGroup>
 
   <ItemGroup>

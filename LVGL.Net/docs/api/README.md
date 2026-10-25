@@ -15,6 +15,7 @@ Package: LVGL.Net
 | [LvAnimPath](Lvgl.md#lvanimpath) | enum | Easing curve of an animation. |
 | [LvAnimation](Lvgl.md#lvanimation) | sealed class | Animates an integer from one value to another over time, driven by LVGL's own animation timer. |
 | [LvAnimations](Lvgl.md#lvanimations) | static class | Shortcuts for animating common widget properties. |
+| [LvArcMode](Lvgl.md#lvarcmode) | enum | Where an [`LvArc`](Lvgl.Widgets.md#lvarc)'s indicator starts. |
 | [LvChartAxis](Lvgl.md#lvchartaxis) | enum | Axis a chart series is bound to. |
 | [LvChartType](Lvgl.md#lvcharttype) | enum | Chart plot style. |
 | [LvChartUpdateMode](Lvgl.md#lvchartupdatemode) | enum | How new chart points are inserted. |
@@ -92,6 +93,7 @@ Package: LVGL.Net
 | Type | Kind | Summary |
 |------|------|---------|
 | [LvGroup](Lvgl.Input.md#lvgroup) | sealed class | A focus group: the set of widgets a keyboard or encoder can move between. |
+| [LvKey](Lvgl.Input.md#lvkey) | static class | LVGL's control-key codes (`LV_KEY_*`), as reported by [`Key`](Lvgl.Events.md#lveventargs). |
 | [LvglInputDevice](Lvgl.Input.md#lvglinputdevice) | sealed class | Feeds pointer and key state from an [`ILvglBackend`](Lvgl.Backends.md#ilvglbackend) into a native |
 
 ## [Lvgl.Interop](Lvgl.Interop.md)
@@ -154,6 +156,7 @@ Package: LVGL.Net
 | [LvArc](Lvgl.Widgets.md#lvarc) | sealed class | A circular arc, used both as a dial-style indicator and as a rotary input. |
 | [LvBar](Lvgl.Widgets.md#lvbar) | sealed class | A read-only progress bar. |
 | [LvButton](Lvgl.Widgets.md#lvbutton) | sealed class | A push button. |
+| [LvCanvas](Lvgl.Widgets.md#lvcanvas) | sealed class | A widget showing a pixel buffer that managed code draws into directly: plots, heat maps, |
 | [LvChart](Lvgl.Widgets.md#lvchart) | sealed class | A line, bar or scatter chart. |
 | [LvChartSeries](Lvgl.Widgets.md#lvchartseries) | sealed class | One data series inside an [`LvChart`](#lvchart). |
 | [LvCheckbox](Lvgl.Widgets.md#lvcheckbox) | sealed class | A checkbox with a caption. |

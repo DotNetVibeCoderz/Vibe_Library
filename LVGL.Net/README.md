@@ -23,6 +23,7 @@ Documentation: **[English](docs/en/README.md)** · **[Bahasa Indonesia](docs/id/
 | `src/LVGL.Net.Assistant` | Jack The Code Bender — Semantic Kernel assistant (OpenAI, Anthropic, Gemini, Ollama) |
 | `tools/LVGL.Designer` | Avalonia visual designer with a live LVGL preview and the AI assistant |
 | `samples/LVGL.Desktop` | Demo browser for the widget, layout, styling and animation APIs |
+| `samples/LVGL.Gallery` | Seventeen use-case demos (scientific, data, multimedia, games, tools, IoT), each with its source |
 | `samples/LVGL.Raspi` | Raspberry Pi telemetry dashboard — CPU, temperature, memory, live chart, bench mode |
 | `tests/` | Library and designer tests; the unit tests run without the native library |
 | `benchmarks/` | BenchmarkDotNet measurements of the render path |
@@ -39,6 +40,35 @@ Documentation: **[English](docs/en/README.md)** · **[Bahasa Indonesia](docs/id/
 </tr>
 </table>
 
+## Gallery
+
+`samples/LVGL.Gallery` — seventeen demos across six use cases, each showing its own source in the
+app: scientific (function plotter, oscilloscope, Mandelbrot), work and data on SQLite (inventory,
+task board, sales report), multimedia (music player, spectrum visualizer, photo filters), games
+(Snake, 2048, noughts and crosses), tools (calculator, unit converter, stopwatch) and home/IoT
+(smart home panel, energy monitor).
+
+```bash
+dotnet run --project samples/LVGL.Gallery
+dotnet run --project samples/LVGL.Gallery -- --demo snake
+```
+
+<table>
+<tr>
+<td><img src="https://raw.githubusercontent.com/DotNetVibeCoderz/Vibe_Library/main/LVGL.Net/docs/images/screenshots/gallery-scientific-mandelbrot.png" alt="Mandelbrot" /></td>
+<td><img src="https://raw.githubusercontent.com/DotNetVibeCoderz/Vibe_Library/main/LVGL.Net/docs/images/screenshots/gallery-work-sales-report.png" alt="Sales report" /></td>
+<td><img src="https://raw.githubusercontent.com/DotNetVibeCoderz/Vibe_Library/main/LVGL.Net/docs/images/screenshots/gallery-multimedia-visualizer.png" alt="Visualizer" /></td>
+</tr>
+<tr>
+<td><img src="https://raw.githubusercontent.com/DotNetVibeCoderz/Vibe_Library/main/LVGL.Net/docs/images/screenshots/gallery-games-2048.png" alt="2048" /></td>
+<td><img src="https://raw.githubusercontent.com/DotNetVibeCoderz/Vibe_Library/main/LVGL.Net/docs/images/screenshots/gallery-tools-calculator.png" alt="Calculator" /></td>
+<td><img src="https://raw.githubusercontent.com/DotNetVibeCoderz/Vibe_Library/main/LVGL.Net/docs/images/screenshots/gallery-home-smart-home.png" alt="Smart home" /></td>
+</tr>
+</table>
+
+Every demo has a **Source** view of its own C# file. See [the gallery chapter](docs/en/14-gallery.md)
+for all seventeen.
+
 ## Install
 
 ```bash
@@ -47,6 +77,16 @@ dotnet add package LVGL.Net.Sdl      # windowed output on Windows, macOS and Lin
 dotnet add package LVGL.Net.Linux    # framebuffer, DRM/KMS and evdev, no window system
 dotnet add package LVGL.Net.Ui       # layout document model, loader and C# generator
 ```
+
+Or start from a template - an app that runs in a desktop window and on a Raspberry Pi display:
+
+```bash
+dotnet new install LVGL.Net.Templates
+dotnet new lvgl -n MyPanel                   # UI in C#; --layout json for a designer layout
+dotnet new lvgl-screen -n Settings           # add a screen to it
+```
+
+See [Project templates](docs/en/13-project-templates.md).
 
 `LVGL.Net.Sdl` needs SDL2 itself on the machine — the package does not redistribute it. Install
 `libsdl2-2.0-0` on Debian/Ubuntu, `sdl2` via Homebrew, or drop `SDL2.dll` into
@@ -62,6 +102,7 @@ dotnet build LVGL.Net.slnx
 dotnet test  LVGL.Net.slnx
 
 dotnet run --project samples/LVGL.Desktop    # needs SDL2
+dotnet run --project samples/LVGL.Gallery    # the use-case gallery
 dotnet run --project tools/LVGL.Designer     # the designer, on any desktop OS
 ```
 

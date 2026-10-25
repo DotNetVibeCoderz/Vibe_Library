@@ -812,4 +812,181 @@ public sealed class LvglWidgetCoverageTests(LvglFixture lvgl) : IDisposable
     }
 
     #endregion
+
+    #region Canvas and input
+
+    [Fact]
+    public void A_canvas_shows_what_managed_code_drew_and_redraws_after_invalidate()
+    {
+        if (Skip) return;
+        lvgl.ResetScreen();
+
+        LvCanvas canvas = null!;
+        lvgl.Invoke(() =>
+        {
+            canvas = new LvCanvas(Screen, 80, 60);
+            canvas.SetPosition(10, 10);
+            canvas.Fill(LvColor.FromRgb(0x0000FFu));
+            canvas.FillRect(40, 0, 40, 60, LvColor.FromRgb(0xFF0000u));
+            canvas.Invalidate();
+        });
+
+        Assert.True(lvgl.RenderFrame());
+        Assert.Equal(0x0000FFu, lvgl.PixelAt(20, 30));
+        Assert.Equal(0xFF0000u, lvgl.PixelAt(70, 30));
+
+        // Draw again into the same buffer: only the invalidation tells LVGL to look.
+        lvgl.Invoke(() =>
+        {
+            canvas.FillCircle(10, 20, 6, LvColor.FromRgb(0x00FF00u));
+            canvas.DrawLine(0, 59, 79, 59, LvColor.FromRgb(0xFFFFFFu));
+            canvas.Invalidate();
+        });
+
+        lvgl.Pump(100);
+        Assert.Equal(0x00FF00u, lvgl.PixelAt(20, 30));
+        Assert.Equal(0xFFFFFFu, lvgl.PixelAt(50, 69));
+    }
+
+    [Fact]
+    public void A_deleted_canvas_has_released_its_pixels()
+    {
+        if (Skip) return;
+        lvgl.ResetScreen();
+
+        lvgl.Invoke(() =>
+        {
+            var canvas = new LvCanvas(Screen, 16, 16);
+            canvas.SetPixel(-1, 99, 0xFFFFFFFFu);   // out of range: ignored, not a write past the buffer
+            canvas.Delete();
+
+            Assert.False(canvas.IsAlive);
+            Assert.Throws<ObjectDisposedException>(() => canvas.Pixels.Length);
+        });
+    }
+
+    [Fact]
+    public void A_focused_widget_receives_arrow_keys()
+    {
+        if (Skip) return;
+        lvgl.ResetScreen();
+
+        var keys = new List<uint>();
+        lvgl.Invoke(() =>
+        {
+            var board = new LvPanel(Screen, 100, 100);
+            board.AddHandler(LvEventCode.Key, (_, e) => keys.Add(e.Key));
+            lvgl.Application.FocusGroup!.Add(board);
+            Input.LvGroup.Focus(board);
+        });
+
+        lvgl.RenderFrame();
+        lvgl.SendKey(Input.LvKey.Up);
+        lvgl.SendKey(Input.LvKey.Left);
+
+        Assert.Equal([Input.LvKey.Up, Input.LvKey.Left], keys);
+    }
+
+    [Fact]
+    public void A_click_reports_where_the_pointer_was()
+    {
+        if (Skip) return;
+        lvgl.ResetScreen();
+
+        (int X, int Y)? clicked = null;
+        lvgl.Invoke(() =>
+        {
+            var target = new LvPanel(Screen, 120, 80);
+            target.SetPosition(40, 30);
+            target.Clicked += (_, e) => clicked = e.TryGetPointer(out var x, out var y) ? (x, y) : null;
+        });
+
+        lvgl.RenderFrame();
+        lvgl.ClickAt(90, 55);
+
+        Assert.Equal((90, 55), clicked);
+    }
+
+    [Fact]
+    public void A_swipe_reports_its_direction()
+    {
+        if (Skip) return;
+        lvgl.ResetScreen();
+
+        var directions = new List<LvDir>();
+        lvgl.Invoke(() =>
+        {
+            var board = new LvPanel(Screen, 360, 200);
+            board.SetPosition(20, 50);
+            board.IsScrollable = false;
+            board.SetFlag(LvObjFlag.GestureBubble, false);   // otherwise the gesture goes to the screen
+            board.AddHandler(LvEventCode.Gesture, (_, e) => directions.Add(e.GestureDirection));
+        });
+        lvgl.RenderFrame();
+
+        // Press, drag to the left, release. The pointer moves on every frame: LVGL zeroes its
+        // gesture sum whenever an input reading shows no movement, so a drag that pauses between
+        // its own readings never adds up to a gesture.
+        lvgl.Invoke(() =>
+        {
+            for (var x = 300; x >= 60; x -= 6)
+            {
+                lvgl.Backend.SetPointer(x, 150, pressed: true);
+                lvgl.Application.RunFrame();
+                Thread.Sleep(5);
+            }
+
+            lvgl.Backend.SetPointer(60, 150, pressed: false);
+            for (var i = 0; i < 3; i++) { lvgl.Application.RunFrame(); Thread.Sleep(5); }
+        });
+
+        Assert.Contains(LvDir.Left, directions);
+    }
+
+    [Fact]
+    public void Scrolling_to_the_bottom_reveals_the_end_of_the_content()
+    {
+        if (Skip) return;
+        lvgl.ResetScreen();
+
+        lvgl.Invoke(() =>
+        {
+            var viewport = new LvPanel(Screen, 200, 100);
+            viewport.SetPadding(0);
+            viewport.SetBorderWidth(0);
+            var content = new LvPanel(viewport, 200, 400);
+            content.SetPosition(0, 0);
+
+            viewport.ScrollToBottom();
+            Assert.Equal(300, viewport.ScrollY);
+
+            viewport.ScrollTo(0, 120);
+            Assert.Equal(120, viewport.ScrollY);
+
+            viewport.ScrollBy(0, 20);   // positive moves the content down, towards the top
+            Assert.Equal(100, viewport.ScrollY);
+        });
+    }
+
+    [Fact]
+    public void Label_recolouring_and_arc_mode_reach_LVGL()
+    {
+        if (Skip) return;
+        lvgl.ResetScreen();
+
+        lvgl.Invoke(() =>
+        {
+            var label = new LvLabel(Screen) { Recolor = true };
+            Assert.True(label.Recolor);
+            label.Text = LvLabel.Recolored("warm", LvColor.FromRgb(0xFF8800u)) + " plain";
+            Assert.Equal("#FF8800 warm# plain", label.Text);
+
+            var arc = new LvArc(Screen) { Mode = LvArcMode.Symmetrical };
+            Assert.Equal(LvArcMode.Symmetrical, arc.Mode);
+        });
+
+        Assert.True(lvgl.RenderFrame());
+    }
+
+    #endregion
 }

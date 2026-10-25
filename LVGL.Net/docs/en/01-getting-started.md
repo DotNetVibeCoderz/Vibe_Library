@@ -128,4 +128,5 @@ dotnet run --project samples/LVGL.Raspi -- --screenshot out/pi.png     # the das
 
 - [Architecture](02-architecture.md) — why the wrapper is shaped the way it is
 - [Widgets and styling](04-widgets.md) — the day-to-day API
+- [Project templates](13-project-templates.md) — start a new app with `dotnet new lvgl`
 - [API reference](../api/README.md) — every public type and member, generated from the code

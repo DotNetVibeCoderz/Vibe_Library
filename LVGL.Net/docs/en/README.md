@@ -5,8 +5,8 @@
 > **Ported by Kang Fadhil of Gravicode Studios** — *Di port oleh Kang Fadhil dari Gravicode Studios.*
 
 LVGL.Net is a multi-platform .NET 10 wrapper around [LVGL](https://github.com/lvgl/lvgl) v9.6, the
-embedded graphics library, together with a cross-platform visual designer and two sample
-applications.
+embedded graphics library, together with a cross-platform visual designer and three sample
+applications, one of them a gallery of use cases.
 
 ![The designer](../images/screenshots/designer-design.png)
 
@@ -24,6 +24,8 @@ applications.
 | 10 | [The designer workspace](10-designer-workspace.md) | Shortcuts, the inspector, Design/Code modes, the assistant panel |
 | 11 | [Images, fonts and animation](11-images-fonts-animation.md) | `LvImage`, TrueType fonts, `LvAnimation`, `LvTimer` |
 | 12 | [Testing and benchmarks](12-testing-and-benchmarks.md) | The test suites, screenshots, benchmark numbers, the API reference |
+| 13 | [Project templates](13-project-templates.md) | `dotnet new lvgl` and `dotnet new lvgl-screen` |
+| 14 | [The gallery](14-gallery.md) | Seventeen use-case demos, how a demo is built, adding one |
 | - | [API reference](../api/README.md) | Every public type and member, generated from the code |
 
 ## Repository layout
@@ -37,6 +39,7 @@ src/LVGL.Net.Assistant Jack The Code Bender - Semantic Kernel assistant, provide
 tools/LVGL.Designer    Avalonia visual designer (Windows, macOS, Linux)
 tools/LVGL.ApiDocs     Generates docs/api from the XML documentation
 samples/LVGL.Desktop   Cross-platform component demo browser
+samples/LVGL.Gallery   Use-case gallery: seventeen demos, each with its source
 samples/LVGL.Raspi     Live sensor dashboard for a Raspberry Pi 4, with a bench mode
 samples/layouts        Example layout documents
 tests/LVGL.Net.Tests   Library tests - unit tests run without the native library
@@ -53,6 +56,7 @@ native/                LVGL build, ABI shim, lv_conf.h, build scripts
 dotnet build LVGL.Net.slnx                         # build everything managed
 dotnet test  LVGL.Net.slnx                         # run the tests
 dotnet run --project samples/LVGL.Desktop          # component demos
+dotnet run --project samples/LVGL.Gallery          # use-case gallery
 dotnet run --project samples/LVGL.Raspi -- --sdl   # sensor dashboard in a window
 dotnet run --project tools/LVGL.Designer           # visual designer
 ```

@@ -37,6 +37,16 @@ public sealed class LvArc : LvObject
         set => LvglNative.lv_arc_set_rotation(Handle, value);
     }
 
+    /// <summary>
+    /// Where the indicator grows from. <see cref="LvArcMode.Symmetrical"/> grows it either way
+    /// from the middle of the range - a centre-zero gauge such as import/export or left/right balance.
+    /// </summary>
+    public LvArcMode Mode
+    {
+        get => (LvArcMode)LvglNative.lv_arc_get_mode(Handle);
+        set => LvglNative.lv_arc_set_mode(Handle, (int)value);
+    }
+
     /// <summary>Makes the arc display-only by removing its click handling.</summary>
     public bool IsReadOnly
     {

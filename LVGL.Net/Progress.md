@@ -11,8 +11,9 @@ membuktikannya; `[~]` berarti sudah dibangun tetapi baru terbukti sebagian atau 
 penutup berisi hal-hal yang *tidak* dibuktikan oleh centang-centang itu.
 
 Last verified / Terakhir diverifikasi: 2026-10-26, Windows x64, LVGL 9.6.0, with
-`LVGLNET_REQUIRE_NATIVE=1`: `tests/LVGL.Net.Tests` 362 passed, `tests/LVGL.Designer.Tests` 224
-passed, 0 failed; Release build of the whole solution with 0 warnings. The live-model tests passed
+`LVGLNET_REQUIRE_NATIVE=1`: `tests/LVGL.Net.Tests` 399 passed, `tests/LVGL.Designer.Tests` 224
+passed, 0 failed; Release build of the whole solution with 0 warnings; `templates/test-templates.sh`
+passed; the gallery rendered all 17 demos off-screen and ran in an SDL window. The live-model tests passed
 against Claude Sonnet 5.5 (`claude-sonnet-5-5`) on the same day. CI run 40240742761 then built and
 ran both suites green on **Windows x64, Ubuntu 24.04 x64 and macOS 26 Arm64** (LVGL built natively
 on each).
@@ -31,7 +32,7 @@ on each).
 - [~] **R3b**: `LVGL.Desktop` demo browser on Windows/macOS/Linux. CI builds it on all three; every
   page renders off-screen through `--screenshots`; the SDL window itself is not checked
   automatically
-- [x] **R3c**: documentation in English and Indonesian - 12 chapters each, mirrored file for file -
+- [x] **R3c**: documentation in English and Indonesian - 14 chapters each, mirrored file for file -
   plus a generated API reference that `ApiReferenceTests` keeps in step with the code
 - [x] **R4**: light and fast. `The_render_path_does_not_allocate` requires 0 managed bytes over 150
   redrawn frames (chart, value changes, animation, timer); BenchmarkDotNet shows 0 B for every
@@ -80,6 +81,26 @@ on each).
 - [~] Hardware-in-the-loop: `lvgl-net-pi4.yml` and `--bench` exist; `--bench` verified off-screen (`docs/benchmarks/dashboard-headless-windows-x64.json`). **No Pi run yet** - needs a self-hosted runner
 - [x] `LVGLNET_REQUIRE_NATIVE=1` makes a missing or broken native library fail the run. Set in CI
 
+## Templates and gallery / Template dan galeri
+
+- [x] `dotnet new lvgl` (`--layout code|json`) and `dotnet new lvgl-screen`, packed as
+  `LVGL.Net.Templates`. `templates/test-templates.sh` packs everything into a local feed, creates
+  both variants plus a screen, builds them with warnings as errors and renders each to a PNG -
+  passed on Windows; added to CI for all three OSes. `TemplateTests` pins the template's package
+  version to `Directory.Build.props` and validates both template layouts
+- [x] The publish workflow packs the templates and rewrites their package version to the release's
+- [x] `LVGL.Gallery`: 17 demos in six use cases, each with its own source in a Source view.
+  `GalleryIntegrationTests` mounts every demo against real LVGL, runs its timers, tears it down and
+  builds its Source view with no callback failures; `GalleryEngineTests` covers the calculator,
+  unit tables, 2048 rules, minimax (exhaustively: the computer never loses), the highlighter and
+  the SQLite store; CI runs `--screenshots`, which fails on any demo error
+- [x] Core additions the gallery needed: `LvCanvas`, `LvEventArgs.Key` / `LvKey`,
+  `GestureDirection`, `TryGetPointer`, `LvLabel.Recolor`, `ScrollTo`/`ScrollBy`/`ScrollToBottom`/
+  `ScrollIntoView`, `LvArc.Mode`. `LvglWidgetCoverageTests` (pixel checks for the canvas, a real
+  key sequence, a dragged swipe, a click position)
+- [~] The gallery on a Pi touch panel: `--drm`/`--fb` are wired like the Pi sample's, but it has
+  not run on one
+
 ## Later items / Butir "Nanti"
 
 - [x] Allocation benchmarks: `benchmarks/LVGL.Net.Benchmarks`, results in `docs/benchmarks/render-path.md`
@@ -97,7 +118,7 @@ on each).
 
 ## Packaging / Paket
 
-- [x] Five packages with README, licence and icon. Checked by `dotnet pack`
+- [x] Five packages with README, licence and icon, plus `LVGL.Net.Templates`. Checked by `dotnet pack`
 - [x] Native libraries for six RIDs inside `LVGL.Net`; the publish workflow fails if any is absent
 - [ ] `LVGL.Net.Assistant` depends on prerelease SK connectors (Google, Ollama) — NU5104 on pack. No stable versions exist yet
 

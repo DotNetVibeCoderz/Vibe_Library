@@ -1,0 +1,11 @@
+{
+  "$schema": "http://json.schemastore.org/dotnetcli.host",
+  "symbolInfo": {
+    "Layout": { "longName": "layout", "shortName": "" },
+    "Width": { "longName": "width", "shortName": "" },
+    "Height": { "longName": "height", "shortName": "" },
+    "LvglNetVersion": { "longName": "lvgl-version", "shortName": "" },
+    "skipRestore": { "longName": "no-restore", "shortName": "" }
+  },
+  "usageExamples": [ "--layout json", "--width 480 --height 320" ]
+}

@@ -121,6 +121,18 @@ Shortcuts for animating common widget properties.
 | `static LvAnimation AnimateX(LvObject widget, int to, int durationMs = 300, LvAnimPath path = LvAnimPath.EaseInOut)` | Slides the widget horizontally from its current X to `to`. |
 | `static LvAnimation AnimateY(LvObject widget, int to, int durationMs = 300, LvAnimPath path = LvAnimPath.EaseInOut)` | Slides the widget vertically from its current Y to `to`. |
 
+## LvArcMode
+
+`enum` in `LVGL.Net`
+
+Where an [`LvArc`](Lvgl.Widgets.md#lvarc)'s indicator starts.
+
+| Value | Description |
+|--------|-------------|
+| `Normal = 0` | From the start angle, clockwise. |
+| `Symmetrical = 1` | From the middle of the range, towards the value on either side. |
+| `Reverse = 2` | From the end angle, counter-clockwise. |
+
 ## LvChartAxis
 
 `enum` in `LVGL.Net`

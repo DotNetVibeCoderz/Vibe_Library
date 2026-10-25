@@ -32,6 +32,31 @@ created, which is why the application sets it up during construction rather than
 | `void MakeDefault()` | Makes this the group new focusable widgets join on creation. Widgets that already exist are unaffected - add them with [`Add`](#lvgroup). |
 | `static void Remove(LvObject widget)` | Removes a widget from whatever group it belongs to. LVGL does this itself when a widget is deleted, so this is only needed to take a live widget out of the focus order. |
 
+## LvKey
+
+`static class` in `LVGL.Net`
+
+LVGL's control-key codes (`LV_KEY_*`), as reported by [`Key`](Lvgl.Events.md#lveventargs).
+Printable keys arrive as their Unicode code point.
+
+`lv_key_t` in `lv_group.h` gives every member an explicit value (they are ASCII control
+characters), so unlike `lv_event_code_t` they do not move between LVGL releases.
+
+| Member | Description |
+|--------|-------------|
+| `const uint Backspace` | Backspace. |
+| `const uint Delete` | Delete. |
+| `const uint Down` | Arrow down. |
+| `const uint End` | End. |
+| `const uint Enter` | Enter or Return. |
+| `const uint Escape` | Escape. |
+| `const uint Home` | Home. |
+| `const uint Left` | Arrow left. |
+| `const uint Next` | Tab: focus the next widget. |
+| `const uint Previous` | Shift+Tab: focus the previous widget. |
+| `const uint Right` | Arrow right. |
+| `const uint Up` | Arrow up. |
+
 ## LvglInputDevice
 
 `sealed class` in `LVGL.Net`

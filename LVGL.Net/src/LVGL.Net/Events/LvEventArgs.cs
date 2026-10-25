@@ -16,6 +16,50 @@ public sealed class LvEventArgs(LvEventCode code, nint nativeEvent, nint target)
 
     /// <summary>Native handle of the object the event is delivered to.</summary>
     public nint Target { get; } = target;
+
+    /// <summary>
+    /// For <see cref="LvEventCode.Key"/>: the key pressed - an <see cref="Input.LvKey"/> code or a
+    /// Unicode code point. 0 for other events. Read it inside the handler.
+    /// </summary>
+    public uint Key => NativeEvent != 0 ? LvglNative.lv_event_get_key(NativeEvent) : 0;
+
+    /// <summary>
+    /// For <see cref="LvEventCode.Gesture"/>: the direction of the swipe. <see cref="LvDir.None"/>
+    /// otherwise. Read it inside the handler.
+    /// </summary>
+    /// <remarks>
+    /// LVGL delivers a gesture to the nearest widget under the finger that does <i>not</i> have
+    /// <see cref="LvObjFlag.GestureBubble"/>, and every widget has it by default - so a swipe
+    /// target must clear it: <c>board.SetFlag(LvObjFlag.GestureBubble, false)</c>. A drag that
+    /// scrolls something is not a gesture, so make the target non-scrollable too.
+    /// </remarks>
+    public LvDir GestureDirection
+    {
+        get
+        {
+            var indev = LvglNative.lv_indev_active();
+            return indev == 0 ? LvDir.None : (LvDir)LvglNative.lv_indev_get_gesture_dir(indev);
+        }
+    }
+
+    /// <summary>
+    /// Where the pointer (mouse or touch) driving this event is, in screen coordinates. False when
+    /// no pointer is involved, e.g. for a key or a programmatic event. Read it inside the handler.
+    /// </summary>
+    public unsafe bool TryGetPointer(out int x, out int y)
+    {
+        var indev = LvglNative.lv_indev_active();
+        if (indev == 0 || LvglNative.lv_indev_get_type(indev) != (int)LvIndevType.Pointer)
+        {
+            x = y = 0;
+            return false;
+        }
+
+        LvPoint point;
+        LvglNative.lv_indev_get_point(indev, &point);
+        (x, y) = (point.X, point.Y);
+        return true;
+    }
 }
 
 /// <summary>

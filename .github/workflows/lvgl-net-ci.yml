@@ -90,6 +90,18 @@ jobs:
           mkdir -p artifacts
           dotnet run --project samples/LVGL.Raspi -c Release --no-build --             --headless --bench 10 --report "artifacts/bench-${{ matrix.os }}.json"
 
+      # Every gallery demo, built and run off-screen against SQLite and the real LVGL, saved as a
+      # PNG. The run exits non-zero if any demo's handler, timer or animation throws.
+      - name: Gallery (headless)
+        shell: bash
+        run: dotnet run --project samples/LVGL.Gallery -c Release --no-build -- --screenshots artifacts/gallery
+
+      # Packs LVGL.Net and the templates into a local feed, creates an app from each template
+      # variant, builds it with warnings as errors and renders it off-screen.
+      - name: Test templates
+        shell: bash
+        run: bash templates/test-templates.sh
+
       - name: Upload results
         if: always()
         uses: actions/upload-artifact@v4
@@ -99,4 +111,5 @@ jobs:
             LVGL.Net/tests/**/TestResults/*.trx
             LVGL.Net/artifacts/bench-*.json
             LVGL.Net/artifacts/screenshots/*.png
+            LVGL.Net/artifacts/gallery/*.png
           if-no-files-found: ignore

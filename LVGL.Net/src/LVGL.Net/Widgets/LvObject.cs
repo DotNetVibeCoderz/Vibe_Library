@@ -281,6 +281,32 @@ public unsafe class LvObject
         return this;
     }
 
+    /// <summary>Scrolls the content so that (<paramref name="x"/>, <paramref name="y"/>) is at the top left.</summary>
+    public void ScrollTo(int x, int y, bool animate = false) =>
+        LvglNative.lv_obj_scroll_to(RequireHandle(), x, y, animate);
+
+    /// <summary>
+    /// Moves the content by (<paramref name="dx"/>, <paramref name="dy"/>). Positive values move it
+    /// right and down, revealing what is above or to the left.
+    /// </summary>
+    public void ScrollBy(int dx, int dy, bool animate = false) =>
+        LvglNative.lv_obj_scroll_by(RequireHandle(), dx, dy, animate);
+
+    /// <summary>Scrolls every scrollable ancestor until this widget is visible.</summary>
+    public void ScrollIntoView(bool animate = false) =>
+        LvglNative.lv_obj_scroll_to_view(RequireHandle(), animate);
+
+    /// <summary>Scrolls to the end of the content - a log, a chat, a tape.</summary>
+    public void ScrollToBottom(bool animate = false)
+    {
+        // Layout first, or content added this frame is not yet counted in the scroll extent.
+        UpdateLayout();
+        ScrollBy(0, -LvglNative.lv_obj_get_scroll_bottom(RequireHandle()), animate);
+    }
+
+    /// <summary>How far the content is scrolled down, in pixels.</summary>
+    public int ScrollY => LvglNative.lv_obj_get_scroll_y(RequireHandle());
+
     #endregion
 
     #region Styling

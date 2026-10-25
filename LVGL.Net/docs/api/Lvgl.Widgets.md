@@ -12,6 +12,7 @@ A circular arc, used both as a dial-style indicator and as a rotary input.
 |--------|-------------|
 | `LvArc(LvObject parent)` | Creates an arc on `parent`. |
 | `bool IsReadOnly { get; set; }` | Makes the arc display-only by removing its click handling. |
+| `LvArcMode Mode { get; set; }` | Where the indicator grows from. [`Symmetrical`](Lvgl.md#lvarcmode) grows it either way from the middle of the range - a centre-zero gauge such as import/export or left/right balance. |
 | `int Rotation { set; }` | Rotates the whole arc, in degrees. |
 | `int Value { get; set; }` | Current value. |
 | `void SetBackgroundAngles(int startAngle, int endAngle)` | Sets the angular extent of the background track, in degrees clockwise from the 3 o'clock position. A gauge typically uses 135..45 together with [`Rotation`](#lvarc). |
@@ -46,6 +47,43 @@ creates and maintains that label so callers do not have to.
 | `bool IsToggle { get; set; }` | Makes the button latch between checked and unchecked instead of firing once per press. Read the result through [`IsChecked`](#lvobject). |
 | `LvLabel Label { get; }` | The child label backing [`Text`](#lvbutton), or `null` if unused. |
 | `string Text { get; set; }` | Caption text. Setting it creates a centred child label on first use. |
+
+## LvCanvas
+
+`sealed class` in `LVGL.Net`
+
+A widget showing a pixel buffer that managed code draws into directly: plots, heat maps,
+fractals, game boards, waveforms - anything that is cheaper as pixels than as widgets.
+
+The buffer is `0xAARRGGBB` per pixel (LVGL's ARGB8888), allocated in unmanaged memory and
+exposed as [`Pixels`](#lvcanvas). Draw into it - with the helpers here or by writing the span -
+and call [`Invalidate`](#lvobject) once the frame is complete; LVGL redraws the canvas on
+its next refresh. Nothing on that path allocates.
+
+
+
+
+
+The buffer belongs to the canvas and is freed when LVGL deletes it, so unlike
+[`LvImageSource`](Lvgl.Drawing.md#lvimagesource) there is nothing to dispose. Do not keep a [`Pixels`](#lvcanvas)
+span across a deletion.
+
+| Member | Description |
+|--------|-------------|
+| `LvCanvas(LvObject parent, int width, int height)` | Creates a canvas of `width` × `height` pixels, cleared to transparent. |
+| `int BufferHeight { get; }` | Height of the pixel buffer. |
+| `int BufferWidth { get; }` | Width of the pixel buffer. |
+| `Span<uint> Pixels { get; }` | The pixels, row-major, `0xAARRGGBB`. Call [`Invalidate`](#lvobject) after changing them. |
+| `static uint Argb(LvColor color, byte alpha = 255)` | Packs an opaque colour into the buffer's pixel format. |
+| `void DrawLine(int x0, int y0, int x1, int y1, LvColor color)` | Draws a one-pixel line in an opaque colour. |
+| `void DrawLine(int x0, int y0, int x1, int y1, uint argb)` | Draws a one-pixel line (Bresenham), clipped to the buffer. |
+| `void FillCircle(int cx, int cy, int radius, LvColor color)` | Fills a circle in an opaque colour. |
+| `void FillCircle(int cx, int cy, int radius, uint argb)` | Fills a circle centred on (`cx`, `cy`), clipped to the buffer. |
+| `void Fill(LvColor color)` | Fills the whole buffer with an opaque colour. |
+| `void Fill(uint argb)` | Fills the whole buffer. |
+| `void FillRect(int x, int y, int width, int height, LvColor color)` | Fills a rectangle with an opaque colour. |
+| `void FillRect(int x, int y, int width, int height, uint argb)` | Fills a rectangle, clipped to the buffer. |
+| `void SetPixel(int x, int y, uint argb)` | Sets one pixel; coordinates outside the buffer are ignored. |
 
 ## LvChart
 
@@ -180,7 +218,9 @@ A text label.
 | `LvLabel(LvObject parent)` | Creates a label on `parent`. |
 | `LvLabel(LvObject parent, string text)` | Creates a label with initial text. |
 | `LvLabelLongMode LongMode { set; }` | How text that does not fit the label's width is handled. |
+| `bool Recolor { get; set; }` | Enables in-line colour commands: `"#FF8800 warm# and plain"` draws "warm" in orange. |
 | `string Text { get; set; }` | The displayed text. LVGL copies the string into its own buffer on assignment, so the managed string does not need to be kept alive. |
+| `static string Recolored(string text, LvColor color)` | Wraps `text` in a colour command for a label with [`Recolor`](#lvlabel) on. |
 
 ## LvLed
 
@@ -283,6 +323,7 @@ Entries are removed when LVGL reports the delete event.
 | `bool IsScrollable { get; set; }` | Whether the widget scrolls its content. |
 | `string Name { get; set; }` | Optional identifier used by the designer and code generator. Not sent to LVGL. |
 | `LvObject Parent { get; set; }` | Parent widget, or `null` for a screen. |
+| `int ScrollY { get; }` | How far the content is scrolled down, in pixels. |
 | `int Width { get; set; }` | Width in pixels. Accepts [`Percent`](Lvgl.Drawing.md#lvcoord) and [`SizeContent`](Lvgl.Drawing.md#lvcoord). |
 | `int X { get; set; }` | X position relative to the parent's content area. |
 | `int Y { get; set; }` | Y position relative to the parent's content area. |
@@ -303,6 +344,10 @@ Entries are removed when LVGL reports the delete event.
 | `void Invalidate()` | Marks the widget for redraw. |
 | `void RemoveHandler(LvEventCode code, EventHandler<LvEventArgs> handler)` | Unsubscribes a previously added handler. |
 | `LvObject RemoveStyle(LvStyle style, LvPart part = LvPart.Main, LvState state = LvState.Default)` | Removes a previously applied shared style. |
+| `void ScrollBy(int dx, int dy, bool animate = false)` | Moves the content by (`dx`, `dy`). Positive values move it right and down, revealing what is above or to the left. |
+| `void ScrollIntoView(bool animate = false)` | Scrolls every scrollable ancestor until this widget is visible. |
+| `void ScrollToBottom(bool animate = false)` | Scrolls to the end of the content - a log, a chat, a tape. |
+| `void ScrollTo(int x, int y, bool animate = false)` | Scrolls the content so that (`x`, `y`) is at the top left. |
 | `static uint Selector(LvPart part = LvPart.Main, LvState state = LvState.Default)` | Combines a part and a state into the selector LVGL's style setters take. |
 | `LvObject SetArcColor(LvColor color, LvPart part = LvPart.Main, LvState state = LvState.Default)` |  |
 | `LvObject SetArcWidth(int width, LvPart part = LvPart.Main, LvState state = LvState.Default)` |  |

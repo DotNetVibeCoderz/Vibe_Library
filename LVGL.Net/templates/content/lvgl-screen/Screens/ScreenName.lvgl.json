@@ -1,0 +1,11 @@
+{
+  "Version": 2,
+  "Name": "ScreenName",
+  "Width": 800,
+  "Height": 480,
+  "BackgroundColor": "#0F1720",
+  "Children": [
+    { "Type": "Label", "Name": "TitleLabel", "X": 24, "Y": 20, "Align": "TopLeft", "Text": "ScreenName", "TextColor": "#E6EDF3", "FontSize": 24 },
+    { "Type": "Button", "Name": "BackButton", "X": -24, "Y": 16, "Align": "TopRight", "Width": 110, "Height": 40, "Radius": 8, "Text": "Back" }
+  ]
+}

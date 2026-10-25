@@ -130,5 +130,6 @@ dotnet run --project samples/LVGL.Raspi -- --screenshot out/pi.png     # dasbor
 
 - [Arsitektur](02-arsitektur.md) — mengapa wrapper ini dirancang seperti ini
 - [Widget dan styling](04-widget.md) — API sehari-hari
+- [Template proyek](13-template-proyek.md) — memulai aplikasi baru dengan `dotnet new lvgl`
 - [Referensi API](../api/README.md) — setiap tipe dan member publik, dihasilkan dari kode (bahasa
   Inggris)

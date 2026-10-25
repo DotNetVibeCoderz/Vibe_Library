@@ -1,4 +1,4 @@
-# Packs the five LVGL.Net packages with native binaries for every supported RID and pushes
+# Packs the five LVGL.Net packages and the dotnet new templates with native binaries for every supported RID and pushes
 # them to nuget.org.
 #
 # Trigger with a tag: LVGL.Net-v0.1.1 (namespaced because Vibe_Library holds several projects
@@ -180,9 +180,22 @@ jobs:
           if [ -n "$v" ]; then echo "arg=-p:Version=$v" >> "$GITHUB_OUTPUT"; fi
           echo "resolved version: ${v:-from Directory.Build.props}"
 
+      # The app template references LVGL.Net at a fixed version (its "lvgl-version" default).
+      # A tag or input can override the version, so the default is rewritten to match first:
+      # otherwise "dotnet new lvgl" would create apps pinned to a different release.
+      - name: Pin the template to this version
+        run: |
+          v="${{ steps.version.outputs.arg }}"
+          v="${v#-p:Version=}"
+          # No override: the template already matches Directory.Build.props (a unit test pins that).
+          if [ -z "$v" ]; then exit 0; fi
+          sed -i "/\"LvglNetVersion\"/,/defaultValue/ s/\"defaultValue\": \"[^\"]*\"/\"defaultValue\": \"$v\"/" \
+            templates/content/lvgl-app/.template.config/template.json
+          grep -n -A3 '"LvglNetVersion"' templates/content/lvgl-app/.template.config/template.json
+
       - name: Pack
         run: |
-          for p in src/LVGL.Net src/LVGL.Net.Ui src/LVGL.Net.Sdl src/LVGL.Net.Linux src/LVGL.Net.Assistant; do
+          for p in src/LVGL.Net src/LVGL.Net.Ui src/LVGL.Net.Sdl src/LVGL.Net.Linux src/LVGL.Net.Assistant templates; do
             dotnet pack "$p" -c Release -o artifacts/nuget ${{ steps.version.outputs.arg }}
           done
           ls -l artifacts/nuget
