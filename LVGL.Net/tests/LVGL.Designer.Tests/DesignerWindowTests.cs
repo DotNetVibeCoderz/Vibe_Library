@@ -66,6 +66,24 @@ public sealed class DesignerWindowTests : IDisposable
         Dispatcher.UIThread.RunJobs();
     }
 
+    /// <summary>
+    /// Pumps until <paramref name="condition"/> holds. For results that arrive through the
+    /// preview's rebuild timer, whose timing depends on how fast the machine is - a fixed wait
+    /// that is enough on a desktop is not enough on a CI runner.
+    /// </summary>
+    private static bool PumpUntil(Func<bool> condition, int timeoutMs = 5000)
+    {
+        var clock = Stopwatch.StartNew();
+        while (!condition())
+        {
+            if (clock.ElapsedMilliseconds > timeoutMs) return false;
+            Dispatcher.UIThread.RunJobs();
+            Thread.Sleep(5);
+        }
+
+        return true;
+    }
+
     private static bool NeedsPreview(MainWindow window)
     {
         if (window.Preview.IsAvailable) return true;
@@ -417,7 +435,11 @@ public sealed class DesignerWindowTests : IDisposable
         Pump(80);
 
         Assert.Equal((480, 320), (window.Session.Document.Width, window.Session.Document.Height));
-        if (window.Preview.IsAvailable) Assert.Equal(480, window.Preview.Bitmap!.PixelSize.Width);
+        if (window.Preview.IsAvailable)
+        {
+            PumpUntil(() => window.Preview.Bitmap?.PixelSize.Width == 480);
+            Assert.Equal(480, window.Preview.Bitmap!.PixelSize.Width);
+        }
         Screenshot(window, "07-small-panel");
 
         window.Close();
