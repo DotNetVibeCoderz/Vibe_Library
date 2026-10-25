@@ -56,7 +56,13 @@ for layout in code json; do
   cp "$work/nuget.config" "$work/$app/"
   dotnet build "$work/$app" -c Release --nologo -v quiet -warnaserror
 
-  dotnet run --project "$work/$app" -c Release --no-build -- --headless --screenshot "$work/$app.png"
+  if ! dotnet run --project "$work/$app" -c Release --no-build -- --headless --screenshot "$work/$app.png"; then
+    # Enough to diagnose a failure on a CI runner without reproducing it there.
+    echo "::group::$app - project files"; find "$work/$app" -not -path '*/obj/*' -not -path '*/bin/*' | sort; echo "::endgroup::"
+    echo "::group::$app - build output"; find "$work/$app/bin" -maxdepth 4 | sort; echo "::endgroup::"
+    echo "::group::$app - project file"; cat "$work/$app"/*.csproj; echo "::endgroup::"
+    exit 1
+  fi
   test -s "$work/$app.png"
   echo "ok: $app built, rendered and saved a screenshot"
 
