@@ -17,7 +17,9 @@ After deletion `IsAlive` turns false and further property access throws `ObjectD
 so a stale reference fails loudly instead of writing to freed memory.
 
 `LvStyle` is the exception: it *is* disposable, because LVGL stores a bare pointer to it. Dispose a
-style only after every widget using it has gone.
+style only after every widget using it has gone. The same rule applies to the other things widgets
+point at - a TrueType `LvFont` and a pixel `LvImageSource` - and to a `UiBuilder`, which owns the
+styles and fonts of a layout it built.
 
 ## The widget set
 
@@ -35,7 +37,40 @@ style only after every widget using it has gone.
 | `LvRoller` | `lv_roller` | Touch-friendly picker |
 | `LvTextArea` | `lv_textarea` | `Text`, `PlaceholderText`, `IsSingleLine` |
 | `LvChart` | `lv_chart` | `AddSeries`, `PointCount`, `UpdateMode` |
+| `LvImage` | `lv_image` | PNG/BMP file, run-time pixels, or a symbol; `Rotation`, `Scale`, `InnerAlign` |
+| `LvTabView` / `LvTabPage` | `lv_tabview` | `AddTab` returns the page; `ActiveTab`, `TabBarPosition` |
+| `LvList` / `LvListButton` | `lv_list` | `AddText` for headings, `AddButton(text, symbol)` |
+| `LvTileView` / `LvTile` | `lv_tileview` | `AddTile(column, row, allowedDirections)`, `ShowTile` |
+| `LvMessageBox` | `lv_msgbox` | `Show(title, text, buttons...)` for a modal dialog; `Close` |
+| `LvKeyboard` | `lv_keyboard` | On-screen keys for an `LvTextArea`; `Mode`, `ShowPopovers` |
+| `LvSpinner` | `lv_spinner` | Busy indicator; `SetAnimation(duration, sweep)` |
+| `LvLed` | `lv_led` | `Color`, `Brightness`, `On`/`Off`/`Toggle` |
+| `LvScale` | `lv_scale` | Ticks and labels for gauges and rulers; `Mode`, `SetRange`, tick counts |
+| `LvTable` | `lv_table` | `this[row, column]`, `SetRows`, `SetColumnWidth` |
+| `LvSpinbox` | `lv_spinbox` | Integer value shown with a decimal point; `Increment`/`Decrement` |
 | `LvScreen` | screen object | `Create()`, `Load()` for multi-page apps |
+
+A few of the newer ones in use:
+
+```csharp
+var tabs = new LvTabView(app.Screen);
+var status = tabs.AddTab("Status");
+new LvLabel(status, "on the first page");
+
+var list = new LvList(tabs.AddTab("Settings"));
+list.AddText("Connectivity");
+list.AddButton("Wi-Fi", LvSymbols.Wifi).Clicked += (_, _) => OpenWifi();
+
+// A gauge: a round scale for the ticks, an arc on top for the value.
+var scale = new LvScale(status) { Mode = LvScaleMode.RoundInner, TotalTickCount = 21, MajorTickEvery = 5, AngleRange = 270, Rotation = 135, ShowLabels = true };
+scale.SetRange(0, 100);
+
+var field = new LvTextArea(app.Screen) { IsSingleLine = true };
+var keyboard = new LvKeyboard(app.Screen) { TextArea = field };
+
+var box = LvMessageBox.Show("Delete profile", "This cannot be undone.", "Cancel", "Delete");
+box.Buttons[0].Clicked += (_, _) => box.Close();
+```
 
 ## Geometry and layout
 
@@ -50,6 +85,10 @@ widget.Center();
 
 Alignment and absolute position are alternatives — LVGL treats the align offset *as* the position,
 so setting both makes the explicit coordinates meaningless.
+
+`X` and `Y` are relative to the parent's content area. `GetBounds()` returns where the widget really
+is on the display - after every ancestor's padding and scrolling - which is what hit-testing and
+overlays need. `ZIndex` reads and changes the drawing order among siblings.
 
 ### Special coordinates
 
@@ -115,7 +154,15 @@ toggle.SetBackgroundColor(green, LvPart.Indicator, LvState.Checked);
 ```
 
 `LvPart` values: `Main`, `Indicator`, `Knob`, `Items`, `Selected`, `Cursor`, `Scrollbar`.
-`LvState` values include `Pressed`, `Checked`, `Focused`, `Disabled`, `Hovered`.
+`LvState` values include `Pressed`, `Checked`, `Focused`, `Disabled`, `Hovered`, `Alt`, and
+`User1`-`User4` for your own states.
+
+Some parts have a size of their own - a chart's point markers, a slider's knob. `SetPartSize` sets
+it; zero hides chart markers:
+
+```csharp
+chart.SetPartSize(0, 0, LvPart.Indicator);   // a plain line, no dot on every sample
+```
 
 ### Colours
 
@@ -130,8 +177,10 @@ accent.Lighten(0.2f)
 background.ContrastingText()                    // black or white, whichever reads better
 ```
 
-Fonts are the built-in Montserrat sizes: 12, 14, 16, 20, 24, 28, 36. A size that was not compiled
-into the native library falls back to the default rather than failing.
+`SetFontSize` picks one of the built-in Montserrat sizes: 12, 14, 16, 20, 24, 28, 36. A size that
+was not compiled into the native library falls back to the default rather than failing. For any
+other size or script, load a TrueType font - see
+[Images, fonts and animation](11-images-fonts-animation.md).
 
 ## Events
 
@@ -147,8 +196,9 @@ widget.RemoveHandler(LvEventCode.LongPressed, OnLongPress);
 `LvEventCode` values are LVGL.Net's own stable identifiers; the native shim translates them to the
 loaded build's `lv_event_code_t`, whose ordinals changed during the 9.x series.
 
-An exception thrown from a handler is swallowed — it cannot be allowed to unwind into LVGL's C
-stack. Handle failures inside the handler.
+An exception thrown from a handler cannot be allowed to unwind into LVGL's C stack, so it is caught
+at the boundary and reported through `LvglRuntime.CallbackFailed` - subscribe to log it. Handle
+expected failures inside the handler.
 
 ## Charts
 
@@ -163,13 +213,17 @@ chart.UpdateMode = LvChartUpdateMode.Shift;      // oldest sample drops off the 
 chart.SetRange(LvChartAxis.PrimaryY, 0, 100);
 
 var cpu = chart.AddSeries(LvColor.Blue);
-cpu.Fill(0);                                     // prime, so it does not ramp in from zero
+cpu.Fill(LvChartSeries.NoValue);                 // empty: the trace starts with the first sample
 
 // later, once per sample
 cpu.AddPoint(value);
 ```
 
 LVGL keeps the ring buffer internally, so a sample costs one native call and allocates nothing.
+
+Since LVGL 9.5 the grid's division lines are drawn with the **main** part's line style, so
+`chart.SetLineColor(color)` colours them (in 9.2 it was `LvPart.Items`). LVGL also draws a marker
+on every point by default; `SetPartSize(0, 0, LvPart.Indicator)` turns them off.
 
 ## Symbols
 

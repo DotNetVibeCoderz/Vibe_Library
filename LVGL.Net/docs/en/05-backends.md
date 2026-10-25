@@ -60,10 +60,40 @@ Both need group membership:
 sudo usermod -aG video,input $USER    # then log out and back in
 ```
 
+## DRM/KMS — `LVGL.Net.Linux`
+
+Current Raspberry Pi OS drives displays through the kernel's KMS driver (`vc4-kms-v3d`); the
+`/dev/fb0` device the framebuffer backend uses is an emulation on top of it, which can only copy
+into the image being shown and therefore tears on movement. `DrmBackend` talks to KMS directly:
+
+```csharp
+var pointer = EvdevPointer.AutoDetect(800, 480);
+using var backend = new DrmBackend(pointer: pointer);   // first card with a connected display
+Console.WriteLine($"{backend.DevicePath}: {backend.Mode}");
+```
+
+It allocates two scan-out buffers and flips between them at vertical blank. LVGL renders strips
+into a shadow copy of the screen; at the end of a frame the damaged region is copied into the hidden
+buffer and a page flip is queued. The hidden buffer last showed the frame *before* the previous one,
+so the copy covers this frame's damage and the last frame's together - small updates stay small and
+neither buffer is ever stale. The wait for the flip happens at the start of the next frame, so LVGL
+renders while the display catches up.
+
+- **No libdrm.** The ioctls are declared directly; their argument structures are fixed-width kernel
+  ABI, identical on arm, arm64 and x64, and pinned by unit tests.
+- **The display must be free.** Only one program may drive it: boot to the console, or stop the
+  desktop on that display. With a desktop running, use the SDL backend instead.
+- **Fallback.** If the driver refuses page flips, the backend draws into the visible buffer and
+  reports `IsDoubleBuffered == false` rather than stopping.
+- The console's mode is restored when the backend is disposed.
+
+The Pi sample uses it with `--drm`.
+
 ## Headless — in `LVGL.Net`
 
-Renders into a managed `byte[]`. Two things use it: the designer's live preview, which copies the
-buffer into a `WriteableBitmap`, and tests, which can assert on pixels without a display server.
+Renders into a managed `byte[]`. Three things use it: the designer's live preview, which copies the
+buffer into a bitmap; tests, which can assert on pixels without a display server; and screenshots -
+`SavePng` writes exactly what LVGL drew.
 
 ```csharp
 using var backend = new HeadlessBackend(800, 480);
@@ -78,12 +108,15 @@ if (backend.IsDirty)
 }
 
 backend.SetPointer(120, 80, pressed: true);     // synthetic input
+
+app.Display.RefreshNow();                       // render everything pending, right now
+backend.SavePng("screen.png");
 ```
 
 ## Writing your own
 
-The whole contract is four members. A backend for a SPI display, a DRM/KMS device or a remote
-frame stream is a single class.
+The whole contract is four members. A backend for a SPI display, an e-paper panel or a remote
+frame stream is a single class - `DrmBackend` is a worked example of a double-buffered one.
 
 ```csharp
 public sealed class MyBackend : ILvglBackend

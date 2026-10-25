@@ -1,15 +1,17 @@
 # Jack The Code Bender — the design assistant
 
 An AI assistant built into the designer. It designs LVGL screens, writes the .NET code around
-them, and can hand a finished layout straight back to the canvas.
+them, and puts a finished layout straight onto the canvas - one undo away.
 
-Open it with **Ask Jack** in the designer toolbar.
+Open it with **Jack** in the designer's command bar, or `Ctrl+J`.
+
+![Jack designing a smart-home screen](../images/screenshots/designer-assistant.png)
 
 ## What it can do
 
 | Capability | Detail |
 |---|---|
-| Design layouts | Produces a validated `.lvgl.json` you can open in the designer with one click |
+| Design layouts | Produces a validated layout that lands on the canvas as an undoable step |
 | Generate code | The same `CSharpUiGenerator` the Export C# button uses, plus event-handler stubs |
 | Search the web | Tavily, when a key is configured |
 | Read pages and files | Fetches a URL and strips it to readable text, or downloads a text file verbatim |
@@ -23,7 +25,7 @@ Four are supported, selectable per chat:
 | Provider | Configure | Notes |
 |---|---|---|
 | OpenAI | `OPENAI_API_KEY` or `Assistant:OpenAI:ApiKey` | Default |
-| Anthropic | `ANTHROPIC_API_KEY` or `Assistant:Anthropic:ApiKey` | See the temperature note below |
+| Anthropic | `ANTHROPIC_API_KEY` or `Assistant:Anthropic:ApiKey` | See the temperature and workspace notes below |
 | Gemini | `GEMINI_API_KEY` or `Assistant:Gemini:ApiKey` | |
 | Ollama | `Assistant:Ollama:Endpoint` | Runs locally, no key needed |
 
@@ -43,9 +45,16 @@ family and leaves the value out of the request rather than failing it. The chat 
 says `temperature ignored on this model` when that happens. Older Claude models still receive it
 normally. Use the model's effort setting to trade quality against cost instead.
 
+### Workspace-scoped keys
+
+An Anthropic key that is **not scoped to a workspace** is refused unless the request names one.
+Set the workspace id - it starts with `wrkspc_` - in `ANTHROPIC_WORKSPACE_ID` or
+`Assistant:Anthropic:WorkspaceId`, and the connector sends it as the `anthropic-workspace-id`
+header. Keys created inside a workspace need nothing extra.
+
 ## Configuration
 
-Everything lives in the designer's `app.config`, under `appSettings` with an `Assistant:` prefix.
+Everything lives in the designer's `App.config`, under `appSettings` with an `Assistant:` prefix.
 An environment variable of the documented name always wins over a key in the file, so you can leave
 the keys blank and keep them out of source control.
 
@@ -58,6 +67,7 @@ the keys blank and keep them out of source control.
 <add key="Assistant:MaxToolIterations" value="8" />
 <add key="Assistant:SystemPrompt" value="" />
 <add key="Assistant:Anthropic:Model" value="claude-opus-5" />
+<add key="Assistant:Anthropic:WorkspaceId" value="" />
 <add key="Assistant:TavilyApiKey" value="" />
 ```
 
@@ -68,10 +78,11 @@ misbehaves.
 
 ## Chats
 
-Each conversation is a chat, stored as one JSON file under `%APPDATA%\LVGL.Net\assistant`.
+Each conversation is a chat, stored as one JSON file under the application-data folder
+(`%APPDATA%\LVGL.Net\assistant` on Windows, `~/.config/LVGL.Net/assistant` on Linux and macOS).
 
 - **New** starts a fresh chat.
-- **Reset** clears the messages but keeps the chat, its title and its provider.
+- **Clear** removes the messages but keeps the chat, its title and its provider.
 - **Delete** removes it permanently.
 
 Each chat remembers its own provider, so you can keep one on a local Ollama model for quick
@@ -93,6 +104,13 @@ the model receives. A locally-running Ollama model can fetch the document URLs; 
 tell you it cannot.
 
 If the local host cannot bind a port, attachments still work and fall back to `file://` URLs.
+
+## The transcript
+
+Replies are rendered natively in the panel - headings, lists, tables, quotes and fenced code with
+a **Copy** button - in the designer's own type and colours, and stream in as the model writes. Tool
+calls appear as small chips under the reply, so you can see what the model actually did: which
+template it started from, whether `create_layout` accepted its design.
 
 ## Prompt templates
 
@@ -123,6 +141,21 @@ The model calls these itself; you do not invoke them directly.
 comes back as a list of problems the model can fix rather than as plausible-looking JSON that will
 not open.
 
+## Testing against a real model
+
+The test suites include an end-to-end check that calls a real model: it asks for a thermostat
+screen, requires the model to call `create_layout`, and checks that the layout it produced is
+valid, contains the requested widgets, and generates. It is opt-in, because it needs a key and
+costs a request:
+
+```bash
+LVGLNET_LIVE_LLM=1 ANTHROPIC_API_KEY=... dotnet test tests/LVGL.Net.Tests --filter LiveAssistantTests
+LVGLNET_LIVE_LLM=1 ANTHROPIC_API_KEY=... dotnet test tests/LVGL.Designer.Tests --filter LiveAssistantWindowTests
+```
+
+`LVGLNET_LIVE_PROVIDER` and `LVGLNET_LIVE_MODEL` choose another provider or model. Without the
+opt-in both tests return immediately.
+
 ## Security notes
 
 Worth understanding before pointing the assistant at arbitrary content:
@@ -141,11 +174,13 @@ Worth understanding before pointing the assistant at arbitrary content:
 
 ## Troubleshooting
 
-**"No API key for X"** — set the environment variable named in the message, or fill in the matching
-`app.config` key, then reopen the chat window.
+**"No API key"** in the panel's status line — set the environment variable named there, or fill in
+the matching `App.config` key, then restart the designer.
 
-**The chat area says WebView2 is missing** — install the Microsoft Edge WebView2 Runtime. It ships
-with Windows 11, so this is unusual. Everything except the rendered transcript still works.
+**"The provider rejected the request (BadRequest): ..."** — the provider's own explanation follows
+the status code, and usually names the fix. *"This API key is not scoped to a workspace"* means
+setting `ANTHROPIC_WORKSPACE_ID` (see above); an unknown model id means checking
+`Assistant:<Provider>:Model`.
 
 **The status bar says `web search off`** — no `Assistant:TavilyApiKey`, so the search tool is not
 registered at all. That is deliberate: an advertised tool that always fails wastes a round trip and

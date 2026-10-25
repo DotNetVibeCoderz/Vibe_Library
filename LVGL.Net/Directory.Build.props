@@ -47,6 +47,7 @@
     <RepositoryType>git</RepositoryType>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageIcon>icon.png</PackageIcon>
     <PackageTags>lvgl;embedded;graphics;gui;ui;raspberry-pi;iot;sdl;framebuffer;interop</PackageTags>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
 
@@ -68,6 +69,15 @@
   <ItemGroup>
     <None Include="$(MSBuildThisFileDirectory)README.md" Pack="true" PackagePath="\" Visible="false" />
     <None Include="$(MSBuildThisFileDirectory)LICENSE" Pack="true" PackagePath="\" Visible="false" />
+  </ItemGroup>
+
+  <!--
+    The icon is packed into every package here rather than per project. Items evaluate after all
+    properties, so this sees the IsPackable each project sets, and a new package cannot forget it.
+    docs/images/icon.svg is the source; icon.png is rendered from it at 1024 and scaled to 256.
+  -->
+  <ItemGroup Condition="'$(IsPackable)' == 'true'">
+    <None Include="$(MSBuildThisFileDirectory)docs/images/icon.png" Pack="true" PackagePath="/" Visible="false" />
   </ItemGroup>
 
   <!--

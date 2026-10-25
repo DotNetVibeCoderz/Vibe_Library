@@ -7,13 +7,13 @@
   ┌───────────────────────┐              ┌────────────────────────┐
   │ Your application      │              │                        │
   ├───────────────────────┤   P/Invoke   │  lvglnet (one library) │
-  │ LVGL.Net              │─────────────▶│    LVGL v9 sources     │
+  │ LVGL.Net              │─────────────▶│    LVGL v9.6 sources   │
   │  widgets, styles,     │◀─────────────│    + lvn_* ABI shim    │
   │  events, run loop     │  callbacks   │                        │
   ├───────────────────────┤              └────────────────────────┘
   │ ILvglBackend          │
   │  SDL / framebuffer /  │   pixels out, input in
-  │  headless             │
+  │  DRM/KMS / headless   │
   └───────────────────────┘
 ```
 
@@ -50,6 +50,11 @@ covers exactly that part:
 | `lv_indev_data_t`, `lv_area_t` | Managed code would have to hard-code struct offsets | `lvn_indev_data_set_*`, `lvn_area_get` |
 | `lv_font_montserrat_*` | Exported *variables*, which P/Invoke cannot bind portably | `lvn_font_montserrat(size)` |
 | `lv_event_code_t` ordinals | LVGL inserted `LV_EVENT_ROTARY` mid-enum in 9.1, shifting later values | `lvn_event_code(stable_id)` translates at run time |
+| Other enum ordinals | `LV_STATE_ALT` and `LV_CHART_TYPE_CURVE` were inserted mid-enum after 9.2 | `lvn_constant("LV_STATE_CHECKED")` exposes the real values; a test checks every managed mirror |
+| `lv_anim_t` allocated by the caller | Its layout is LVGL's business | `lvn_anim_start` builds one on its own stack; callbacks are three process-wide trampolines |
+| `lv_image_dsc_t` bit fields | A bit-field header has no portable managed layout | `lvn_image_dsc_create` / `lvn_image_dsc_delete` |
+| `lv_obj_get_coords` fills an `lv_area_t` | Struct offsets again | `lvn_obj_get_coords` returns four integers |
+| `lv_led_set_color` takes `lv_color_t` | The by-value colour problem | `lvn_led_set_color(..., uint32_t rgb)` |
 | `LV_PCT`, `LV_SIZE_CONTENT` | C macros do not exist in a shared library | Reimplemented in `LvCoord`, asserted by tests |
 
 Everything else calls `lv_*` directly. The shim adds no per-frame cost: the render path
@@ -102,16 +107,27 @@ marshalling stub on the render path.
 - **Widget events** resolve through a static registry keyed by the native pointer. A `GCHandle`
   would be wrong here: LVGL fires callbacks *while* it tears an object down, and reading a freed
   `GCHandle` is undefined behaviour, whereas a missed dictionary lookup is a harmless no-op.
+- **Animations and timers** follow the same rule with an id instead of a pointer: the id is what
+  LVGL holds (as the animation's `var`, or the timer's user data), and a registry maps it back.
+  Using an id rather than the widget pointer also means stopping one animation never stops another
+  running on the same widget. Deleting a widget stops the animations that target it.
 
 No managed exception is ever allowed to unwind into C. The flush path parks the exception and the
-run loop rethrows it; event handlers swallow theirs.
+run loop rethrows it. Event handlers, timers and animations contain theirs at the callback boundary
+and report it through `LvglRuntime.CallbackFailed`, so a failing handler is visible instead of
+silently ignored:
+
+```csharp
+LvglRuntime.CallbackFailed += (_, e) => log.Error(e.Exception, "LVGL callback failed: {Source}", e.Source);
+```
 
 ## Colour format
 
-`LV_COLOR_DEPTH` is fixed at 32. LVGL produces XRGB8888 (bytes B, G, R, X on little-endian), which
-is copied unchanged to SDL's `ARGB8888` texture and to a 32-bit framebuffer, and reinterpreted as
-WPF's `Bgr32` in the designer. `LvglRuntime.Initialize` refuses a native library built with a
-different depth rather than drawing colour-swapped output.
+The colour format is fixed at XRGB8888 (`LV_COLOR_FORMAT_DEFAULT` in `lv_conf.h`, which makes
+`LV_COLOR_DEPTH` 32). LVGL produces bytes B, G, R, X on little-endian, which are copied unchanged to
+SDL's `ARGB8888` texture, to a 32-bit framebuffer, to a DRM dumb buffer, and into an opaque BGRA
+bitmap in the designer. `LvglRuntime.Initialize` refuses a native library built with a different
+depth rather than drawing colour-swapped output.
 
 ## Project boundaries
 
@@ -120,4 +136,7 @@ different depth rather than drawing colour-swapped output.
   bindings it will not use.
 - `LVGL.Net.Ui` holds the layout model shared by the designer, the runtime loader and the code
   generator, so a previewed layout and a running one cannot drift apart.
-- `LVGL.Designer` is the only Windows-only project, and only because WPF is.
+- `LVGL.Designer` is an Avalonia application, so it runs on Windows, macOS and Linux. It holds only
+  presentation; its editing model (`DesignerSession`) has no UI dependency and is unit-tested
+  directly.
+- `LVGL.Net.Assistant` holds all AI code and no UI.

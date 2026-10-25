@@ -1,0 +1,73 @@
+{
+  "Version": 2,
+  "Name": "SmartHome",
+  "Width": 800,
+  "Height": 480,
+  "BackgroundColor": "#0F1720",
+  "Styles": [
+    {
+      "Name": "Card",
+      "BackgroundColor": "#1A2430",
+      "BorderWidth": 0,
+      "Radius": 12,
+      "Padding": 14
+    },
+    {
+      "Name": "Caption",
+      "TextColor": "#8B9AAA",
+      "FontSize": 12
+    }
+  ],
+  "Children": [
+    { "Type": "Label", "Name": "TitleLabel", "X": 20, "Y": 16, "Text": "Smart Home", "TextColor": "#E6EDF3", "FontSize": 24 },
+    { "Type": "Label", "Name": "StatusLabel", "X": -20, "Y": 24, "Align": "TopRight", "Text": "All systems online", "Styles": [ "Caption" ] },
+    {
+      "Type": "Panel", "Name": "LivingRoomCard", "X": 20, "Y": 64, "Width": 440, "Height": 74, "Styles": [ "Card" ],
+      "Children": [
+        { "Type": "Label", "Name": "LivingRoomName", "Text": "Living room", "TextColor": "#E6EDF3", "FontSize": 16 },
+        { "Type": "Label", "Name": "LivingRoomInfo", "Y": 24, "Text": "Ceiling lights - 80%", "Styles": [ "Caption" ] },
+        { "Type": "Led", "Name": "LivingRoomLed", "X": -76, "Align": "RightMid", "Width": 16, "Height": 16, "AccentColor": "#4ADE80", "Value": 255 },
+        { "Type": "Switch", "Name": "LivingRoomSwitch", "Align": "RightMid", "Width": 56, "Height": 30, "AccentColor": "#38BDF8", "Value": 1 }
+      ]
+    },
+    {
+      "Type": "Panel", "Name": "KitchenCard", "X": 20, "Y": 150, "Width": 440, "Height": 74, "Styles": [ "Card" ],
+      "Children": [
+        { "Type": "Label", "Name": "KitchenName", "Text": "Kitchen", "TextColor": "#E6EDF3", "FontSize": 16 },
+        { "Type": "Label", "Name": "KitchenInfo", "Y": 24, "Text": "Counter lights - 60%", "Styles": [ "Caption" ] },
+        { "Type": "Led", "Name": "KitchenLed", "X": -76, "Align": "RightMid", "Width": 16, "Height": 16, "AccentColor": "#FB923C", "Value": 255 },
+        { "Type": "Switch", "Name": "KitchenSwitch", "Align": "RightMid", "Width": 56, "Height": 30, "AccentColor": "#38BDF8", "Value": 1 }
+      ]
+    },
+    {
+      "Type": "Panel", "Name": "BedroomCard", "X": 20, "Y": 236, "Width": 440, "Height": 74, "Styles": [ "Card" ],
+      "Children": [
+        { "Type": "Label", "Name": "BedroomName", "Text": "Bedroom", "TextColor": "#E6EDF3", "FontSize": 16 },
+        { "Type": "Label", "Name": "BedroomInfo", "Y": 24, "Text": "Bedside lamps - off", "Styles": [ "Caption" ] },
+        { "Type": "Led", "Name": "BedroomLed", "X": -76, "Align": "RightMid", "Width": 16, "Height": 16, "AccentColor": "#38BDF8", "Value": 40 },
+        { "Type": "Switch", "Name": "BedroomSwitch", "Align": "RightMid", "Width": 56, "Height": 30, "AccentColor": "#38BDF8" }
+      ]
+    },
+    {
+      "Type": "Panel", "Name": "ThermostatCard", "X": 480, "Y": 64, "Width": 300, "Height": 246, "Styles": [ "Card" ],
+      "Children": [
+        { "Type": "Label", "Name": "ThermostatTitle", "Text": "Thermostat", "TextColor": "#E6EDF3", "FontSize": 16 },
+        { "Type": "Scale", "Name": "ThermostatScale", "Y": 10, "Align": "Center", "Width": 188, "Height": 188, "ScaleMode": "RoundInner", "Minimum": 10, "Maximum": 30, "TickCount": 21, "MajorTickEvery": 5, "TextColor": "#8B9AAA" },
+        { "Type": "Arc", "Name": "ThermostatArc", "Y": 10, "Align": "Center", "Width": 112, "Height": 112, "Minimum": 10, "Maximum": 30, "Value": 22, "AccentColor": "#FB923C" },
+        { "Type": "Label", "Name": "SetPointLabel", "Y": 8, "Align": "Center", "Text": "22.0", "TextColor": "#E6EDF3", "FontSize": 24 },
+        { "Type": "Label", "Name": "HeatingLabel", "Y": 38, "Align": "Center", "Text": "Heating", "TextColor": "#FB923C", "FontSize": 12 }
+      ]
+    },
+    {
+      "Type": "Panel", "Name": "EnergyCard", "X": 20, "Y": 322, "Width": 760, "Height": 138, "Styles": [ "Card" ],
+      "Children": [
+        { "Type": "Label", "Name": "EnergyTitle", "Text": "Energy today", "TextColor": "#E6EDF3", "FontSize": 16 },
+        { "Type": "Label", "Name": "EnergyValue", "X": 0, "Y": 0, "Align": "TopRight", "Text": "6.2 kWh of 10", "Styles": [ "Caption" ] },
+        { "Type": "Bar", "Name": "EnergyBar", "Y": 40, "Width": 732, "Height": 14, "Minimum": 0, "Maximum": 100, "Value": 62, "AccentColor": "#4ADE80" },
+        { "Type": "Label", "Name": "SolarLabel", "Y": 72, "Text": "Solar 4.1 kWh", "Styles": [ "Caption" ] },
+        { "Type": "Label", "Name": "GridLabel", "Y": 72, "X": 200, "Text": "Grid 2.1 kWh", "Styles": [ "Caption" ] },
+        { "Type": "Button", "Name": "DetailsButton", "Align": "BottomRight", "Width": 120, "Height": 36, "Radius": 8, "Text": "Details", "BackgroundColor": "#38BDF8", "TextColor": "#0F1720" }
+      ]
+    }
+  ]
+}

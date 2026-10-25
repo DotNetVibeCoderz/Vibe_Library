@@ -80,6 +80,14 @@ public sealed class LvStyle : IDisposable
         return this;
     }
 
+    /// <summary>Sets a font; a TrueType <see cref="LvFont"/> must outlive the style.</summary>
+    public LvStyle Font(LvFont font)
+    {
+        ArgumentNullException.ThrowIfNull(font);
+        LvglNative.lvn_style_set_text_font(Handle, font.Handle);
+        return this;
+    }
+
     public LvStyle Radius(int radius)
     {
         LvglNative.lv_style_set_radius(Handle, radius);

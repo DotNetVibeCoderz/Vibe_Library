@@ -48,12 +48,12 @@ public sealed class LvChart : LvObject
     public void SetRange(LvChartAxis axis, int minimum, int maximum)
     {
         if (minimum > maximum) throw new ArgumentException("minimum must not exceed maximum.", nameof(minimum));
-        LvglNative.lv_chart_set_range(Handle, (int)axis, minimum, maximum);
+        LvglNative.lv_chart_set_axis_range(Handle, (int)axis, minimum, maximum);
     }
 
     /// <summary>Sets how many division lines the grid draws.</summary>
     public void SetDivisionLines(int horizontal, int vertical) =>
-        LvglNative.lv_chart_set_div_line_count(Handle, (byte)horizontal, (byte)vertical);
+        LvglNative.lv_chart_set_div_line_count(Handle, (uint)horizontal, (uint)vertical);
 
     /// <summary>Adds a data series.</summary>
     public LvChartSeries AddSeries(LvColor color, LvChartAxis axis = LvChartAxis.PrimaryY)
@@ -84,6 +84,12 @@ public sealed class LvChart : LvObject
 /// <summary>One data series inside an <see cref="LvChart"/>.</summary>
 public sealed class LvChartSeries(LvChart chart, nint handle, LvColor color)
 {
+    /// <summary>
+    /// A sample with no value (<c>LV_CHART_POINT_NONE</c>): not drawn, and the line breaks there.
+    /// <see cref="Fill"/> a fresh series with it so the trace starts where real data does.
+    /// </summary>
+    public const int NoValue = int.MaxValue;
+
     /// <summary>The chart this series belongs to.</summary>
     public LvChart Chart { get; } = chart;
 
@@ -100,5 +106,5 @@ public sealed class LvChartSeries(LvChart chart, nint handle, LvColor color)
     public void AddPoint(int value) => LvglNative.lv_chart_set_next_value(Chart.Handle, Handle, value);
 
     /// <summary>Sets every point of the series to one value - useful to prime a fresh chart.</summary>
-    public void Fill(int value) => LvglNative.lv_chart_set_all_value(Chart.Handle, Handle, value);
+    public void Fill(int value) => LvglNative.lv_chart_set_all_values(Chart.Handle, Handle, value);
 }

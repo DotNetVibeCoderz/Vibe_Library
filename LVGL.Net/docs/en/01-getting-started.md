@@ -6,7 +6,7 @@
 |-------------|-------|
 | .NET SDK 10.0 | `dotnet --version` should report 10.x |
 | CMake 3.20+ and a C compiler | Only needed to build the native library |
-| Git | The native build clones LVGL v9 |
+| Git | The native build clones LVGL v9.6 |
 | SDL2 | Only for the SDL backend (desktop windows) |
 
 On Windows you probably already have the C toolchain: a Visual Studio install with the *Desktop
@@ -43,7 +43,7 @@ LVGL is a C library, so there is one compilation step before any of the managed 
 ./native/build.ps1         # Windows
 ```
 
-This fetches LVGL v9 into `native/lvgl`, compiles it together with the ABI shim in `native/shim`,
+This fetches LVGL v9.6 into `native/lvgl`, compiles it together with the ABI shim in `native/shim`,
 and stages the result in `runtimes/<rid>/native/`. The managed projects pick it up from there
 automatically — nothing needs to be copied by hand.
 
@@ -58,7 +58,9 @@ dotnet test  LVGL.Net.slnx
 ```
 
 The tests deliberately do **not** require the native library, so `dotnet test` works on a machine
-without CMake. Tests that would need LVGL check for it and return early.
+without CMake. Tests that would need LVGL check for it and return early. Once you have built it,
+set `LVGLNET_REQUIRE_NATIVE=1` to turn that leniency off: an LVGL that fails to load then fails the
+run instead of quietly skipping every integration test - CI runs this way.
 
 ## Your first window
 
@@ -98,20 +100,32 @@ Three things are worth noticing:
 dotnet run --project samples/LVGL.Desktop                    # component browser
 dotnet run --project samples/LVGL.Desktop -- --width 1280 --height 720
 dotnet run --project samples/LVGL.Raspi -- --sdl --simulate  # dashboard, fake sensors, in a window
+dotnet run --project tools/LVGL.Designer                     # the visual designer
 ```
+
+![The desktop sample's Controls page](../images/screenshots/desktop-02-controls.png)
 
 To check the whole stack without watching a window — useful in CI — render a fixed number of
 frames and exit:
 
 ```bash
 dotnet run --project samples/LVGL.Desktop -- --frames 120 --no-vsync
-# LVGL 9.2.2  |  1024x600  |  draw buffers 480 KiB
-# Rendered 120 frames in 224 ms (14 region flushes)
+# LVGL 9.6.0  |  1024x600  |  draw buffers 480 KiB
+# Rendered 120 frames in 227 ms (10 region flushes)
 ```
 
 A non-zero exit code means no region was ever flushed, i.e. nothing rendered.
+
+Both samples can also render off-screen into PNG files - no window, and no SDL needed. That is how
+the screenshots in these documents are made:
+
+```bash
+dotnet run --project samples/LVGL.Desktop -- --screenshots out/        # one PNG per page
+dotnet run --project samples/LVGL.Raspi -- --screenshot out/pi.png     # the dashboard
+```
 
 ## Next
 
 - [Architecture](02-architecture.md) — why the wrapper is shaped the way it is
 - [Widgets and styling](04-widgets.md) — the day-to-day API
+- [API reference](../api/README.md) — every public type and member, generated from the code

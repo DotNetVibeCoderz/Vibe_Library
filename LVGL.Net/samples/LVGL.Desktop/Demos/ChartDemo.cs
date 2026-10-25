@@ -48,14 +48,16 @@ internal sealed class ChartDemo : DemoPage
         _chart.SetBackgroundColor(Theme.Background);
         _chart.SetBorderWidth(0);
         _chart.SetRadius(8);
-        _chart.SetLineColor(Theme.SurfaceAlt, LvPart.Items);
+        // Since LVGL 9.5 the grid is drawn with the main part's line style; no per-sample markers.
+        _chart.SetLineColor(Theme.SurfaceAlt);
+        _chart.SetPartSize(0, 0, LvPart.Indicator);
 
         _sine = _chart.AddSeries(Theme.Accent);
         _noise = _chart.AddSeries(Theme.AccentWarm);
 
         // Priming both series avoids the ramp-in from zero that an empty chart would show.
-        _sine.Fill(0);
-        _noise.Fill(0);
+        _sine.Fill(LvChartSeries.NoValue);
+        _noise.Fill(LvChartSeries.NoValue);
 
         var heading = new LvLabel(card, "Signal");
         heading.Align(LvAlign.TopLeft);

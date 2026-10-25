@@ -1,0 +1,168 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:views="clr-namespace:Lvgl.Designer.Views"
+        xmlns:assistant="clr-namespace:Lvgl.Designer.Assistant"
+        x:Class="Lvgl.Designer.MainWindow"
+        Title="LVGL.Net Designer"
+        Icon="avares://LVGL.Designer/Assets/designer.ico"
+        Width="1480" Height="900" MinWidth="980" MinHeight="600"
+        WindowStartupLocation="CenterScreen">
+
+  <Grid RowDefinitions="Auto,*,Auto">
+
+    <!-- ===================== Command bar ===================== -->
+    <Border Grid.Row="0" Background="{StaticResource Board}" BorderBrush="{StaticResource Trace}"
+            BorderThickness="0,0,0,1" Padding="12,8">
+      <DockPanel LastChildFill="False">
+
+        <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+          <Image Source="avares://LVGL.Designer/Assets/designer.png" Width="22" Height="22" />
+          <TextBlock Classes="title" Text="LVGL.Net Designer" VerticalAlignment="Center" />
+          <Border Classes="chip" VerticalAlignment="Center" Margin="4,0,0,0">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <Ellipse x:Name="DirtyDot" Width="6" Height="6" Fill="{StaticResource Copper}" IsVisible="False"
+                       VerticalAlignment="Center" ToolTip.Tip="Unsaved changes" />
+              <TextBlock x:Name="DocumentTitle" Classes="mono" Text="(unsaved layout)" VerticalAlignment="Center" />
+            </StackPanel>
+          </Border>
+        </StackPanel>
+
+        <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Spacing="2" Margin="22,0,0,0" VerticalAlignment="Center">
+          <Button Classes="ghost" Content="New" Click="OnNew" ToolTip.Tip="New layout (Ctrl+N)" />
+          <Button Classes="ghost" Content="Open" Click="OnOpen" ToolTip.Tip="Open a .lvgl.json layout (Ctrl+O)" />
+          <Button Classes="ghost" Content="Save" Click="OnSave" ToolTip.Tip="Save (Ctrl+S)" />
+          <Button Classes="ghost" Content="Export C#" Click="OnExport" ToolTip.Tip="Write the generated class and copy its assets" />
+          <Rectangle Width="1" Height="18" Fill="{StaticResource Trace}" Margin="8,0" />
+          <Button x:Name="UndoButton" Classes="ghost" Content="Undo" Click="OnUndo" ToolTip.Tip="Undo (Ctrl+Z)" />
+          <Button x:Name="RedoButton" Classes="ghost" Content="Redo" Click="OnRedo" ToolTip.Tip="Redo (Ctrl+Y)" />
+        </StackPanel>
+
+        <ToggleButton x:Name="AssistantToggle" DockPanel.Dock="Right" Click="OnAssistantToggled"
+                      ToolTip.Tip="Jack, the design assistant (Ctrl+J)" Margin="12,0,0,0">
+          <StackPanel Orientation="Horizontal" Spacing="7">
+            <TextBlock Classes="designator" Text="AI" VerticalAlignment="Center" />
+            <TextBlock Text="Jack" VerticalAlignment="Center" FontWeight="Medium" />
+          </StackPanel>
+        </ToggleButton>
+
+        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+          <ComboBox x:Name="PresetBox" MinWidth="230" SelectionChanged="OnPresetChanged"
+                    ToolTip.Tip="Target display" />
+          <TextBox x:Name="ScreenWidthBox" Classes="mono" Width="62" LostFocus="OnScreenSizeCommitted" KeyDown="OnScreenSizeKey" />
+          <TextBlock Classes="faint" Text="×" VerticalAlignment="Center" />
+          <TextBox x:Name="ScreenHeightBox" Classes="mono" Width="62" LostFocus="OnScreenSizeCommitted" KeyDown="OnScreenSizeKey" />
+        </StackPanel>
+
+        <Border DockPanel.Dock="Right" Background="{StaticResource Mask}" CornerRadius="4" Padding="2"
+                Margin="0,0,16,0" BorderBrush="{StaticResource Trace}" BorderThickness="1">
+          <StackPanel Orientation="Horizontal">
+            <RadioButton x:Name="DesignModeButton" Classes="segment" GroupName="mode" Content="Design"
+                         IsChecked="True" IsCheckedChanged="OnModeChanged" />
+            <RadioButton x:Name="CodeModeButton" Classes="segment" GroupName="mode" Content="Code" />
+          </StackPanel>
+        </Border>
+
+      </DockPanel>
+    </Border>
+
+    <!-- ===================== Workspace ===================== -->
+    <Grid Grid.Row="1" x:Name="Workspace">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="248" MinWidth="200" />
+        <ColumnDefinition Width="1" />
+        <ColumnDefinition Width="*" MinWidth="320" />
+        <ColumnDefinition Width="1" />
+        <ColumnDefinition Width="312" MinWidth="250" />
+        <ColumnDefinition Width="0" />
+        <ColumnDefinition Width="0" />
+      </Grid.ColumnDefinitions>
+
+      <!-- Parts and outline -->
+      <Border Grid.Column="0" Classes="panel" x:Name="LeftPanel">
+        <Grid RowDefinitions="Auto,*,1,Auto,*">
+          <Border Grid.Row="0" Classes="panel-head">
+            <DockPanel>
+              <TextBlock Classes="designator" Text="click to add" DockPanel.Dock="Right" Foreground="{StaticResource SilkFaint}"
+                         VerticalAlignment="Center" />
+              <TextBlock Classes="head" Text="PARTS" />
+            </DockPanel>
+          </Border>
+          <ScrollViewer Grid.Row="1">
+            <StackPanel x:Name="PartsList" Margin="6,4,6,10" />
+          </ScrollViewer>
+
+          <GridSplitter Grid.Row="2" ResizeDirection="Rows" />
+
+          <Border Grid.Row="3" Classes="panel-head">
+            <DockPanel>
+              <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="0">
+                <Button Classes="ghost" Content="↑" Click="OnMoveUp" ToolTip.Tip="Draw earlier (behind)" Padding="6,1" />
+                <Button Classes="ghost" Content="↓" Click="OnMoveDown" ToolTip.Tip="Draw later (in front)" Padding="6,1" />
+                <Button Classes="ghost" Content="⧉" Click="OnDuplicate" ToolTip.Tip="Duplicate (Ctrl+D)" Padding="6,1" />
+                <Button Classes="ghost danger" Content="✕" Click="OnDelete" ToolTip.Tip="Delete (Del)" Padding="6,1" />
+              </StackPanel>
+              <TextBlock Classes="head" Text="OUTLINE" VerticalAlignment="Center" />
+            </DockPanel>
+          </Border>
+          <views:OutlineView Grid.Row="4" x:Name="Outline" />
+        </Grid>
+      </Border>
+
+      <GridSplitter Grid.Column="1" ResizeDirection="Columns" />
+
+      <!-- Canvas or code -->
+      <Grid Grid.Column="2">
+        <views:BoardCanvas x:Name="Canvas" />
+
+        <Border x:Name="PreviewUnavailablePanel" IsVisible="False" HorizontalAlignment="Center" VerticalAlignment="Center"
+                MaxWidth="460" Padding="20" Background="{StaticResource Board}" CornerRadius="6"
+                BorderBrush="{StaticResource Fault}" BorderThickness="1">
+          <StackPanel Spacing="8">
+            <TextBlock Classes="head" Text="PREVIEW OFFLINE" Foreground="{StaticResource Fault}" />
+            <TextBlock x:Name="PreviewUnavailableText" TextWrapping="Wrap" />
+            <TextBlock Classes="dim small" TextWrapping="Wrap"
+                       Text="Build the native library with native/build.ps1 or native/build.sh. Everything except the preview keeps working meanwhile." />
+          </StackPanel>
+        </Border>
+
+        <views:CodePanel x:Name="CodeSurface" IsVisible="False" />
+      </Grid>
+
+      <GridSplitter Grid.Column="3" ResizeDirection="Columns" />
+
+      <!-- Inspector -->
+      <views:InspectorPanel Grid.Column="4" x:Name="Inspector" />
+
+      <GridSplitter Grid.Column="5" ResizeDirection="Columns" x:Name="AssistantSplitter" IsVisible="False" />
+      <assistant:ChatPanel Grid.Column="6" x:Name="Assistant" IsVisible="False" />
+    </Grid>
+
+    <!-- ===================== Status bar ===================== -->
+    <Border Grid.Row="2" Background="{StaticResource Board}" BorderBrush="{StaticResource Trace}"
+            BorderThickness="0,1,0,0" Padding="12,4">
+      <DockPanel>
+        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="18">
+          <Button x:Name="ProblemsButton" Classes="ghost" Padding="4,0" Click="OnShowProblems" IsVisible="False">
+            <StackPanel Orientation="Horizontal" Spacing="5">
+              <Ellipse Width="7" Height="7" Fill="{StaticResource Warn}" VerticalAlignment="Center" />
+              <TextBlock x:Name="ProblemsText" Classes="small" />
+            </StackPanel>
+          </Button>
+          <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+            <Ellipse x:Name="LiveDot" Width="7" Height="7" Fill="{StaticResource Live}" VerticalAlignment="Center" />
+            <TextBlock x:Name="LiveText" Classes="mono" Text="LVGL" VerticalAlignment="Center" />
+          </StackPanel>
+          <ToggleButton x:Name="SnapToggle" Classes="ghost" IsChecked="True" Padding="4,0" Click="OnSnapToggled"
+                        ToolTip.Tip="Snap to the 8 px via grid while dragging. Hold Alt to invert for one drag.">
+            <TextBlock Classes="mono" Text="SNAP 8" />
+          </ToggleButton>
+          <Button Classes="ghost" Padding="4,0" Click="OnFit" ToolTip.Tip="Fit the board to the view (Ctrl+0). Ctrl+wheel zooms.">
+            <TextBlock x:Name="ZoomText" Classes="mono" Text="100%" />
+          </Button>
+        </StackPanel>
+        <TextBlock x:Name="StatusText" Classes="dim small" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+      </DockPanel>
+    </Border>
+
+  </Grid>
+</Window>

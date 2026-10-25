@@ -19,6 +19,11 @@
  *   5. Some convenience setters (lv_obj_set_style_pad_all, lv_style_set_pad_all)
  *      are static inline in LVGL's headers, so they exist in no shared library
  *      and there is no symbol to import. They are re-exported here.
+ *   6. lv_anim_t and lv_image_dsc_t are caller-allocated structs (bit fields, in
+ *      the image header's case) whose layout managed code should not hard-code.
+ *   7. Enum ordinals move between releases (LV_STATE_ALT and LV_CHART_TYPE_CURVE
+ *      were both inserted mid-enum after 9.2). lvn_constant exposes the real
+ *      values so the integration tests can cross-check every managed mirror.
  *
  * Everything here is a thin forwarder: no state, no allocation on the hot
  * path, no copying of pixel data. The render loop still calls lv_* directly.
@@ -42,7 +47,7 @@ extern "C" {
  * managed side requires is added. The managed side checks this on startup and
  * refuses to run against a mismatched build.
  * Keep in step with LvglRuntime.ExpectedShimAbi. */
-#define LVN_ABI_VERSION 3
+#define LVN_ABI_VERSION 4
 
 /* ---- build information ------------------------------------------------ */
 LVN_API uint32_t lvn_abi_version(void);
@@ -55,8 +60,16 @@ LVN_API uint32_t lvn_style_size(void);     /* sizeof(lv_style_t), for diagnostic
 LVN_API int32_t lvn_size_content(void);
 LVN_API int32_t lvn_coord_max(void);
 
+/* Value of a named LVGL enum constant such as "LV_STATE_CHECKED", for verifying
+ * the managed mirrors. Returns INT32_MIN for a name this build does not know.
+ * Diagnostic only: a string lookup, never called on a hot path. */
+LVN_API int32_t lvn_constant(const char *name);
+
 /* ---- geometry --------------------------------------------------------- */
 LVN_API void lvn_area_get(const lv_area_t *area, int32_t *x1, int32_t *y1, int32_t *x2, int32_t *y2);
+/* Absolute bounds of an object on its display, after layout. lv_obj_get_coords
+ * fills a caller-allocated lv_area_t, so the struct stays on this side. */
+LVN_API void lvn_obj_get_coords(const lv_obj_t *obj, int32_t *x1, int32_t *y1, int32_t *x2, int32_t *y2);
 
 /* ---- event codes ------------------------------------------------------ */
 /*
@@ -118,6 +131,7 @@ LVN_API void lvn_obj_set_style_outline_color(lv_obj_t *obj, uint32_t rgb, uint32
 LVN_API void lvn_obj_set_style_shadow_color(lv_obj_t *obj, uint32_t rgb, uint32_t selector);
 LVN_API void lvn_obj_set_style_line_color(lv_obj_t *obj, uint32_t rgb, uint32_t selector);
 LVN_API void lvn_obj_set_style_arc_color(lv_obj_t *obj, uint32_t rgb, uint32_t selector);
+LVN_API void lvn_obj_set_style_image_recolor(lv_obj_t *obj, uint32_t rgb, uint32_t selector);
 
 /* ---- inline helpers that have no exported symbol ---------------------- */
 LVN_API void lvn_obj_set_style_pad_all(lv_obj_t *obj, int32_t value, uint32_t selector);
@@ -136,6 +150,53 @@ LVN_API void lvn_style_set_text_font(lv_style_t *style, const lv_font_t *font);
 
 /* ---- charts ----------------------------------------------------------- */
 LVN_API lv_chart_series_t *lvn_chart_add_series(lv_obj_t *chart, uint32_t rgb, int32_t axis);
+
+/* ---- widgets with lv_color_t parameters --------------------------------- */
+LVN_API void lvn_led_set_color(lv_obj_t *led, uint32_t rgb);
+
+/* ---- images ------------------------------------------------------------- */
+/*
+ * Wraps caller-owned pixels in an lv_image_dsc_t. The pixels are NOT copied:
+ * the caller keeps them alive until lvn_image_dsc_delete, which also drops the
+ * descriptor from LVGL's image cache so a recycled address cannot show stale
+ * pixels. cf is an lv_color_format_t value.
+ */
+LVN_API lv_image_dsc_t *lvn_image_dsc_create(uint32_t width, uint32_t height, uint32_t cf,
+                                             uint32_t stride, const void *data, uint32_t data_size);
+LVN_API void lvn_image_dsc_delete(lv_image_dsc_t *dsc);
+
+/* ---- animations --------------------------------------------------------- */
+/*
+ * lv_anim_t is caller-allocated and copied by lv_anim_start, so it lives on the
+ * shim's stack for the duration of one call. Each animation's var is an opaque
+ * managed identifier rather than an object pointer: the managed side routes the
+ * callbacks by that id and stops an animation with lv_anim_delete(id, NULL)
+ * without disturbing any other animation on the same widget.
+ *
+ * The three callbacks are process-wide and set once. completed fires when an
+ * animation finishes normally; deleted fires whenever LVGL frees it, finished or
+ * stopped, and is the managed side's cue to drop its registry entry.
+ */
+typedef void (*lvn_anim_exec_cb_t)(void *id, int32_t value);
+typedef void (*lvn_anim_event_cb_t)(void *id);
+
+enum {
+    LVN_ANIM_PATH_LINEAR = 0,
+    LVN_ANIM_PATH_EASE_IN = 1,
+    LVN_ANIM_PATH_EASE_OUT = 2,
+    LVN_ANIM_PATH_EASE_IN_OUT = 3,
+    LVN_ANIM_PATH_OVERSHOOT = 4,
+    LVN_ANIM_PATH_BOUNCE = 5,
+    LVN_ANIM_PATH_STEP = 6
+};
+
+LVN_API void lvn_anim_set_callbacks(lvn_anim_exec_cb_t exec, lvn_anim_event_cb_t completed,
+                                    lvn_anim_event_cb_t deleted);
+LVN_API int32_t lvn_anim_start(void *id, int32_t start, int32_t end, uint32_t duration, uint32_t delay,
+                               uint32_t reverse_duration, uint32_t reverse_delay,
+                               uint32_t repeat_count, uint32_t repeat_delay, int32_t path,
+                               uint8_t early_apply);
+LVN_API int32_t lvn_anim_stop(void *id);
 
 /* ---- optional bundled demos ------------------------------------------- */
 LVN_API int32_t lvn_demo_widgets(void);

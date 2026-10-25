@@ -2,7 +2,7 @@ using System.Runtime.InteropServices;
 
 namespace Lvgl.Linux;
 
-/// <summary>Syscalls needed to talk to the framebuffer and to evdev input devices.</summary>
+/// <summary>Syscalls needed to talk to the framebuffer, DRM/KMS and evdev input devices.</summary>
 internal static unsafe partial class LibC
 {
     private const string Library = "libc";
@@ -10,6 +10,9 @@ internal static unsafe partial class LibC
     internal const int O_RDONLY = 0x0000;
     internal const int O_RDWR = 0x0002;
     internal const int O_NONBLOCK = 0x0800;
+    internal const int O_CLOEXEC = 0x80000;
+
+    internal const short POLLIN = 0x001;
 
     internal const int PROT_READ = 0x1;
     internal const int PROT_WRITE = 0x2;
@@ -38,6 +41,18 @@ internal static unsafe partial class LibC
 
     [LibraryImport(Library, EntryPoint = "munmap", SetLastError = true)]
     internal static partial int Munmap(nint address, nuint length);
+
+    /// <summary><c>struct pollfd</c>.</summary>
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct PollFd
+    {
+        public int Fd;
+        public short Events;
+        public short Revents;
+    }
+
+    [LibraryImport(Library, EntryPoint = "poll", SetLastError = true)]
+    internal static partial int Poll(PollFd* fds, nuint count, int timeoutMs);
 
     internal static string LastError() => Marshal.GetLastPInvokeErrorMessage();
 }

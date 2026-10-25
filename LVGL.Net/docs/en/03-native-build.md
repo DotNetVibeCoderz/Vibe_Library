@@ -2,7 +2,7 @@
 
 ## What gets built
 
-One shared library, `lvglnet`, containing upstream LVGL v9 plus the ABI shim from `native/shim`.
+One shared library, `lvglnet`, containing upstream LVGL v9.6 plus the ABI shim from `native/shim`.
 One artifact means one `DllImport` name and no load-order problems between co-dependent libraries.
 
 | Platform | File | Staged to |
@@ -60,7 +60,7 @@ cmake --build native/build --config Release
 
 | Option | Default | Effect |
 |--------|---------|--------|
-| `LVGL_TAG` | `v9.2.2` | Which LVGL release to fetch |
+| `LVGL_TAG` | `v9.6.0` | Which LVGL release to fetch |
 | `LVGLNET_WITH_DEMOS` | `ON` | Compile `lv_demo_widgets` and `lv_demo_benchmark` |
 | `LVGLNET_TUNE_PI4` | `OFF` | Add `-mcpu=cortex-a72`; makes the binary non-portable |
 | `LVGLNET_RID` | auto-detected | Which `runtimes/<rid>/native` folder to stage into |
@@ -77,11 +77,23 @@ point release does not have to be merged by hand.
 The one setting you must not change:
 
 ```c
-#define LV_COLOR_DEPTH 32
+#define LV_COLOR_FORMAT_DEFAULT LV_COLOR_FORMAT_XRGB8888
 ```
 
-The backends blit raw XRGB8888 words. A 16-bit build would produce garbled output, so
+The backends blit raw XRGB8888 words. Since LVGL 9.5 the format is the setting and
+`LV_COLOR_DEPTH` (32) is derived from it - defining the depth directly is deprecated, with a
+`#warning` that MSVC's C11 mode treats as an error. A 16-bit build would produce garbled output, so
 `LvglRuntime.Initialize` rejects it with an explicit message rather than drawing nonsense.
+
+Features compiled in that the managed side relies on:
+
+| Setting | Used by |
+|---------|---------|
+| `LV_USE_LODEPNG`, `LV_USE_BMP` | `LvImage` file sources - PNG and BMP are decoded natively |
+| `LV_USE_FS_STDIO`, `LV_FS_STDIO_LETTER 'A'` | Every file path handed to LVGL; `LvFileSystem.ToLvglPath` adds the `A:` |
+| `LV_USE_TINY_TTF`, `LV_TINY_TTF_FILE_SUPPORT` | `LvFont.FromFile` / `FromData` |
+| `LV_CACHE_DEF_SIZE` (1 MiB) | Decoded images are cached rather than re-inflated on every redraw |
+| `LV_USE_LED`, `LV_USE_SPINBOX`, and the other widget flags | The widget classes of the same names |
 
 Settings you might reasonably change:
 
@@ -94,6 +106,25 @@ Settings you might reasonably change:
 | `LV_USE_LOG` | Set to 1 while debugging a rendering problem |
 
 After editing, rebuild the native library. Managed code does not need rebuilding.
+
+## Moving to a newer LVGL
+
+LVGL keeps its function names stable across a major version but not its enum ordinals, and it
+sometimes turns a function into a macro (in 9.6, `lv_chart_set_range` became a macro for
+`lv_chart_set_axis_range`, so the old name is no longer exported). The upgrade from 9.2.2 to 9.6.0
+went like this, and the same steps apply next time:
+
+1. Change `LVGL_TAG`, delete `native/lvgl` (or move it aside to diff against), rebuild.
+2. Compare the prototypes of every imported function between the two header trees - argument
+   types change silently: `lv_state_t` grew from 16 to 32 bits, `lv_anim_enable_t` became a `bool`.
+3. Run the tests with `LVGLNET_REQUIRE_NATIVE=1`. The constants test compares every managed enum
+   mirror against the new build through `lvn_constant`; the event-code test does the same for
+   events.
+4. Bump `LVN_ABI_VERSION` and `LvglRuntime.ExpectedShimAbi` together if the shim changed.
+
+`LvglConstantsTests` is the safety net here: between 9.2 and 9.6 it would have caught `LV_STATE_ALT`
+shifting every state bit and `LV_CHART_TYPE_CURVE` moving `Bar` and `Scatter` - neither of which
+fails to compile or link.
 
 ## Cross-compiling for the Pi
 
@@ -142,7 +173,7 @@ library.
 
 ```csharp
 LvglRuntime.Initialize();
-Console.WriteLine(LvglRuntime.LvglVersion);   // e.g. 9.2.2
+Console.WriteLine(LvglRuntime.LvglVersion);   // e.g. 9.6.0
 Console.WriteLine(LvglRuntime.ColorDepth);    // must be 32
 ```
 

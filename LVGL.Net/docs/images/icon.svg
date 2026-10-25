@@ -1,0 +1,74 @@
+<!-- Di port oleh Kang Fadhil dari Gravicode Studios. -->
+<!-- LVGL.Net package icon: a microcontroller whose die is a screen running LVGL widgets. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1c2452"/>
+      <stop offset="1" stop-color="#0a0d22"/>
+    </linearGradient>
+    <radialGradient id="halo" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#22d3ee" stop-opacity="0.35"/>
+      <stop offset="1" stop-color="#22d3ee" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="edge" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#22d3ee"/>
+      <stop offset="0.5" stop-color="#6d8bff"/>
+      <stop offset="1" stop-color="#a855f7"/>
+    </linearGradient>
+    <linearGradient id="screen" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0f1838"/>
+      <stop offset="1" stop-color="#0a1027"/>
+    </linearGradient>
+    <linearGradient id="value" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#22d3ee"/>
+      <stop offset="1" stop-color="#34d399"/>
+    </linearGradient>
+    <linearGradient id="button" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#a78bfa"/>
+      <stop offset="1" stop-color="#7c3aed"/>
+    </linearGradient>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="3" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <rect x="8" y="8" width="240" height="240" rx="52" fill="url(#bg)"/>
+  <circle cx="128" cy="128" r="104" fill="url(#halo)"/>
+
+  <!-- Pins: four a side, so the shape reads as a chip even at 32px. -->
+  <g fill="#6d8bff" opacity="0.9">
+    <rect x="34" y="78"  width="22" height="8" rx="4"/>
+    <rect x="34" y="104" width="22" height="8" rx="4"/>
+    <rect x="34" y="144" width="22" height="8" rx="4"/>
+    <rect x="34" y="170" width="22" height="8" rx="4"/>
+    <rect x="200" y="78"  width="22" height="8" rx="4"/>
+    <rect x="200" y="104" width="22" height="8" rx="4"/>
+    <rect x="200" y="144" width="22" height="8" rx="4"/>
+    <rect x="200" y="170" width="22" height="8" rx="4"/>
+    <rect x="78"  y="34" width="8" height="22" rx="4"/>
+    <rect x="104" y="34" width="8" height="22" rx="4"/>
+    <rect x="144" y="34" width="8" height="22" rx="4"/>
+    <rect x="170" y="34" width="8" height="22" rx="4"/>
+    <rect x="78"  y="200" width="8" height="22" rx="4"/>
+    <rect x="104" y="200" width="8" height="22" rx="4"/>
+    <rect x="144" y="200" width="8" height="22" rx="4"/>
+    <rect x="170" y="200" width="8" height="22" rx="4"/>
+  </g>
+
+  <!-- Package body, with the die as a screen. -->
+  <rect x="50" y="50" width="156" height="156" rx="20" fill="#141a3c" stroke="url(#edge)" stroke-width="5" filter="url(#glow)"/>
+  <rect x="64" y="64" width="128" height="128" rx="12" fill="url(#screen)"/>
+
+  <!-- lv_arc: LVGL's default 135 deg start, 270 deg sweep, set to 70%. -->
+  <path d="M 105.37 138.63 A 32 32 0 1 1 150.63 138.63" fill="none" stroke="#2a3566" stroke-width="9" stroke-linecap="round"/>
+  <path d="M 105.37 138.63 A 32 32 0 1 1 153.89 97.19" fill="none" stroke="url(#value)" stroke-width="9" stroke-linecap="round" filter="url(#glow)"/>
+  <circle cx="153.89" cy="97.19" r="7" fill="#ecfeff" filter="url(#glow)"/>
+  <circle cx="128" cy="116" r="12" fill="url(#button)" filter="url(#glow)"/>
+  <circle cx="128" cy="116" r="4.5" fill="#ede9fe"/>
+
+  <!-- lv_slider -->
+  <rect x="82" y="168" width="92" height="8" rx="4" fill="#2a3566"/>
+  <rect x="82" y="168" width="58" height="8" rx="4" fill="url(#value)" filter="url(#glow)"/>
+  <circle cx="140" cy="172" r="8" fill="#ecfeff" filter="url(#glow)"/>
+</svg>

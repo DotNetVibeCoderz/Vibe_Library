@@ -7,9 +7,9 @@ namespace Lvgl.Backends;
 /// Renders into a managed pixel buffer instead of a screen.
 /// </summary>
 /// <remarks>
-/// Two things use this: the WPF designer, which copies <see cref="Frame"/> into a
-/// <c>WriteableBitmap</c> to show a true LVGL preview, and the test suite, which asserts on
-/// rendered pixels without needing a display server. Input can be driven synthetically through
+/// Three things use this: the designer, which copies <see cref="Frame"/> into a bitmap to show a
+/// true LVGL preview; the test suite, which asserts on rendered pixels without a display server;
+/// and anything that wants a screenshot (<see cref="SavePng"/>). Input can be driven synthetically through
 /// <see cref="SetPointer"/>.
 /// </remarks>
 public sealed class HeadlessBackend : ILvglBackend, ILvglKeyboardSource
@@ -48,6 +48,21 @@ public sealed class HeadlessBackend : ILvglBackend, ILvglKeyboardSource
 
     /// <summary>The backing array, for APIs that need one (e.g. <c>WriteableBitmap.WritePixels</c>).</summary>
     public byte[] Buffer => _frame;
+
+    /// <summary>
+    /// Writes the current frame as a PNG - a screenshot of exactly what LVGL rendered. Run a frame
+    /// (or <see cref="Display.LvglDisplay.RefreshNow"/>) first so the surface is up to date.
+    /// </summary>
+    public void SavePng(string path)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+
+        var directory = Path.GetDirectoryName(Path.GetFullPath(path));
+        if (!string.IsNullOrEmpty(directory)) Directory.CreateDirectory(directory);
+
+        using var file = File.Create(path);
+        PngWriter.Write(file, _frame, Width, Height, Stride);
+    }
 
     public LvPointerState Pointer => _pointer;
 

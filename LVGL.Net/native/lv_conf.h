@@ -6,11 +6,11 @@
  * Keeping this file small means a new LVGL point release does not have to be
  * merged by hand each time.
  *
- * IMPORTANT: LV_COLOR_DEPTH must stay 32. The managed side hands LVGL a
- * buffer it interprets as XRGB8888 (byte order B,G,R,X on little-endian) and
- * blits it straight to SDL / the Linux framebuffer with no per-pixel
- * conversion. Changing the depth here without changing PixelFormat in
- * LvglDisplay.cs will produce colour-swapped output.
+ * IMPORTANT: the default colour format must stay XRGB8888 (byte order
+ * B,G,R,X on little-endian), which makes LV_COLOR_DEPTH 32. The managed side
+ * blits that buffer straight to SDL / the Linux framebuffer with no per-pixel
+ * conversion, and LvglRuntime refuses any other depth at start-up. Changing it
+ * here without changing every backend produces garbled output.
  */
 #ifndef LV_CONF_H
 #define LV_CONF_H
@@ -21,13 +21,20 @@
    COLOR & MEMORY
  *====================*/
 
-#define LV_COLOR_DEPTH 32
+/* Since 9.5 LVGL derives LV_COLOR_DEPTH from this, and defining the depth directly
+ * is deprecated (with a #warning that MSVC's C11 mode treats as an error). */
+#define LV_COLOR_FORMAT_DEFAULT LV_COLOR_FORMAT_XRGB8888
 
 /* The host has a real allocator; the built-in pool allocator would need a
  * fixed LV_MEM_SIZE tuned per screen size, which we do not want to hard-code. */
 #define LV_USE_STDLIB_MALLOC  LV_STDLIB_CLIB
 #define LV_USE_STDLIB_STRING  LV_STDLIB_CLIB
 #define LV_USE_STDLIB_SPRINTF LV_STDLIB_CLIB
+
+/* Decoded images are cached so a PNG is not re-inflated on every redraw. 1 MiB holds a
+ * screen's worth of icons at 800x480 and stays small enough for a 1 GB Pi. */
+#define LV_CACHE_DEF_SIZE (1024 * 1024)
+#define LV_IMAGE_HEADER_CACHE_DEF_CNT 16
 
 /*====================
    HAL / TIMING
@@ -110,6 +117,26 @@
 #define LV_USE_TABVIEW    1
 #define LV_USE_TILEVIEW   1
 #define LV_USE_WIN        1
+#define LV_USE_LED        1
+#define LV_USE_SPINBOX    1
+
+/*====================
+   FILES, IMAGES, FONTS
+ *====================*/
+
+/* One drive letter onto the C library's fopen. LvImage and LvFont prefix every path with
+ * "A:" themselves: without a letter LVGL would read the "C" of a Windows path as the drive. */
+#define LV_USE_FS_STDIO    1
+#define LV_FS_STDIO_LETTER 'A'
+#define LV_FS_STDIO_PATH   ""
+
+/* PNG and BMP decoding inside the native library, so the managed core needs no image codec. */
+#define LV_USE_LODEPNG 1
+#define LV_USE_BMP     1
+
+/* TrueType at run time, for scripts the built-in Montserrat does not cover. */
+#define LV_USE_TINY_TTF          1
+#define LV_TINY_TTF_FILE_SUPPORT 1
 
 /*====================
    THEMES & LAYOUTS
@@ -129,6 +156,8 @@
 #ifdef LVGLNET_WITH_DEMOS
 #define LV_USE_DEMO_WIDGETS   1
 #define LV_USE_DEMO_BENCHMARK 1
+/* The 9.6 benchmark draws at 26 px as well; only linked in when the demos are. */
+#define LV_FONT_MONTSERRAT_26 1
 #define LV_USE_PERF_MONITOR   0
 #endif
 

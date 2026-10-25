@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Generates docs/api from the XML documentation of the published packages.
+    Run: dotnet run (project tools/LVGL.ApiDocs) - writes into docs/api of the repository.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>Lvgl.ApiDocs</RootNamespace>
+    <AssemblyName>LVGL.ApiDocs</AssemblyName>
+    <IsPackable>false</IsPackable>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/LVGL.Net/LVGL.Net.csproj" />
+    <ProjectReference Include="../../src/LVGL.Net.Ui/LVGL.Net.Ui.csproj" />
+    <ProjectReference Include="../../src/LVGL.Net.Sdl/LVGL.Net.Sdl.csproj" />
+    <ProjectReference Include="../../src/LVGL.Net.Linux/LVGL.Net.Linux.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="LVGL.Net.Tests" />
+  </ItemGroup>
+
+</Project>

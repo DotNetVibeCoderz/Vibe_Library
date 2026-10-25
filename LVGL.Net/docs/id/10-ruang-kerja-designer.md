@@ -1,99 +1,88 @@
 # Ruang kerja designer
 
-Designer adalah satu jendela dengan tiga bagian: kanvas visual, editor kode di atas dokumen yang
-sama, dan asisten yang ditambatkan di sisi kanan.
+Satu jendela: board, editor kode di atas dokumen yang sama, dan asisten yang ditambatkan di sisi
+kanan.
 
 ```
-┌───────────────────────────────────────────────────────────────────────┬──────────────┐
-│ New Open Save Export C# [Design|Code] [Toolbox][Inspector] 800 x 480  │  Ask Jack ▣  │
-├─────────┬───────────────────────────────────────┬─────────────────────┼──────────────┤
-│         │                                       │  OUTLINE            │              │
-│ TOOLBOX │      kanvas  atau  editor kode        ├─────────────────────┤    asisten   │
-│         │                                       │  PROPERTIES         │              │
-├─────────┴───────────────────────────────────────┴─────────────────────┴──────────────┤
-│ status                                                        [Undo assistant change] │
-└───────────────────────────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│ LVGL.Net Designer  file.lvgl.json •  New Open Save Export · Undo Redo · [Design|Code] · 800×480 · Jack  │
+├─ PARTS ───────┬─ board or code ─────────────────────────────────┬─ INSPECTOR ─────────┬─ JACK ──────────┤
+│ PNL Panel     │                                                 │ [Properties|Styles] │ transcript      │
+│ BTN Button    │      live LVGL preview on the board             │ BTN2 ActionButton   │                 │
+│ ...           │                                                 │ PLACEMENT ...       │                 │
+│ OUTLINE       │                                                 │ APPEARANCE ...      │                 │
+│ LBL1 Title    │                                                 │ SHARED STYLES       │ composer        │
+└───────────────┴─────────────────────────────────────────────────┴─────────────────────┴─────────────────┘
+  status                                                 ● 2 things to check   ● LVGL 9.6.0   SNAP 8   100%
 ```
 
-## Panel
+Setiap pembatas dapat diseret. Kolom asisten muncul saat Anda membukanya dan mengingat lebarnya saat
+Anda menutup lalu membukanya lagi.
 
-Ketiga panel samping disembunyikan dan ditampilkan dengan cara yang sama, dan ketiganya bisa diubah
-lebarnya dengan menyeret pembatasnya. Masing-masing mengingat lebar yang Anda pilih, jadi membukanya
-kembali memulihkan tata letak Anda alih-alih kembali ke ukuran bawaan.
-
-| Panel | Tombol | Pintasan |
-|---|---|---|
-| Toolbox (kiri) | **Toolbox** di toolbar, atau ✕ di kepalanya | `Ctrl+B` |
-| Outline dan properties (kanan) | **Inspector**, atau ✕ di kepalanya | `Ctrl+Shift+B` |
-| Asisten (paling kanan) | **Ask Jack**, atau ✕ di kepalanya | `Ctrl+J` |
-
-Pada layar kecil, menyembunyikan toolbox dan inspector memberi kanvas hampir seluruh jendela sambil
-tetap membuka asisten di sisinya.
-
-Mode Code menyembunyikan toolbox dan inspector secara otomatis — keduanya bekerja pada kanvas, jadi
-tidak ada yang bisa dilakukan — sekaligus menonaktifkan tombolnya. Pilihan Anda tetap diingat dan
-kembali saat Anda beralih ke mode Design.
-
-## Mode Design dan Code
-
-Sakelar **Design | Code** pada toolbar mengubah isi panel tengah. Keduanya bekerja pada dokumen
-yang sama, jadi berpindah mode tidak menghilangkan apa pun.
-
-**Design** adalah kanvas visual dengan toolbox dan inspector di kedua sisinya.
-
-**Code** menggantikan kanvas dengan editor. Sebuah dropdown menentukan apa yang ditampilkan:
-
-| Tampilan | Bisa disunting | Isinya |
-|---|---|---|
-| Layout (JSON) | Ya | Dokumennya sendiri. **Apply to design** mem-parsing dan menerapkannya ke kanvas |
-| Generated C# | Tidak | Kelas builder, persis seperti hasil Export C# |
-| Event handlers | Tidak | Belahan tulisan tangan, dengan kerangka per widget interaktif |
-
-Kedua tampilan hasil generate sengaja hanya-baca: suntingan di sana akan hilang diam-diam saat
-regenerasi berikutnya, dan itu lebih buruk daripada tidak menawarkannya sama sekali. Layout JSON
-adalah satu-satunya tampilan yang bisa disunting, dan itulah yang menutup lingkarannya — sunting
-dokumen dengan tangan, terapkan, lalu lihat hasilnya di kanvas.
-
-Suntingan yang tidak valid ditolak dengan alasannya di status strip, bukan diterapkan begitu saja.
-
-## Editor
+## Pintasan
 
 | Perintah | Pintasan |
 |---|---|
-| Undo / Redo | `Ctrl+Z` / `Ctrl+Y` |
-| Cut / Copy / Paste | `Ctrl+X` / `Ctrl+C` / `Ctrl+V` |
-| Select all | `Ctrl+A` |
-| Find and replace | `Ctrl+F`, `F3` untuk berikutnya |
-| Go to line | `Ctrl+G` |
-| Apply to design | `Ctrl+Enter` |
+| New / Open / Save / Save as | `Ctrl+N` / `Ctrl+O` / `Ctrl+S` / `Ctrl+Shift+S` |
+| Export C# | `Ctrl+E` |
+| Undo / Redo | `Ctrl+Z` / `Ctrl+Y` atau `Ctrl+Shift+Z` |
+| Duplicate / Delete / Deselect | `Ctrl+D` / `Del` / `Esc` |
+| Nudge | Tombol panah, `Shift` untuk 10 px |
+| Sesuaikan board dengan tampilan | `Ctrl+0` |
+| Tampilkan atau sembunyikan asisten | `Ctrl+J` |
 
-Semuanya juga tersedia di toolbar dan menu klik-kanan, jadi tidak ada yang hanya bisa lewat papan
-ketik.
+Di macOS, `Cmd` berlaku di mana pun `Ctrl` tercantum. Selama sebuah kolom teks atau editor kode
+memegang fokus, `Ctrl+Z` dan `Ctrl+D` berlaku untuk teks, bukan untuk layout.
 
-**Line numbers** dan **Wrap** adalah tombol centang di toolbar. Status strip menampilkan posisi
-kursor dan panjang seleksi.
+Undo mencakup segala hal yang mengubah dokumen - suntingan properti, seretan, perubahan struktur,
+style, JSON yang diterapkan, layout dari asisten. Mengetik sebuah nama adalah satu langkah, bukan
+satu per huruf: suntingan pada kolom yang sama secara berturut-turut dalam waktu singkat digabung
+menjadi satu.
 
-Pewarnaan sintaks mengikuti tampilan — JSON untuk layout, C# untuk kode hasil generate.
+## Inspector
+
+Halaman **Properties** menampilkan kolom yang relevan untuk jenis widget terpilih - rentang untuk
+slider, warna series untuk chart, kolom target untuk keyboard - alih-alih satu grid berisi
+segalanya. Bila tidak ada yang terpilih, halaman ini menampilkan nama kelas dan latar layar, serta
+mencantumkan masalah dan peringatan apa pun di layout.
+
+- **Kolom angka** menerima tombol panah: Up/Down melangkah 1, dengan `Shift` 10.
+- **Kolom warna** punya swatch yang membuka pemilih warna di sebelah teks hex. Kolom kosong berarti
+  warna dari tema LVGL.
+- **Kosong berarti bawaan.** Kolom opsional yang kosong berarti "biarkan nilai bawaan LVGL", bukan
+  nol - perbedaan yang dijaga oleh format dokumen.
+- Kolom disunting selagi Anda mengetik; nilai yang tidak valid diberi garis merah dan tidak
+  dituliskan ke dokumen.
+
+Halaman **Styles** menyunting style bersama: pilih satu, ubah, dan setiap widget yang memakainya
+ikut berubah.
+
+## Mode Design dan Code
+
+**Design** adalah board dengan parts, outline, dan inspector. **Code** menggantikan board dengan
+editor di atas tiga tampilan dari dokumen yang sama:
+
+| Tampilan | Bisa disunting | Isinya |
+|---|---|---|
+| Layout JSON | Ya | Dokumennya sendiri. **Apply to design** (`Ctrl+Enter`) menaruhnya ke kanvas |
+| Generated C# | Tidak | Kelas builder, persis seperti hasil Export C# |
+| Event handlers | Tidak | Belahan tulisan tangan, dengan kerangka per widget interaktif |
+
+![Mode Code](../images/screenshots/designer-code.png)
+
+Tampilan hasil generate sengaja hanya-baca: suntingan di sana akan hilang pada regenerasi
+berikutnya. Menerapkan JSON adalah satu langkah yang bisa di-undo seperti langkah lainnya; dokumen
+yang tidak valid ditolak dengan alasannya di baris status editor. Editor ini punya nomor baris,
+pewarnaan sintaks, pencarian (`Ctrl+F`), dan riwayat undo-nya sendiri.
 
 ## Panel asisten
 
-**Ask Jack** di toolbar, atau `Ctrl+J`, menampilkan dan menyembunyikan asisten. Seret pembatasnya
-untuk mengubah lebar; lebarnya diingat saat ditutup dan dibuka lagi. Tombol **✕** di kepala panel
-juga menyembunyikannya.
+**Jack** di command bar, atau `Ctrl+J`, membuka asisten yang dijelaskan di [bab 9](09-asisten.md).
+Saat asisten menghasilkan layout, layout itu langsung **ditaruh ke board** - tidak ada tombol yang
+perlu ditekan - dan itu adalah langkah undo biasa, jadi `Ctrl+Z` mengembalikan apa yang Anda miliki
+sebelumnya. Minta, lihat, undo bila belum sesuai, minta lagi.
 
-Panel ini adalah asisten yang sama seperti pada [bab 9](09-asisten.md) — sesi, penyedia model,
-lampiran, dan tools tidak berubah. Yang berbeda dari jendela terpisah adalah apa yang terjadi saat
-ia menghasilkan layout:
+![Asisten sedang merancang sebuah layar](../images/screenshots/designer-assistant.png)
 
-**Layout langsung diterapkan ke kanvas.** Tidak ada tombol yang perlu ditekan. Minta sebuah layar,
-lalu lihat ia muncul. Bila Anda sedang di mode Code, editornya ikut diperbarui.
-
-Itu aman karena ada tombol **Undo assistant change** yang muncul di status bar. Tombol itu
-mengembalikan dokumen ke keadaan sebelum perubahan, satu langkah. Penerapan bersifat tidak merusak,
-jadi siklusnya tetap cepat — minta, lihat, kembalikan bila bukan yang Anda mau, minta lagi.
-
-Peringatan pada layout yang diterapkan (widget di luar layar, offset perataan yang tampak seperti
-koordinat absolut) ditampilkan di status bar, bukan menghalangi penerapan.
-
-Asisten dimulai secara malas: sesi designer yang tidak pernah membuka panel tidak pernah membangun
-kernel, tidak menjalankan host lampiran, dan tidak membaca kunci API.
+Asisten dimulai secara malas: sesi yang tidak pernah membuka panel tidak pernah membangun klien
+model, tidak menjalankan host lampiran, dan tidak membaca kunci API.

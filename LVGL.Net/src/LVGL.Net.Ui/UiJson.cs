@@ -1,5 +1,7 @@
+using System.Collections;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.Json.Serialization.Metadata;
 
 namespace Lvgl.Ui;
 
@@ -23,20 +25,49 @@ public static class UiJson
         var document = JsonSerializer.Deserialize(json, UiJsonContext.Default.UiDocument)
             ?? throw new InvalidDataException("The file does not contain a UI document.");
 
-        if (document.Version > 1)
+        if (document.Version > UiDocument.CurrentVersion)
         {
             throw new InvalidDataException(
                 $"The document was written by a newer version of the designer (format {document.Version}).");
         }
 
+        // Version 1 is a strict subset of version 2, so migrating is only re-stamping. Done on
+        // load so a re-save writes the current version and the file stays honest about its shape.
+        if (document.Version < UiDocument.CurrentVersion) document.Version = UiDocument.CurrentVersion;
+
         return document;
+    }
+
+    /// <summary>
+    /// Writing omits what was never set - null values, empty lists, false flags - so a saved layout
+    /// holds only the decisions that were made, and a diff of it shows only real changes. Reading
+    /// is unaffected: an omitted list comes back empty and an omitted flag false.
+    /// </summary>
+    private static readonly JsonTypeInfo<UiDocument> CompactDocument = (JsonTypeInfo<UiDocument>)new JsonSerializerOptions(UiJsonContext.Default.Options)
+    {
+        TypeInfoResolver = UiJsonContext.Default.WithAddedModifier(OmitDefaults),
+    }.GetTypeInfo(typeof(UiDocument));
+
+    private static void OmitDefaults(JsonTypeInfo info)
+    {
+        foreach (var property in info.Properties)
+        {
+            if (typeof(ICollection).IsAssignableFrom(property.PropertyType))
+            {
+                property.ShouldSerialize = static (_, value) => value is ICollection { Count: > 0 };
+            }
+            else if (property.PropertyType == typeof(bool))
+            {
+                property.ShouldSerialize = static (_, value) => value is true;
+            }
+        }
     }
 
     /// <summary>Serialises a document to an indented JSON string.</summary>
     public static string ToJson(UiDocument document)
     {
         ArgumentNullException.ThrowIfNull(document);
-        return JsonSerializer.Serialize(document, UiJsonContext.Default.UiDocument);
+        return JsonSerializer.Serialize(document, CompactDocument);
     }
 
     /// <summary>Reads a document from disk.</summary>

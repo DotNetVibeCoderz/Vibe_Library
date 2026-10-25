@@ -1,96 +1,85 @@
 # The designer workspace
 
-The designer is one window with three movable parts: the visual canvas, a code editor over the
-same document, and the assistant docked on the right.
+One window: the board, a code editor over the same document, and the assistant docked on the
+right.
 
 ```
-┌───────────────────────────────────────────────────────────────────────┬──────────────┐
-│ New Open Save Export C# [Design|Code] [Toolbox][Inspector] 800 x 480  │  Ask Jack ▣  │
-├─────────┬───────────────────────────────────────┬─────────────────────┼──────────────┤
-│         │                                       │  OUTLINE            │              │
-│ TOOLBOX │        canvas  or  code editor        ├─────────────────────┤   assistant  │
-│         │                                       │  PROPERTIES         │              │
-├─────────┴───────────────────────────────────────┴─────────────────────┴──────────────┤
-│ status                                                        [Undo assistant change] │
-└───────────────────────────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│ LVGL.Net Designer  file.lvgl.json •  New Open Save Export · Undo Redo · [Design|Code] · 800×480 · Jack  │
+├─ PARTS ───────┬─ board or code ─────────────────────────────────┬─ INSPECTOR ─────────┬─ JACK ──────────┤
+│ PNL Panel     │                                                 │ [Properties|Styles] │ transcript      │
+│ BTN Button    │      live LVGL preview on the board             │ BTN2 ActionButton   │                 │
+│ ...           │                                                 │ PLACEMENT ...       │                 │
+│ OUTLINE       │                                                 │ APPEARANCE ...      │                 │
+│ LBL1 Title    │                                                 │ SHARED STYLES       │ composer        │
+└───────────────┴─────────────────────────────────────────────────┴─────────────────────┴─────────────────┘
+  status                                                 ● 2 things to check   ● LVGL 9.6.0   SNAP 8   100%
 ```
 
-## Panels
+Every divider can be dragged. The assistant column appears when you open it and remembers its
+width when you close and reopen it.
 
-All three side panels hide and show the same way, and all three are resizable by dragging their
-divider. Each remembers the width you dragged it to, so reopening restores your layout rather than
-snapping back to a default.
-
-| Panel | Toggle | Shortcut |
-|---|---|---|
-| Toolbox (left) | **Toolbox** in the toolbar, or the ✕ in its header | `Ctrl+B` |
-| Outline and properties (right) | **Inspector**, or the ✕ in its header | `Ctrl+Shift+B` |
-| Assistant (far right) | **Ask Jack**, or the ✕ in its header | `Ctrl+J` |
-
-On a small screen, hiding the toolbox and inspector gives the canvas most of the window while
-keeping the assistant open beside it.
-
-Code mode hides the toolbox and inspector automatically — they act on the canvas, so there is
-nothing for them to do — and disables their toggles while it does. Your choice is remembered and
-comes back when you return to Design.
-
-## Design and Code modes
-
-The **Design | Code** switch in the toolbar changes what the centre pane shows. Both work on the
-same document, so switching does not lose anything.
-
-**Design** is the visual canvas with the toolbox and inspector either side.
-
-**Code** replaces the canvas with an editor. A dropdown chooses what to look at:
-
-| View | Editable | What it is |
-|---|---|---|
-| Layout (JSON) | Yes | The document itself. **Apply to design** parses it back onto the canvas |
-| Generated C# | No | The builder class, exactly as Export C# would write it |
-| Event handlers | No | The hand-written half, with a stub per interactive widget |
-
-The two generated views are read-only on purpose: edits there would be silently discarded the next
-time they regenerate, which is worse than not offering it. Layout JSON is the one editable view,
-and it closes the loop — hand-edit the document, apply, and see the result on the canvas.
-
-An invalid edit is refused with the reason in the status strip rather than being applied.
-
-## The editor
+## Shortcuts
 
 | Command | Shortcut |
 |---|---|
-| Undo / Redo | `Ctrl+Z` / `Ctrl+Y` |
-| Cut / Copy / Paste | `Ctrl+X` / `Ctrl+C` / `Ctrl+V` |
-| Select all | `Ctrl+A` |
-| Find and replace | `Ctrl+F`, `F3` for next |
-| Go to line | `Ctrl+G` |
-| Apply to design | `Ctrl+Enter` |
+| New / Open / Save / Save as | `Ctrl+N` / `Ctrl+O` / `Ctrl+S` / `Ctrl+Shift+S` |
+| Export C# | `Ctrl+E` |
+| Undo / Redo | `Ctrl+Z` / `Ctrl+Y` or `Ctrl+Shift+Z` |
+| Duplicate / Delete / Deselect | `Ctrl+D` / `Del` / `Esc` |
+| Nudge | Arrow keys, `Shift` for 10 px |
+| Fit board to view | `Ctrl+0` |
+| Show or hide the assistant | `Ctrl+J` |
 
-All of it is also on the toolbar and in the right-click menu, so nothing is keyboard-only.
+On macOS, `Cmd` works wherever `Ctrl` is listed. While a text field or the code editor has focus,
+`Ctrl+Z` and `Ctrl+D` belong to the text rather than the layout.
 
-**Line numbers** and **Wrap** are toggles in the toolbar. The status strip shows the caret position
-and the selection length.
+Undo covers everything that changes the document - property edits, drags, structure changes,
+styles, applied JSON, layouts from the assistant. Typing a name is one step, not one per letter:
+edits to the same field in quick succession are folded together.
 
-Syntax highlighting follows the view — JSON for the layout, C# for the generated code.
+## The inspector
+
+The **Properties** page shows the fields that matter for the selected kind of widget - a range for
+a slider, series colours for a chart, the target field for a keyboard - rather than one grid of
+everything. With nothing selected it shows the screen's class name and background, and lists any
+problems and warnings in the layout.
+
+- **Number fields** take the arrow keys: Up/Down step by 1, with `Shift` by 10.
+- **Colour fields** have a swatch that opens a picker beside the hex text. An empty field means the
+  LVGL theme's colour.
+- **Empty means default.** An empty optional field is "leave LVGL's default", not zero - the
+  distinction the document format preserves.
+- Fields edit as you type; an invalid value is outlined in red and not written to the document.
+
+The **Styles** page edits shared styles: pick one, change it, and every widget using it follows.
+
+## Design and Code modes
+
+**Design** is the board with parts, outline and inspector. **Code** replaces the board with an
+editor over three views of the same document:
+
+| View | Editable | What it is |
+|---|---|---|
+| Layout JSON | Yes | The document itself. **Apply to design** (`Ctrl+Enter`) puts it on the canvas |
+| Generated C# | No | The builder class, exactly as Export C# writes it |
+| Event handlers | No | The hand-written half, with a stub per interactive widget |
+
+![Code mode](../images/screenshots/designer-code.png)
+
+The generated views are read-only on purpose: edits there would vanish on the next regeneration.
+Applying JSON is an undoable step like any other; an invalid document is refused with the reason
+in the editor's status line. The editor has line numbers, syntax highlighting, search (`Ctrl+F`)
+and its own undo history.
 
 ## The assistant panel
 
-**Ask Jack** in the toolbar, or `Ctrl+J`, shows and hides the assistant. Drag the divider to resize
-it; the width is remembered when you close and reopen it. The **✕** in the panel header hides it too.
+**Jack** in the command bar, or `Ctrl+J`, opens the assistant described in
+[chapter 9](09-assistant.md). When it produces a layout, the layout goes **straight onto the
+board** - there is no button to press - and it is a normal undo step, so `Ctrl+Z` brings back what
+you had. Ask, look, undo if it is not right, ask again.
 
-The panel is the same assistant described in [chapter 9](09-assistant.md) — sessions, providers,
-attachments and tools are unchanged. What differs from a separate window is what happens when it
-produces a layout:
+![The assistant designing a screen](../images/screenshots/designer-assistant.png)
 
-**Layouts are applied to the canvas immediately.** There is no button to press. Ask for a screen,
-watch it appear. If you were in Code mode, the editor updates too.
-
-That is safe because of the **Undo assistant change** button that appears in the status bar. It
-restores the document from before the change, one step. Applying is not destructive, so the loop
-stays fast — ask, look, revert if it is not what you wanted, ask again.
-
-Warnings on an applied layout (a widget off screen, an alignment offset that looks like an absolute
-coordinate) are shown in the status bar rather than blocking the apply.
-
-The assistant starts lazily: a designer session that never opens the panel never builds a kernel,
-never starts the attachment host, and never reads the API keys.
+The assistant starts lazily: a session that never opens the panel never builds a model client,
+never starts the attachment host and never reads an API key.

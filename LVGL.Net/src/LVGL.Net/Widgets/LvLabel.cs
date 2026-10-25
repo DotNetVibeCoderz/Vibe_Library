@@ -11,6 +11,9 @@ public sealed class LvLabel : LvObject
     /// <summary>Creates a label with initial text.</summary>
     public LvLabel(LvObject? parent, string text) : this(parent) => Text = text;
 
+    /// <summary>Wraps a label LVGL created itself, such as a list heading.</summary>
+    internal LvLabel(nint handle) : base(handle) { }
+
     /// <summary>
     /// The displayed text. LVGL copies the string into its own buffer on assignment, so the
     /// managed string does not need to be kept alive.

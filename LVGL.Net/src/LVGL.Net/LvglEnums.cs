@@ -45,18 +45,29 @@ public enum LvPart : uint
 }
 
 /// <summary>Interaction state of a widget.</summary>
+/// <remarks>
+/// Mirrors <c>lv_state_t</c> of the bundled LVGL. These values are not stable across LVGL
+/// releases - 9.5 inserted <c>LV_STATE_ALT</c> at bit 0 and moved every other state up - so the
+/// integration tests check each one against the native build through <c>lvn_constant</c>.
+/// </remarks>
 [Flags]
 public enum LvState : ushort
 {
     Default = 0x0000,
-    Checked = 0x0001,
-    Focused = 0x0002,
-    FocusKey = 0x0004,
-    Edited = 0x0008,
-    Hovered = 0x0010,
-    Pressed = 0x0020,
-    Scrolled = 0x0040,
-    Disabled = 0x0080,
+    /// <summary>Alternative look, e.g. a dark variant of a theme.</summary>
+    Alt = 1 << 0,
+    Checked = 1 << 2,
+    Focused = 1 << 3,
+    FocusKey = 1 << 4,
+    Edited = 1 << 5,
+    Hovered = 1 << 6,
+    Pressed = 1 << 7,
+    Scrolled = 1 << 8,
+    Disabled = 1 << 9,
+    User1 = 1 << 12,
+    User2 = 1 << 13,
+    User3 = 1 << 14,
+    User4 = 1 << 15,
     Any = 0xFFFF,
 }
 
@@ -196,12 +207,21 @@ public enum LvScrollbarMode
 }
 
 /// <summary>Chart plot style.</summary>
+/// <remarks>
+/// <c>Curve</c> and <c>Stacked</c> were inserted mid-enum after LVGL 9.2, moving <c>Bar</c> and
+/// <c>Scatter</c>. The values are checked against the native build by the integration tests.
+/// Saved layouts store the name, not the number, so the move does not affect them.
+/// </remarks>
 public enum LvChartType
 {
     None = 0,
     Line = 1,
-    Bar = 2,
-    Scatter = 3,
+    /// <summary>A line smoothed into a curve.</summary>
+    Curve = 2,
+    Bar = 3,
+    /// <summary>Bars of every series stacked on top of each other.</summary>
+    Stacked = 4,
+    Scatter = 5,
 }
 
 /// <summary>Axis a chart series is bound to.</summary>
@@ -227,4 +247,76 @@ public enum LvRollerMode
 {
     Normal = 0,
     Infinite = 1,
+}
+
+/// <summary>A direction, or a set of them (tab bar side, allowed tile scroll directions).</summary>
+[Flags]
+public enum LvDir
+{
+    None = 0x00,
+    Left = 1 << 0,
+    Right = 1 << 1,
+    Top = 1 << 2,
+    Bottom = 1 << 3,
+    Horizontal = Left | Right,
+    Vertical = Top | Bottom,
+    All = Horizontal | Vertical,
+}
+
+/// <summary>Key layout shown by an on-screen keyboard.</summary>
+public enum LvKeyboardMode
+{
+    TextLower = 0,
+    TextUpper = 1,
+    Special = 2,
+    Number = 3,
+}
+
+/// <summary>Shape and tick side of a scale.</summary>
+public enum LvScaleMode
+{
+    HorizontalTop = 0x00,
+    HorizontalBottom = 0x01,
+    VerticalLeft = 0x02,
+    VerticalRight = 0x04,
+    /// <summary>Round scale with the labels inside the ticks - a gauge face.</summary>
+    RoundInner = 0x08,
+    RoundOuter = 0x10,
+}
+
+/// <summary>How an image's pixels are placed inside the widget when the sizes differ.</summary>
+public enum LvImageAlign
+{
+    Default = 0,
+    TopLeft = 1,
+    TopMid = 2,
+    TopRight = 3,
+    BottomLeft = 4,
+    BottomMid = 5,
+    BottomRight = 6,
+    LeftMid = 7,
+    RightMid = 8,
+    Center = 9,
+    // 10 is LVGL's internal _LV_IMAGE_ALIGN_AUTO_TRANSFORM.
+    Stretch = 11,
+    Tile = 12,
+    Contain = 13,
+    ContainDownscale = 14,
+    Cover = 15,
+}
+
+/// <summary>
+/// Easing curve of an animation. These are LVGL.Net's own identifiers, mapped onto LVGL's path
+/// functions in the shim, so they are stable across LVGL releases.
+/// </summary>
+public enum LvAnimPath
+{
+    Linear = 0,
+    EaseIn = 1,
+    EaseOut = 2,
+    EaseInOut = 3,
+    Overshoot = 4,
+    Bounce = 5,
+    /// <summary>Jumps from the start value to the end value at the end of the duration.</summary>
+    Step = 6,
 }

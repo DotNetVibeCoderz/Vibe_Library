@@ -3,22 +3,20 @@
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <!--
-      WPF pins this project to Windows. That is the only Windows-only project in the solution:
-      LVGL.Net itself and both samples stay platform-agnostic, and the designer talks to them
-      through the same public API any application would use.
+      Avalonia makes the designer cross-platform: it runs on Windows, macOS and Linux - including
+      a Raspberry Pi desktop - from this one project. The LVGL preview is LVGL itself, rendered
+      off-screen through HeadlessBackend, so it needs nothing platform-specific either.
     -->
-    <TargetFramework>net10.0-windows</TargetFramework>
-    <UseWPF>true</UseWPF>
+    <TargetFramework>net10.0</TargetFramework>
     <RootNamespace>Lvgl.Designer</RootNamespace>
     <AssemblyName>LVGL.Designer</AssemblyName>
     <IsPackable>false</IsPackable>
-    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
+    <ApplicationIcon>Assets/designer.ico</ApplicationIcon>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
 
     <!--
-      WPF cannot run under invariant globalization, which Directory.Build.props turns on for the
-      solution. Text layout resolves a specific culture from the UI language, and with ICU absent
-      that throws "Cannot find non-neutral culture related to 'en-us'" the first time a templated
-      item is measured - the app dies on startup rather than degrading.
+      Text shaping resolves cultures from the UI language; keep ICU available rather than
+      inheriting the solution-wide invariant mode, which is meant for the embedded targets.
     -->
     <InvariantGlobalization>false</InvariantGlobalization>
   </PropertyGroup>
@@ -31,6 +29,7 @@
   -->
   <ItemGroup>
     <None Include="App.config" />
+    <AvaloniaResource Include="Assets/**" />
   </ItemGroup>
 
   <ItemGroup>
@@ -40,18 +39,18 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!--
-      The chat transcript is rendered as HTML in a WebView2 rather than with WPF controls:
-      tables, fenced code and embedded media are what a model actually emits, and reproducing
-      them with WPF primitives would be a lot of work for a worse result.
-    -->
-    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4078.44" />
+    <PackageReference Include="Avalonia" Version="12.1.4" />
+    <PackageReference Include="Avalonia.Desktop" Version="12.1.4" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.4" />
+    <PackageReference Include="Avalonia.Controls.ColorPicker" Version="12.1.4" />
 
-    <!--
-      The code view needs line numbers, a search panel, undo/redo and syntax highlighting.
-      AvalonEdit provides all four; a TextBox would mean hand-rolling the first three.
-    -->
-    <PackageReference Include="AvalonEdit" Version="6.3.1.120" />
+    <!-- The code view needs line numbers, search, undo/redo and highlighting: AvaloniaEdit has all four. -->
+    <PackageReference Include="Avalonia.AvaloniaEdit" Version="12.0.0" />
+    <PackageReference Include="AvaloniaEdit.TextMate" Version="12.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="LVGL.Designer.Tests" />
   </ItemGroup>
 
 </Project>

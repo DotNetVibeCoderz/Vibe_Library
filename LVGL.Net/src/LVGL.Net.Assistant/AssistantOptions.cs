@@ -109,6 +109,20 @@ public sealed class AssistantOptions
         /// <summary>Base endpoint override; null uses the provider default.</summary>
         public string? Endpoint { get; set; }
 
+        /// <summary>
+        /// Anthropic workspace for keys that are not scoped to one; such keys are refused without
+        /// it. <c>ANTHROPIC_WORKSPACE_ID</c> takes precedence. Ignored by the other providers.
+        /// </summary>
+        public string? WorkspaceId { get; set; }
+
+        /// <summary>The workspace id: environment variable first, then the configured value.</summary>
+        public string? ResolveWorkspaceId()
+        {
+            var fromEnvironment = Environment.GetEnvironmentVariable("ANTHROPIC_WORKSPACE_ID");
+            if (!string.IsNullOrWhiteSpace(fromEnvironment)) return fromEnvironment;
+            return string.IsNullOrWhiteSpace(WorkspaceId) ? null : WorkspaceId;
+        }
+
         /// <summary>True when the provider has everything it needs to run.</summary>
         public bool IsConfigured =>
             ApiKeyVariable is null || !string.IsNullOrWhiteSpace(ResolveApiKey());
@@ -208,6 +222,7 @@ public sealed class AssistantOptions
         if (get($"{name}:Model") is { Length: > 0 } model) target.Model = model;
         if (get($"{name}:ApiKey") is { Length: > 0 } key) target.ApiKey = key;
         if (get($"{name}:Endpoint") is { Length: > 0 } endpoint) target.Endpoint = endpoint;
+        if (get($"{name}:WorkspaceId") is { Length: > 0 } workspace) target.WorkspaceId = workspace;
     }
 
     private static bool TryDouble(string? text, out double value) =>

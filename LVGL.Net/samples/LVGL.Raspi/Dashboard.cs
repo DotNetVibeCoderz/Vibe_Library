@@ -183,13 +183,18 @@ internal sealed class Dashboard
         _chart.SetBackgroundColor(Background);
         _chart.SetBorderWidth(0);
         _chart.SetRadius(8);
-        _chart.SetLineColor(LvColor.FromRgb(0x243244u), LvPart.Items);
+        // Since LVGL 9.5 the grid is drawn with the main part's line style.
+        _chart.SetLineColor(LvColor.FromRgb(0x243244u));
+
+        // No marker on every sample: at 90 points a plain line reads better than a row of beads.
+        _chart.SetPartSize(0, 0, LvPart.Indicator);
 
         _loadSeries = _chart.AddSeries(LoadColor);
         _tempSeries = _chart.AddSeries(TempColor);
 
-        _loadSeries.Fill(0);
-        _tempSeries.Fill(0);
+        // Empty, not zero: the trace begins with the first real sample instead of a flat floor.
+        _loadSeries.Fill(LvChartSeries.NoValue);
+        _tempSeries.Fill(LvChartSeries.NoValue);
     }
 
     /// <summary>

@@ -16,6 +16,8 @@ Tanpa perangkat keras tambahan dan tanpa paket tambahan. Pengambilan sampel berj
 karena membaca berkas-berkas itu menyentuh sistem berkas dan run loop yang terblokir langsung terlihat
 sebagai grafik yang tersendat. Hasilnya sampai ke UI lewat `app.Post(...)`.
 
+![Dasbor, dirender di luar layar dengan sensor simulasi](../images/screenshots/raspi-dashboard.png)
+
 ## Menyiapkan Pi
 
 ```bash
@@ -45,14 +47,24 @@ Opsi:
 
 ```bash
 --sdl              # render ke jendela (butuh sesi desktop)
+--drm [device]     # DRM/KMS dengan page flipping - tanpa tearing; butuh layar sendirian
 --simulate         # telemetri palsu, untuk mengembangkan tanpa Pi
 --fb /dev/fb1      # perangkat framebuffer lain
 --interval 500     # interval pengambilan sampel dalam ms
+--bench 30         # ukur selama 30 dtk dan cetak laporan JSON (lihat di bawah)
+--headless         # render di luar layar (dengan --bench, di mesin tanpa layar)
+--screenshot a.png # render dengan data simulasi dan simpan sebagai PNG
 ```
 
-Tanpa `--sdl`, contoh ini membuka `/dev/fb0`, mendeteksi perangkat sentuh atau tetikus secara
-otomatis, dan jatuh kembali ke jendela SDL bila framebuffer tidak tersedia — sehingga biner yang sama
-bekerja lewat SSH dengan X forwarding maupun langsung di panel.
+Tanpa `--sdl` atau `--drm`, contoh ini membuka `/dev/fb0`, mendeteksi perangkat sentuh atau tetikus
+secara otomatis, dan jatuh kembali ke jendela SDL bila framebuffer tidak tersedia — sehingga biner
+yang sama bekerja lewat SSH dengan X forwarding maupun langsung di panel.
+
+**Utamakan `--drm` saat boot ke konsol.** Pada Raspberry Pi OS terkini, layar berjalan di atas driver
+KMS dan `/dev/fb0` hanyalah lapisan emulasi: menggambar ke dalamnya langsung terlihat saat proses
+berlangsung dan terjadi tearing saat ada gerakan. `--drm` merender ke buffer tersembunyi dan membalik
+buffer saat vertical blank. Opsi ini membutuhkan layar untuk dirinya sendiri, jadi bila desktop
+berjalan di layar yang sama, tetap pakai backend framebuffer atau SDL.
 
 ## Catatan framebuffer
 
@@ -122,7 +134,7 @@ Nilai bawaan yang berpengaruh di Pi, beserta alasannya:
 | Pengaturan | Nilai | Alasan |
 |------------|-------|--------|
 | `RenderMode` | `Partial` | Dua potongan kecil, bukan dua buffer sepenuh layar |
-| `PartialBufferLines` | 32 pada contoh | ~100 KiB total pada 800×480, bukan ~1,5 MiB |
+| `PartialBufferLines` | 32 pada contoh | 200 KiB (dua potongan 100 KiB) pada 800×480, bukan 3 MiB untuk dua buffer sepenuh layar |
 | `ServerGarbageCollection` | mati | Server GC memakan memori tanpa manfaat pada papan kecil |
 | `ConcurrentGarbageCollection` | mati | Thread GC latar bersaing dengan proses render |
 | `LV_DRAW_SW_DRAW_UNIT_CNT` | 1 | Thread gambar tambahan umumnya hanya menambah rebutan pada empat inti |
@@ -137,6 +149,59 @@ Bila UI terasa lambat:
 3. Utamakan latar polos dibanding gradien, dan hindari bayangan buram yang besar: keduanya mahal pada
    rendering perangkat lunak.
 4. Naikkan `PartialBufferLines` bila memori masih longgar — blit lebih sedikit dan lebih besar.
+
+## Mengukur: `--bench`
+
+`--bench <detik>` menjalankan dasbor dengan kecepatan penuh - sampel simulasi setiap 50 ms, sehingga
+gauge, label, dan chart terus digambar ulang - lalu melaporkan hasilnya:
+
+```bash
+dotnet run --project samples/LVGL.Raspi -c Release -- --drm --bench 30 --report bench.json
+```
+
+Sebuah laporan hasil pengukuran (desktop x64 yang merender di luar layar dengan `--headless`,
+disimpan di `docs/benchmarks/dashboard-headless-windows-x64.json`):
+
+```json
+{
+  "Lvgl": "9.6.0",
+  "Backend": "HeadlessBackend",
+  "Width": 800,
+  "Height": 480,
+  "FramesPerSecond": 63.6,
+  "FrameMsMedian": 0.013,
+  "FrameMsP95": 1.538,
+  "FrameMsP99": 2.081,
+  "BytesAllocatedPerFrame": 53.2,
+  "Gen0Collections": 0,
+  "DrawBufferKiB": 200,
+  "WorkingSetMiB": 34.7
+}
+```
+
+Waktu frame adalah waktu di dalam `RunFrame` - timer, layout, rendering, dan blit - tanpa waktu tidur
+saat idle; median yang mendekati nol berarti sebagian besar putaran loop tidak punya apa pun untuk
+digambar ulang. Angka alokasi berasal dari pemformatan label milik dasbor sendiri: jalur render itu
+sendiri tidak mengalokasikan apa pun, dan hal ini ditegakkan oleh sebuah test
+(`The_render_path_does_not_allocate`). Ini bukan angka Pi; proses hardware-in-the-loop di bawah ini
+menghasilkan angka Pi yang sesungguhnya.
+
+## Hardware-in-the-loop
+
+`.github/workflows/lvgl-net-pi4.yml` menjalankan seluruh rangkaian test dan bench **di Pi 4
+sungguhan**, setiap minggu dan sesuai permintaan. Workflow ini membutuhkan runner GitHub Actions
+self-hosted di Pi:
+
+1. Di Pi, ikuti langkah *Settings → Actions → Runners → New self-hosted runner* dari GitHub untuk
+   Linux ARM64, dan beri runner tersebut label tambahan `pi4`.
+2. Pasang sebagai service (`sudo ./svc.sh install && sudo ./svc.sh start`) di bawah pengguna yang
+   tergabung dalam grup `video` dan `input`, dengan CMake dan compiler terpasang seperti pada
+   *Menyiapkan Pi*.
+3. Boot ke konsol (atau hentikan desktop) agar `--drm` dapat mengambil alih layar; bila tidak,
+   workflow melakukan benchmark di luar layar dan menyebutkannya pada kolom `Backend` di laporan.
+
+Setiap proses membangun library native dengan `--pi4`, menjalankan setiap test terhadapnya dengan
+`LVGLNET_REQUIRE_NATIVE=1`, dan mengunggah `bench-pi4.json`.
 
 ## Kalibrasi sentuh
 

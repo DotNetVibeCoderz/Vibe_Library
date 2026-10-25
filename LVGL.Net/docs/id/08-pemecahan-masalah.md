@@ -17,13 +17,22 @@ export LVGLNET_NATIVE_PATH=/opt/lvglnet/liblvglnet.so    # berkas atau direktori
 
 ## "Native shim ABI *n* does not match the expected *m*"
 
-Assembly managed dan library native berasal dari commit yang berbeda. Bangun ulang sisi native.
+Assembly managed dan library native berasal dari commit yang berbeda - biasanya library yang
+dibangun sebelum perpindahan ke LVGL 9.6 (shim ABI 3) berdampingan dengan kode managed yang lebih baru
+(ABI 4). Bangun ulang sisi native; bila CMake mengeluh bahwa cache-nya milik direktori lain, bangun
+ulang dari bersih (`./native/build.ps1 -Clean`, atau hapus `native/build`).
 
 ## "The native library was built with LV_COLOR_DEPTH=16"
 
 LVGL.Net memerlukan warna 32-bit: backend menyalin word XRGB8888 mentah, dan build 16-bit akan
-menghasilkan tampilan kacau. Kembalikan `#define LV_COLOR_DEPTH 32` di `native/lv_conf.h` lalu
-bangun ulang.
+menghasilkan tampilan kacau. Kembalikan `#define LV_COLOR_FORMAT_DEFAULT LV_COLOR_FORMAT_XRGB8888`
+di `native/lv_conf.h` lalu bangun ulang.
+
+## Semua integration test "lulus" dalam sepersekian detik
+
+Test-test itu sebenarnya terlewati: tanpa library native yang dapat dimuat, setiap integration test
+berhenti lebih awal. Set `LVGLNET_REQUIRE_NATIVE=1` dan prosesnya justru gagal, disertai alasan
+mengapa library tidak termuat.
 
 ## `SDL_Init failed` / SDL2 tidak ditemukan
 
@@ -96,6 +105,12 @@ Pada backend buatan sendiri, sumbernya berformat XRGB8888: byte B, G, R, X pada 
 Backend framebuffer mendeteksi urutan kanal perangkat dan menukarnya bila perlu; backend tulisan
 tangan harus menyesuaikan dengan targetnya sendiri.
 
+## Grid chart berubah menjadi putih terang, atau setiap sampel punya titik
+
+Keduanya berubah di LVGL 9.5. Garis grid kini memakai gaya garis milik part **main** - warnai dengan
+`chart.SetLineColor(color)` alih-alih `LvPart.Items` - dan penanda titik digambar secara bawaan:
+`chart.SetPartSize(0, 0, LvPart.Indicator)` menghilangkannya.
+
 ## Chart tidak bergulir
 
 `UpdateMode` harus `Shift` untuk jendela bergulir. `Circular` menimpa di tempat, seperti sapuan
@@ -105,15 +120,31 @@ osiloskop.
 chart.UpdateMode = LvChartUpdateMode.Shift;
 ```
 
-## Preview designer kosong tetapi aplikasi tetap berjalan
+## Designer menampilkan "Preview offline" tetapi aplikasi tetap berjalan
 
-Wajar bila library native belum ada — panel di atas area preview menjelaskannya. Menyunting,
-menyimpan, dan mengekspor C# tidak memerlukan LVGL.
+Wajar bila library native belum ada — panel di papan desain menjelaskannya, dan status bar
+menampilkan *LVGL offline*. Menyunting, menyimpan, dan mengekspor C# tidak memerlukan LVGL.
+
+## Gambar atau font tidak tampil
+
+`UiBuilder.Diagnostics` (dan *things to check* di designer) mencantumkan setiap aset yang tidak dapat
+ditemukannya. Jalur aset di dalam layout relatif terhadap berkas layout; di dalam kode,
+`LvImageSource.FromFile` dan `LvFont.FromFile` melempar `FileNotFoundException` sebelum LVGL melihat
+jalurnya. Bila PNG tetap tidak tampil, pastikan berkas itu benar-benar PNG atau BMP - hanya kedua
+decoder itulah yang dikompilasi.
+
+## `DrmBackend`: "DRM_IOCTL_MODE_SETCRTC failed"
+
+Program lain sedang menguasai layar - biasanya desktop. Boot ke konsol atau hentikan display
+manager, atau pakai backend SDL selama desktop berjalan. "No DRM device has a connected display"
+berarti KMS mati (`dtoverlay=vc4-kms-v3d` di `/boot/firmware/config.txt`) atau panel tidak
+terhubung; backend framebuffer tetap bekerja dalam kasus itu.
 
 ## Handler event berjalan tetapi exception-nya hilang
 
-Ini disengaja: exception managed tidak boleh naik ke tumpukan C milik LVGL, jadi handler menelannya.
-Tangkap dan catat di dalam handler.
+Exception managed tidak boleh naik ke tumpukan C milik LVGL, jadi exception itu ditangkap di batas
+callback. Exception itu tidak hilang: berlanggananlah pada `LvglRuntime.CallbackFailed` untuk
+mencatatnya. Timer dan animasi juga melapor ke sana.
 
 ## CPU tinggi saat menganggur
 

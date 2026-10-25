@@ -16,6 +16,8 @@ No extra hardware and no extra packages. Sampling runs on a background thread, b
 those files touches the filesystem and a blocked render loop shows up immediately as a stuttering
 chart. Results reach the UI through `app.Post(...)`.
 
+![The dashboard, rendered off-screen with simulated sensors](../images/screenshots/raspi-dashboard.png)
+
 ## Prepare the Pi
 
 ```bash
@@ -45,14 +47,23 @@ Options:
 
 ```bash
 --sdl              # render into a window instead (needs a desktop session)
+--drm [device]     # DRM/KMS with page flipping - no tearing; needs the display to itself
 --simulate         # fake telemetry, for developing away from a Pi
 --fb /dev/fb1      # a different framebuffer device
 --interval 500     # sampling interval in ms
+--bench 30         # measure for 30 s and print a JSON report (see below)
+--headless         # render off-screen (with --bench, on a machine without a display)
+--screenshot a.png # render with simulated data and save a PNG
 ```
 
-Without `--sdl` the sample opens `/dev/fb0`, auto-detects a touch or mouse device, and falls back
-to an SDL window if the framebuffer is unavailable — so the same binary works over SSH with X
-forwarding and on the panel itself.
+Without `--sdl` or `--drm` the sample opens `/dev/fb0`, auto-detects a touch or mouse device, and
+falls back to an SDL window if the framebuffer is unavailable — so the same binary works over SSH
+with X forwarding and on the panel itself.
+
+**Prefer `--drm` on a console boot.** On current Raspberry Pi OS the display runs on the KMS driver
+and `/dev/fb0` is an emulation layer: drawing into it is visible as it happens and tears on
+movement. `--drm` renders into a hidden buffer and flips at vertical blank. It needs the display to
+itself, so with a desktop running on the same display, keep the framebuffer or SDL backend.
 
 ## Framebuffer notes
 
@@ -122,7 +133,7 @@ Defaults that matter on a Pi, and why:
 | Setting | Value | Reason |
 |---------|-------|--------|
 | `RenderMode` | `Partial` | Two small strips instead of two full-screen buffers |
-| `PartialBufferLines` | 32 in the sample | ~100 KiB total at 800×480 instead of ~1.5 MiB |
+| `PartialBufferLines` | 32 in the sample | 200 KiB (two 100 KiB strips) at 800×480 instead of 3 MiB for two full-screen buffers |
 | `ServerGarbageCollection` | off | Server GC costs memory for no benefit on a small board |
 | `ConcurrentGarbageCollection` | off | The background GC thread competes with rendering |
 | `LV_DRAW_SW_DRAW_UNIT_CNT` | 1 | Extra draw threads mostly add contention on four cores |
@@ -137,6 +148,56 @@ If a UI feels sluggish:
 3. Prefer solid backgrounds over gradients, and avoid large blurred shadows: both are expensive in
    software rendering.
 4. Increase `PartialBufferLines` if there is memory to spare — fewer, larger blits.
+
+## Measuring: `--bench`
+
+`--bench <seconds>` drives the dashboard flat out - simulated samples every 50 ms, so the gauges,
+labels and chart redraw continuously - and reports how it went:
+
+```bash
+dotnet run --project samples/LVGL.Raspi -c Release -- --drm --bench 30 --report bench.json
+```
+
+A measured report (an x64 desktop rendering off-screen with `--headless`, kept in
+`docs/benchmarks/dashboard-headless-windows-x64.json`):
+
+```json
+{
+  "Lvgl": "9.6.0",
+  "Backend": "HeadlessBackend",
+  "Width": 800,
+  "Height": 480,
+  "FramesPerSecond": 63.6,
+  "FrameMsMedian": 0.013,
+  "FrameMsP95": 1.538,
+  "FrameMsP99": 2.081,
+  "BytesAllocatedPerFrame": 53.2,
+  "Gen0Collections": 0,
+  "DrawBufferKiB": 200,
+  "WorkingSetMiB": 34.7
+}
+```
+
+Frame time is the time inside `RunFrame` - timers, layout, rendering and the blit - with the idle
+sleep excluded; a median near zero means most loop passes had nothing to redraw. The allocation
+figure is the dashboard's own label formatting: the render path itself allocates nothing, which a
+test enforces (`The_render_path_does_not_allocate`). These are not Pi numbers; the
+hardware-in-the-loop run below produces the Pi's own.
+
+## Hardware-in-the-loop
+
+`.github/workflows/lvgl-net-pi4.yml` runs the whole suite and the bench **on a real Pi 4**, weekly
+and on demand. It needs a self-hosted GitHub Actions runner on the Pi:
+
+1. On the Pi, follow GitHub's *Settings → Actions → Runners → New self-hosted runner* steps for
+   Linux ARM64, and give the runner the extra label `pi4`.
+2. Install it as a service (`sudo ./svc.sh install && sudo ./svc.sh start`) under a user in the
+   `video` and `input` groups, with CMake and a compiler installed as in *Prepare the Pi*.
+3. Boot to the console (or stop the desktop) so `--drm` can take the display; otherwise the
+   workflow benchmarks off-screen and says so in the report's `Backend` field.
+
+Each run builds the native library with `--pi4`, runs every test against it with
+`LVGLNET_REQUIRE_NATIVE=1`, and uploads `bench-pi4.json`.
 
 ## Touch calibration
 

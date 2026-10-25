@@ -15,4 +15,8 @@
     <ProjectReference Include="../LVGL.Net/LVGL.Net.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="LVGL.Net.Tests" />
+  </ItemGroup>
+
 </Project>

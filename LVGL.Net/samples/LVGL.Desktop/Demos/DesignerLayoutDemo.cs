@@ -14,7 +14,8 @@ namespace Lvgl.Samples.Desktop.Demos;
 /// </remarks>
 internal sealed class DesignerLayoutDemo : DemoPage
 {
-    private readonly UiBuilder _builder = new();
+    // One builder per visit: it owns the styles and fonts of the build, which go after the widgets.
+    private UiBuilder _builder = new();
     private LvLabel? _status;
     private int _clicks;
 
@@ -26,6 +27,7 @@ internal sealed class DesignerLayoutDemo : DemoPage
     {
         var document = LoadDocument(Math.Max(240, container.Width - 32));
 
+        _builder = new UiBuilder();
         _builder.Build(document, container);
 
         // Widgets are located by the Name given in the designer, which is also the field name the
@@ -131,5 +133,11 @@ internal sealed class DesignerLayoutDemo : DemoPage
         ],
     };
 
-    public override void Teardown() => _status = null;
+    public override void Teardown()
+    {
+        // The shell has already cleared the page, so the widgets are gone and the builder's
+        // styles can follow.
+        _status = null;
+        _builder.Dispose();
+    }
 }

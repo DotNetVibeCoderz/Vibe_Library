@@ -19,6 +19,12 @@ namespace Lvgl.Tests;
 /// When the native library has not been built, <see cref="IsAvailable"/> is false and the tests
 /// return early rather than failing: the suite must stay runnable on a machine without CMake.
 /// </para>
+/// <para>
+/// That leniency has a cost: a library that is present but broken (an ABI mismatch, a failed
+/// <c>lv_init</c>) would also turn every integration test into a silent pass. Setting
+/// <c>LVGLNET_REQUIRE_NATIVE=1</c> - as CI does, because it builds the library first - makes an
+/// unavailable LVGL fail the run instead.
+/// </para>
 /// </remarks>
 public sealed class LvglFixture : IDisposable
 {
@@ -41,6 +47,28 @@ public sealed class LvglFixture : IDisposable
         _thread = new Thread(Pump) { IsBackground = true, Name = "lvgl-test" };
         _thread.Start();
         _ready.Wait(TimeSpan.FromSeconds(30));
+    }
+
+    /// <summary>
+    /// True when <c>LVGLNET_REQUIRE_NATIVE</c> asks for an unavailable LVGL to fail the run.
+    /// </summary>
+    public static bool NativeRequired =>
+        Environment.GetEnvironmentVariable("LVGLNET_REQUIRE_NATIVE") is "1" or "true";
+
+    /// <summary>
+    /// Whether a test should skip itself. Throws instead when the native library is required, so
+    /// a broken build cannot pass as a skipped one.
+    /// </summary>
+    public bool ShouldSkip()
+    {
+        if (IsAvailable) return false;
+        if (NativeRequired)
+        {
+            throw new InvalidOperationException(
+                $"LVGLNET_REQUIRE_NATIVE is set but LVGL is not available: {UnavailableReason}");
+        }
+
+        return true;
     }
 
     /// <summary>False when the native library is missing or failed to start.</summary>
@@ -185,6 +213,33 @@ public sealed class LvglFixture : IDisposable
             for (var i = 0; i < 4; i++) { Application.RunFrame(); Thread.Sleep(5); }
         });
     }
+
+    /// <summary>Presses and releases the pointer at a point, pumping frames so LVGL sees both.</summary>
+    public void ClickAt(int x, int y) => Invoke(() =>
+    {
+        Backend.SetPointer(x, y, pressed: true);
+        for (var i = 0; i < 5; i++) { Application.RunFrame(); Thread.Sleep(10); }
+
+        Backend.SetPointer(x, y, pressed: false);
+        for (var i = 0; i < 5; i++) { Application.RunFrame(); Thread.Sleep(10); }
+    });
+
+    /// <summary>
+    /// Runs the loop for at least <paramref name="milliseconds"/> of real time. Animations and
+    /// timers advance on LVGL's tick, which the run loop feeds from a wall clock, so they need
+    /// time to pass rather than a number of frames.
+    /// </summary>
+    public void Pump(int milliseconds) => Invoke(() =>
+    {
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        while (clock.ElapsedMilliseconds < milliseconds)
+        {
+            Application.RunFrame();
+            Thread.Sleep(5);
+        }
+
+        Application.RunFrame();
+    });
 
     /// <summary>Reads one pixel of the rendered surface as a packed 0xRRGGBB value.</summary>
     public uint PixelAt(int x, int y)

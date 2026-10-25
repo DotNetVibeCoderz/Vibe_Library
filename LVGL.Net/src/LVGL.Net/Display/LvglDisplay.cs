@@ -127,6 +127,17 @@ public sealed unsafe class LvglDisplay : IDisposable
     /// <summary>Number of regions flushed since creation. Useful when profiling redraw churn.</summary>
     public long FlushCount { get; private set; }
 
+    /// <summary>
+    /// Renders everything that is invalid right now, instead of at the next refresh tick - for a
+    /// screenshot taken straight after a change, or for measuring a redraw on its own.
+    /// </summary>
+    public void RefreshNow()
+    {
+        LvglRuntime.EnsureUiThread();
+        LvglNative.lv_refr_now(Handle);
+        ThrowPendingCallbackException();
+    }
+
     public void Dispose()
     {
         if (_disposed) return;

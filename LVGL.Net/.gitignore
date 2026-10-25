@@ -20,3 +20,6 @@ artifacts/
 # Test output
 TestResults/
 *.trx
+
+# Benchmark output
+BenchmarkDotNet.Artifacts/

@@ -49,8 +49,18 @@ public sealed class LvglDesignPlugin
         builder.AppendLine(
             """
             Every widget also accepts: Name (a valid C# identifier, unique in the document),
-            X, Y, Width, Height, Align, BackgroundColor, TextColor, BorderColor, BorderWidth,
-            Radius, Padding, FontSize, Hidden, and Children (Panel only).
+            X, Y, Width, Height, Align, BackgroundColor, TextColor, BorderColor, AccentColor,
+            BorderWidth, Radius, Padding, FontSize, Hidden, Styles (names of shared styles), and
+            Children (Panel, Tab and Tile only).
+
+            STRUCTURE - tabs and tiles:
+              * A TabView's Children must all be Tab nodes; put the widgets inside the tabs.
+              * A TileView's Children must all be Tile nodes, each with a unique Column/Row.
+              * Tabs and tiles are sized by their host; give them no X, Y, Width or Height.
+
+            SHARED STYLES: the document may have "Styles": [{"Name": "Card", "BackgroundColor":
+            "#1A2430", "Radius": 12, ...}] and a node opts in with "Styles": ["Card"]. Use them
+            when several widgets share a look; a node's own properties override its styles.
 
             POSITIONING - the one thing to get right:
               * WITHOUT Align, X and Y are absolute coordinates from the top left.
@@ -187,6 +197,7 @@ public sealed class LvglDesignPlugin
         var builder = new StringBuilder();
 
         builder.AppendLine("using Lvgl;");
+        builder.AppendLine("using Lvgl.Events;");
         builder.AppendLine("using Lvgl.Widgets;");
         builder.AppendLine();
 
@@ -235,8 +246,10 @@ public sealed class LvglDesignPlugin
     {
         UiWidgetType.Button => $"{node.Name}.Clicked += On{node.Name}Clicked;",
         UiWidgetType.Slider or UiWidgetType.Arc or UiWidgetType.Switch or UiWidgetType.Checkbox
-            or UiWidgetType.Dropdown or UiWidgetType.Roller =>
+            or UiWidgetType.Dropdown or UiWidgetType.Roller or UiWidgetType.TabView
+            or UiWidgetType.TileView or UiWidgetType.Spinbox =>
             $"{node.Name}.ValueChanged += On{node.Name}Changed;",
+        UiWidgetType.Keyboard => $"{node.Name}.AddHandler(LvEventCode.Ready, On{node.Name}Ready);",
         _ => null,
     };
 
@@ -271,6 +284,22 @@ public sealed class LvglDesignPlugin
             UiWidgetType.Roller =>
                 $"    private void On{node.Name}Changed(object? sender, LvEventArgs e)\n" +
                 $"    {{\n        var selected = {node.Name}.SelectedOption;\n        // TODO: react to the selection.\n    }}\n",
+
+            UiWidgetType.TabView =>
+                $"    private void On{node.Name}Changed(object? sender, LvEventArgs e)\n" +
+                $"    {{\n        var tab = {node.Name}.ActiveTab;\n        // TODO: react to the tab change.\n    }}\n",
+
+            UiWidgetType.TileView =>
+                $"    private void On{node.Name}Changed(object? sender, LvEventArgs e)\n" +
+                $"    {{\n        var tile = {node.Name}.ActiveTile;\n        // TODO: react to the swipe.\n    }}\n",
+
+            UiWidgetType.Spinbox =>
+                $"    private void On{node.Name}Changed(object? sender, LvEventArgs e)\n" +
+                $"    {{\n        var value = {node.Name}.Value;\n        // TODO: use the new value.\n    }}\n",
+
+            UiWidgetType.Keyboard =>
+                $"    private void On{node.Name}Ready(object? sender, LvEventArgs e)\n" +
+                $"    {{\n        var text = {node.Name}.TextArea?.Text;\n        // TODO: the user pressed OK.\n    }}\n",
 
             _ => null,
         };
@@ -410,7 +439,7 @@ public sealed class LvglDesignPlugin
 
     private static string DescribeType(UiWidgetType type) => type switch
     {
-        UiWidgetType.Panel => "container; the only type that accepts Children",
+        UiWidgetType.Panel => "container for other widgets (Children)",
         UiWidgetType.Label => "text; uses Text and FontSize",
         UiWidgetType.Button => "button; uses Text, and Value=1 for a latching toggle",
         UiWidgetType.Slider => "draggable slider; uses Minimum, Maximum, Value",
@@ -421,7 +450,19 @@ public sealed class LvglDesignPlugin
         UiWidgetType.Dropdown => "drop-down list; uses Options",
         UiWidgetType.Roller => "scrolling picker, good for touch; uses Options",
         UiWidgetType.TextArea => "editable text field; uses Text",
-        UiWidgetType.Chart => "line/bar/scatter chart; uses ChartType, PointCount, Minimum, Maximum, SeriesColors",
+        UiWidgetType.Chart => "line/curve/bar/stacked/scatter chart; uses ChartType, PointCount, Minimum, Maximum, SeriesColors",
+        UiWidgetType.Image => "picture; uses Source (an image file next to the layout, PNG or BMP) or Symbol (an LvSymbols name such as Wifi, Ok, Warning), Rotation (tenths of a degree), ImageScale (256 = 100%)",
+        UiWidgetType.TabView => "tabbed pages; Children must be Tab nodes; TabBarPosition is Top, Bottom, Left or Right",
+        UiWidgetType.Tab => "one page of a TabView; Text is the tab title; holds Children",
+        UiWidgetType.List => "scrolling menu; Options are buttons, an option starting with # is a section heading",
+        UiWidgetType.TileView => "swipeable full-size pages; Children must be Tile nodes",
+        UiWidgetType.Tile => "one page of a TileView at Column, Row; holds Children",
+        UiWidgetType.Keyboard => "on-screen keyboard; Target is the Name of the TextArea it types into; KeyboardMode is TextLower, TextUpper, Special or Number",
+        UiWidgetType.Spinner => "busy indicator; AccentColor colours the moving arc",
+        UiWidgetType.Led => "status light; AccentColor is its colour, Value its brightness 0-255",
+        UiWidgetType.Scale => "ticks and labels; ScaleMode (HorizontalBottom, RoundInner for a gauge face, ...), Minimum, Maximum, TickCount, MajorTickEvery",
+        UiWidgetType.Table => "grid of text; each Option is a row, cells separated by |",
+        UiWidgetType.Spinbox => "numeric field; Minimum, Maximum, Value, Digits, DecimalPlaces",
         _ => "widget",
     };
 

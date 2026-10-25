@@ -6,7 +6,7 @@
 |-----------|---------|
 | .NET SDK 10.0 | `dotnet --version` harus menampilkan 10.x |
 | CMake 3.20+ dan compiler C | Hanya diperlukan untuk membangun library native |
-| Git | Proses build native mengkloning LVGL v9 |
+| Git | Proses build native mengkloning LVGL v9.6 |
 | SDL2 | Hanya untuk backend SDL (jendela desktop) |
 
 Di Windows, perkakas C kemungkinan besar sudah tersedia: instalasi Visual Studio dengan workload
@@ -44,9 +44,9 @@ LVGL adalah library C, jadi ada satu langkah kompilasi sebelum kode managed dapa
 ./native/build.ps1         # Windows
 ```
 
-Perintah ini mengunduh LVGL v9 ke `native/lvgl`, mengompilasinya bersama shim ABI di `native/shim`,
-lalu menempatkan hasilnya di `runtimes/<rid>/native/`. Proyek managed mengambilnya dari sana secara
-otomatis — tidak ada yang perlu disalin manual.
+Perintah ini mengunduh LVGL v9.6 ke `native/lvgl`, mengompilasinya bersama shim ABI di
+`native/shim`, lalu menempatkan hasilnya di `runtimes/<rid>/native/`. Proyek managed mengambilnya
+dari sana secara otomatis — tidak ada yang perlu disalin manual.
 
 Langkah ini hanya perlu diulang saat Anda mengubah `native/lv_conf.h`, mengubah shim, atau berpindah
 versi LVGL.
@@ -60,6 +60,9 @@ dotnet test  LVGL.Net.slnx
 
 Test sengaja **tidak** memerlukan library native, sehingga `dotnet test` tetap berjalan di mesin
 tanpa CMake. Test yang membutuhkan LVGL akan memeriksa ketersediaannya dan berhenti lebih awal.
+Setelah library tersebut dibangun, set `LVGLNET_REQUIRE_NATIVE=1` untuk mematikan kelonggaran itu:
+LVGL yang gagal dimuat kemudian menggagalkan proses test, alih-alih diam-diam melewati setiap
+integration test - CI berjalan dengan cara ini.
 
 ## Jendela pertama Anda
 
@@ -99,20 +102,33 @@ Tiga hal yang perlu diperhatikan:
 dotnet run --project samples/LVGL.Desktop                    # peramban komponen
 dotnet run --project samples/LVGL.Desktop -- --width 1280 --height 720
 dotnet run --project samples/LVGL.Raspi -- --sdl --simulate  # dasbor, sensor palsu, dalam jendela
+dotnet run --project tools/LVGL.Designer                     # designer visual
 ```
+
+![Halaman Controls pada contoh desktop](../images/screenshots/desktop-02-controls.png)
 
 Untuk memeriksa keseluruhan tumpukan tanpa harus mengamati jendela — berguna di CI — render
 sejumlah frame tetap lalu keluar:
 
 ```bash
 dotnet run --project samples/LVGL.Desktop -- --frames 120 --no-vsync
-# LVGL 9.2.2  |  1024x600  |  draw buffers 480 KiB
-# Rendered 120 frames in 224 ms (14 region flushes)
+# LVGL 9.6.0  |  1024x600  |  draw buffers 480 KiB
+# Rendered 120 frames in 227 ms (10 region flushes)
 ```
 
 Kode keluar bukan-nol berarti tidak ada region yang pernah di-flush, alias tidak ada yang tergambar.
+
+Kedua contoh juga dapat merender di luar layar ke file PNG - tanpa jendela, dan tanpa SDL. Begitulah
+screenshot dalam dokumen-dokumen ini dibuat:
+
+```bash
+dotnet run --project samples/LVGL.Desktop -- --screenshots out/        # satu PNG per halaman
+dotnet run --project samples/LVGL.Raspi -- --screenshot out/pi.png     # dasbor
+```
 
 ## Selanjutnya
 
 - [Arsitektur](02-arsitektur.md) — mengapa wrapper ini dirancang seperti ini
 - [Widget dan styling](04-widget.md) — API sehari-hari
+- [Referensi API](../api/README.md) — setiap tipe dan member publik, dihasilkan dari kode (bahasa
+  Inggris)

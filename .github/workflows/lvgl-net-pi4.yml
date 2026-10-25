@@ -1,0 +1,77 @@
+# Hardware-in-the-loop run of LVGL.Net on a real Raspberry Pi 4.
+#
+# Runs on a self-hosted runner registered on the Pi itself with the labels
+# [self-hosted, linux, ARM64, pi4] - see LVGL.Net/docs/en/07-raspberry-pi.md, "Hardware-in-the-loop".
+# It builds the native library tuned for the Cortex-A72, runs every test against it, and benchmarks
+# the dashboard on the real display (DRM/KMS when the display is free, otherwise off-screen), so the
+# Pi figures in Progress.md come from a repeatable run instead of a hand measurement.
+name: LVGL.Net Pi 4
+
+on:
+  workflow_dispatch:
+    inputs:
+      seconds:
+        description: Bench duration in seconds
+        default: '30'
+  schedule:
+    - cron: '0 3 * * 1'   # Mondays 03:00 UTC
+
+concurrency:
+  group: lvgl-net-pi4
+  cancel-in-progress: false
+
+defaults:
+  run:
+    working-directory: LVGL.Net
+
+jobs:
+  pi4:
+    runs-on: [self-hosted, linux, ARM64, pi4]
+    timeout-minutes: 90
+    env:
+      LVGLNET_REQUIRE_NATIVE: '1'
+      DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: LVGL.Net/global.json
+
+      - name: Build native library (Cortex-A72)
+        run: bash ./native/build.sh --pi4
+
+      - name: Build
+        run: |
+          dotnet build src/LVGL.Net.Linux -c Release
+          dotnet build samples/LVGL.Raspi -c Release
+          dotnet build tests/LVGL.Net.Tests -c Release
+
+      - name: Test
+        run: dotnet test tests/LVGL.Net.Tests -c Release --no-build --logger "trx;LogFileName=pi4-results.trx"
+
+      - name: Bench on the display
+        run: |
+          mkdir -p artifacts
+          seconds="${{ github.event.inputs.seconds || '30' }}"
+          # DRM needs the display to itself; with a desktop on it, measure off-screen instead
+          # and say so in the report's Backend field.
+          if dotnet run --project samples/LVGL.Raspi -c Release --no-build -- \
+               --drm --bench "$seconds" --report artifacts/bench-pi4.json; then
+            echo "Benchmarked on DRM/KMS."
+          else
+            dotnet run --project samples/LVGL.Raspi -c Release --no-build -- \
+              --headless --bench "$seconds" --report artifacts/bench-pi4.json
+          fi
+          cat artifacts/bench-pi4.json
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lvgl-net-pi4
+          path: |
+            LVGL.Net/tests/**/TestResults/*.trx
+            LVGL.Net/artifacts/bench-pi4.json
+          if-no-files-found: ignore

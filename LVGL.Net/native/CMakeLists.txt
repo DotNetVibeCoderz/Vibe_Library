@@ -23,7 +23,7 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
 endif()
 
 option(LVGLNET_WITH_DEMOS "Compile the bundled LVGL demos (widgets, benchmark)" ON)
-set(LVGL_TAG "v9.2.2" CACHE STRING "Git tag of the LVGL release to build against")
+set(LVGL_TAG "v9.6.0" CACHE STRING "Git tag of the LVGL release to build against")
 
 # ---------------------------------------------------------------------------
 # LVGL sources

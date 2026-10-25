@@ -64,7 +64,8 @@ public static class AssistantKernelFactory
                     modelId: settings.Model,
                     maxTokens: options.MaxTokens,
                     temperature: options.Temperature,
-                    maxToolIterations: options.MaxToolIterations);
+                    maxToolIterations: options.MaxToolIterations,
+                    workspaceId: settings.ResolveWorkspaceId());
 
                 notice = service.TemperatureNotice;
                 builder.Services.AddSingleton<IChatCompletionService>(service);

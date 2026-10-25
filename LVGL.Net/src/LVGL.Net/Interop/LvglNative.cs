@@ -52,6 +52,13 @@ internal static unsafe partial class LvglNative
     [LibraryImport(Library)]
     internal static partial int lvn_coord_max();
 
+    /// <summary>
+    /// Value of a named LVGL enum constant (e.g. <c>"LV_STATE_CHECKED"</c>), or
+    /// <see cref="int.MinValue"/> when unknown. Used by the tests to verify the managed mirrors.
+    /// </summary>
+    [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int lvn_constant(string name);
+
     /// <summary>LVGL's own <c>LV_PCT</c>, used to verify the managed reimplementation.</summary>
     [LibraryImport(Library)]
     internal static partial int lv_pct(int value);
@@ -96,6 +103,10 @@ internal static unsafe partial class LvglNative
     [LibraryImport(Library)]
     internal static partial void lv_display_flush_ready(nint display);
 
+    /// <summary>Renders every pending invalid area now, without waiting for the refresh timer.</summary>
+    [LibraryImport(Library)]
+    internal static partial void lv_refr_now(nint display);
+
     [LibraryImport(Library)]
     [return: MarshalAs(UnmanagedType.U1)]
     internal static partial bool lv_display_flush_is_last(nint display);
@@ -126,6 +137,9 @@ internal static unsafe partial class LvglNative
 
     [LibraryImport(Library)]
     internal static partial void lvn_area_get(nint area, int* x1, int* y1, int* x2, int* y2);
+
+    [LibraryImport(Library)]
+    internal static partial void lvn_obj_get_coords(nint obj, int* x1, int* y1, int* x2, int* y2);
 
     #endregion
 
@@ -229,6 +243,12 @@ internal static unsafe partial class LvglNative
     [LibraryImport(Library)]
     internal static partial void lv_obj_update_layout(nint obj);
 
+    [LibraryImport(Library)]
+    internal static partial int lv_obj_get_index(nint obj);
+
+    [LibraryImport(Library)]
+    internal static partial void lv_obj_move_to_index(nint obj, int index);
+
     #endregion
 
     #region Geometry
@@ -287,14 +307,14 @@ internal static unsafe partial class LvglNative
     internal static partial bool lv_obj_has_flag(nint obj, uint flag);
 
     [LibraryImport(Library)]
-    internal static partial void lv_obj_add_state(nint obj, ushort state);
+    internal static partial void lv_obj_add_state(nint obj, uint state);
 
     [LibraryImport(Library)]
-    internal static partial void lv_obj_remove_state(nint obj, ushort state);
+    internal static partial void lv_obj_remove_state(nint obj, uint state);
 
     [LibraryImport(Library)]
     [return: MarshalAs(UnmanagedType.U1)]
-    internal static partial bool lv_obj_has_state(nint obj, ushort state);
+    internal static partial bool lv_obj_has_state(nint obj, uint state);
 
     [LibraryImport(Library)]
     internal static partial void lv_obj_set_flex_flow(nint obj, int flow);
@@ -337,6 +357,12 @@ internal static unsafe partial class LvglNative
 
     [LibraryImport(Library)]
     internal static partial void lv_obj_set_style_line_width(nint obj, int width, uint selector);
+
+    [LibraryImport(Library)]
+    internal static partial void lv_obj_set_style_width(nint obj, int width, uint selector);
+
+    [LibraryImport(Library)]
+    internal static partial void lv_obj_set_style_height(nint obj, int height, uint selector);
 
     [LibraryImport(Library)]
     internal static partial void lv_obj_set_style_arc_width(nint obj, int width, uint selector);
@@ -473,7 +499,7 @@ internal static unsafe partial class LvglNative
     internal static partial nint lv_slider_create(nint parent);
 
     [LibraryImport(Library)]
-    internal static partial void lv_slider_set_value(nint obj, int value, int animEnable);
+    internal static partial void lv_slider_set_value(nint obj, int value, [MarshalAs(UnmanagedType.U1)] bool animate);
 
     [LibraryImport(Library)]
     internal static partial int lv_slider_get_value(nint obj);
@@ -485,7 +511,7 @@ internal static unsafe partial class LvglNative
     internal static partial nint lv_bar_create(nint parent);
 
     [LibraryImport(Library)]
-    internal static partial void lv_bar_set_value(nint obj, int value, int animEnable);
+    internal static partial void lv_bar_set_value(nint obj, int value, [MarshalAs(UnmanagedType.U1)] bool animate);
 
     [LibraryImport(Library)]
     internal static partial int lv_bar_get_value(nint obj);
@@ -566,19 +592,19 @@ internal static unsafe partial class LvglNative
     internal static partial void lv_chart_set_point_count(nint obj, uint count);
 
     [LibraryImport(Library)]
-    internal static partial void lv_chart_set_range(nint obj, int axis, int min, int max);
+    internal static partial void lv_chart_set_axis_range(nint obj, int axis, int min, int max);
 
     [LibraryImport(Library)]
     internal static partial void lv_chart_set_update_mode(nint obj, int mode);
 
     [LibraryImport(Library)]
-    internal static partial void lv_chart_set_div_line_count(nint obj, byte hDiv, byte vDiv);
+    internal static partial void lv_chart_set_div_line_count(nint obj, uint hDiv, uint vDiv);
 
     [LibraryImport(Library)]
     internal static partial void lv_chart_set_next_value(nint obj, nint series, int value);
 
     [LibraryImport(Library)]
-    internal static partial void lv_chart_set_all_value(nint obj, nint series, int value);
+    internal static partial void lv_chart_set_all_values(nint obj, nint series, int value);
 
     [LibraryImport(Library)]
     internal static partial void lv_chart_refresh(nint obj);
@@ -588,6 +614,368 @@ internal static unsafe partial class LvglNative
 
     [LibraryImport(Library)]
     internal static partial nint lvn_chart_add_series(nint chart, uint rgb, int axis);
+
+    #endregion
+
+    #region Widgets - containers and navigation
+
+    [LibraryImport(Library)]
+    internal static partial nint lv_tabview_create(nint parent);
+
+    [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial nint lv_tabview_add_tab(nint obj, string name);
+
+    [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void lv_tabview_set_tab_text(nint obj, uint index, string name);
+
+    [LibraryImport(Library)]
+    internal static partial void lv_tabview_set_active(nint obj, uint index, [MarshalAs(UnmanagedType.U1)] bool animate);
+
+    [LibraryImport(Library)]
+    internal static partial uint lv_tabview_get_tab_active(nint obj);
+
+    [LibraryImport(Library)]
+    internal static partial uint lv_tabview_get_tab_count(nint obj);
+
+    [LibraryImport(Library)]
+    internal static partial void lv_tabview_set_tab_bar_position(nint obj, int direction);
+
+    [LibraryImport(Library)]
+    internal static partial void lv_tabview_set_tab_bar_size(nint obj, int size);
+
+    [LibraryImport(Library)]
+    internal static partial nint lv_tabview_get_content(nint obj);
+
+    [LibraryImport(Library)]
+    internal static partial nint lv_tabview_get_tab_bar(nint obj);
+
+    [LibraryImport(Library)]
+    internal static partial nint lv_list_create(nint parent);
+
+    [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial nint lv_list_add_text(nint list, string text);
+
+    [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial nint lv_list_add_button(nint list, string? icon, string text);
+
+    [LibraryImport(Library)]
+    internal static partial nint lv_list_get_button_text(nint list, nint button);
+
+    [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void lv_list_set_button_text(nint list, nint button, string text);
+
+    [LibraryImport(Library)]
+    internal static partial nint lv_msgbox_create(nint parent);
+
+    [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial nint lv_msgbox_add_title(nint obj, string title);
+
+    [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial nint lv_msgbox_add_text(nint obj, string text);
+
+    [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial nint lv_msgbox_add_footer_button(nint obj, string text);
+
+    [LibraryImport(Library)]
+    internal static partial nint lv_msgbox_add_close_button(nint obj);
+
+    [LibraryImport(Library)]
+    internal static partial nint lv_msgbox_get_content(nint obj);
+
+    [LibraryImport(Library)]
+    internal static partial void lv_msgbox_close(nint obj);
+
+    [LibraryImport(Library)]
+    internal static partial nint lv_tileview_create(nint parent);
+
+    [LibraryImport(Library)]
+    internal static partial nint lv_tileview_add_tile(nint obj, byte column, byte row, int direction);
+
+    [LibraryImport(Library)]
+    internal static partial void lv_tileview_set_tile_by_index(nint obj, uint column, uint row, [MarshalAs(UnmanagedType.U1)] bool animate);
+
+    [LibraryImport(Library)]
+    internal static partial nint lv_tileview_get_tile_active(nint obj);
+
+    [LibraryImport(Library)]
+    internal static partial nint lv_keyboard_create(nint parent);
+
+    [LibraryImport(Library)]
+    internal static partial void lv_keyboard_set_textarea(nint obj, nint textArea);
+
+    [LibraryImport(Library)]
+    internal static partial nint lv_keyboard_get_textarea(nint obj);
+
+    [LibraryImport(Library)]
+    internal static partial void lv_keyboard_set_mode(nint obj, int mode);
+
+    [LibraryImport(Library)]
+    internal static partial int lv_keyboard_get_mode(nint obj);
+
+    [LibraryImport(Library)]
+    internal static partial void lv_keyboard_set_popovers(nint obj, [MarshalAs(UnmanagedType.U1)] bool enabled);
+
+    #endregion
+
+    #region Widgets - indicators
+
+    [LibraryImport(Library)]
+    internal static partial nint lv_spinner_create(nint parent);
+
+    [LibraryImport(Library)]
+    internal static partial void lv_spinner_set_anim_params(nint obj, uint durationMs, uint arcSweep);
+
+    [LibraryImport(Library)]
+    internal static partial uint lv_spinner_get_anim_duration(nint obj);
+
+    [LibraryImport(Library)]
+    internal static partial uint lv_spinner_get_arc_sweep(nint obj);
+
+    [LibraryImport(Library)]
+    internal static partial nint lv_led_create(nint parent);
+
+    [LibraryImport(Library)]
+    internal static partial void lvn_led_set_color(nint obj, uint rgb);
+
+    [LibraryImport(Library)]
+    internal static partial void lv_led_set_brightness(nint obj, byte brightness);
+
+    [LibraryImport(Library)]
+    internal static partial byte lv_led_get_brightness(nint obj);
+
+    [LibraryImport(Library)]
+    internal static partial void lv_led_on(nint obj);
+
+    [LibraryImport(Library)]
+    internal static partial void lv_led_off(nint obj);
+
+    [LibraryImport(Library)]
+    internal static partial void lv_led_toggle(nint obj);
+
+    [LibraryImport(Library)]
+    internal static partial nint lv_scale_create(nint parent);
+
+    [LibraryImport(Library)]
+    internal static partial void lv_scale_set_mode(nint obj, int mode);
+
+    [LibraryImport(Library)]
+    internal static partial void lv_scale_set_range(nint obj, int min, int max);
+
+    [LibraryImport(Library)]
+    internal static partial void lv_scale_set_total_tick_count(nint obj, uint count);
+
+    [LibraryImport(Library)]
+    internal static partial void lv_scale_set_major_tick_every(nint obj, uint every);
+
+    [LibraryImport(Library)]
+    internal static partial void lv_scale_set_label_show(nint obj, [MarshalAs(UnmanagedType.U1)] bool show);
+
+    [LibraryImport(Library)]
+    internal static partial void lv_scale_set_angle_range(nint obj, uint degrees);
+
+    [LibraryImport(Library)]
+    internal static partial void lv_scale_set_rotation(nint obj, int degrees);
+
+    [LibraryImport(Library)]
+    internal static partial int lv_scale_get_mode(nint obj);
+
+    [LibraryImport(Library)]
+    internal static partial int lv_scale_get_total_tick_count(nint obj);
+
+    [LibraryImport(Library)]
+    internal static partial int lv_scale_get_major_tick_every(nint obj);
+
+    [LibraryImport(Library)]
+    internal static partial int lv_scale_get_range_min_value(nint obj);
+
+    [LibraryImport(Library)]
+    internal static partial int lv_scale_get_range_max_value(nint obj);
+
+    [LibraryImport(Library)]
+    internal static partial nint lv_table_create(nint parent);
+
+    [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void lv_table_set_cell_value(nint obj, uint row, uint column, string text);
+
+    [LibraryImport(Library)]
+    internal static partial nint lv_table_get_cell_value(nint obj, uint row, uint column);
+
+    [LibraryImport(Library)]
+    internal static partial void lv_table_set_row_count(nint obj, uint rows);
+
+    [LibraryImport(Library)]
+    internal static partial void lv_table_set_column_count(nint obj, uint columns);
+
+    [LibraryImport(Library)]
+    internal static partial uint lv_table_get_row_count(nint obj);
+
+    [LibraryImport(Library)]
+    internal static partial uint lv_table_get_column_count(nint obj);
+
+    [LibraryImport(Library)]
+    internal static partial void lv_table_set_column_width(nint obj, uint column, int width);
+
+    [LibraryImport(Library)]
+    internal static partial int lv_table_get_column_width(nint obj, uint column);
+
+    [LibraryImport(Library)]
+    internal static partial nint lv_spinbox_create(nint parent);
+
+    [LibraryImport(Library)]
+    internal static partial void lv_spinbox_set_value(nint obj, int value);
+
+    [LibraryImport(Library)]
+    internal static partial int lv_spinbox_get_value(nint obj);
+
+    [LibraryImport(Library)]
+    internal static partial void lv_spinbox_set_range(nint obj, int min, int max);
+
+    [LibraryImport(Library)]
+    internal static partial void lv_spinbox_set_digit_format(nint obj, uint digitCount, uint separatorPosition);
+
+    [LibraryImport(Library)]
+    internal static partial void lv_spinbox_set_step(nint obj, uint step);
+
+    [LibraryImport(Library)]
+    internal static partial int lv_spinbox_get_step(nint obj);
+
+    [LibraryImport(Library)]
+    internal static partial void lv_spinbox_set_rollover(nint obj, [MarshalAs(UnmanagedType.U1)] bool rollover);
+
+    [LibraryImport(Library)]
+    internal static partial void lv_spinbox_increment(nint obj);
+
+    [LibraryImport(Library)]
+    internal static partial void lv_spinbox_decrement(nint obj);
+
+    #endregion
+
+    #region Images
+
+    [LibraryImport(Library)]
+    internal static partial nint lv_image_create(nint parent);
+
+    /// <summary>Sets a descriptor (<c>lv_image_dsc_t*</c>) as the source.</summary>
+    [LibraryImport(Library)]
+    internal static partial void lv_image_set_src(nint obj, nint source);
+
+    /// <summary>
+    /// Sets a file path (<c>"A:..."</c>) or a symbol string as the source. LVGL tells the two
+    /// apart by the first byte and copies the string, so it need not outlive the call.
+    /// </summary>
+    [LibraryImport(Library, EntryPoint = "lv_image_set_src", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void lv_image_set_src_text(nint obj, string source);
+
+    [LibraryImport(Library)]
+    internal static partial void lv_image_set_rotation(nint obj, int angleTenths);
+
+    [LibraryImport(Library)]
+    internal static partial int lv_image_get_rotation(nint obj);
+
+    [LibraryImport(Library)]
+    internal static partial void lv_image_set_scale(nint obj, uint scale);
+
+    [LibraryImport(Library)]
+    internal static partial int lv_image_get_scale(nint obj);
+
+    [LibraryImport(Library)]
+    internal static partial void lv_image_set_pivot(nint obj, int x, int y);
+
+    [LibraryImport(Library)]
+    internal static partial void lv_image_set_inner_align(nint obj, int align);
+
+    [LibraryImport(Library)]
+    internal static partial void lv_image_set_antialias(nint obj, [MarshalAs(UnmanagedType.U1)] bool antialias);
+
+    [LibraryImport(Library)]
+    internal static partial int lv_image_get_src_width(nint obj);
+
+    [LibraryImport(Library)]
+    internal static partial int lv_image_get_src_height(nint obj);
+
+    [LibraryImport(Library)]
+    internal static partial nint lvn_image_dsc_create(uint width, uint height, uint colorFormat, uint stride, void* data, uint dataSize);
+
+    [LibraryImport(Library)]
+    internal static partial void lvn_image_dsc_delete(nint descriptor);
+
+    [LibraryImport(Library)]
+    internal static partial void lvn_obj_set_style_image_recolor(nint obj, uint rgb, uint selector);
+
+    [LibraryImport(Library)]
+    internal static partial void lv_obj_set_style_image_recolor_opa(nint obj, byte opa, uint selector);
+
+    #endregion
+
+    #region Fonts
+
+    [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial nint lv_tiny_ttf_create_file(string path, int fontSize);
+
+    [LibraryImport(Library)]
+    internal static partial nint lv_tiny_ttf_create_data(void* data, nuint dataSize, int fontSize);
+
+    [LibraryImport(Library)]
+    internal static partial void lv_tiny_ttf_set_size(nint font, int fontSize);
+
+    [LibraryImport(Library)]
+    internal static partial void lv_tiny_ttf_destroy(nint font);
+
+    #endregion
+
+    #region Animations and timers
+
+    [LibraryImport(Library)]
+    internal static partial void lvn_anim_set_callbacks(
+        delegate* unmanaged[Cdecl]<nint, int, void> exec,
+        delegate* unmanaged[Cdecl]<nint, void> completed,
+        delegate* unmanaged[Cdecl]<nint, void> deleted);
+
+    [LibraryImport(Library)]
+    internal static partial int lvn_anim_start(
+        nint id, int start, int end, uint duration, uint delay, uint reverseDuration, uint reverseDelay,
+        uint repeatCount, uint repeatDelay, int path, byte earlyApply);
+
+    [LibraryImport(Library)]
+    internal static partial int lvn_anim_stop(nint id);
+
+    [LibraryImport(Library)]
+    internal static partial nint lv_timer_create(delegate* unmanaged[Cdecl]<nint, void> callback, uint periodMs, void* userData);
+
+    [LibraryImport(Library)]
+    internal static partial void lv_timer_delete(nint timer);
+
+    [LibraryImport(Library)]
+    internal static partial void* lv_timer_get_user_data(nint timer);
+
+    [LibraryImport(Library)]
+    internal static partial void lv_timer_pause(nint timer);
+
+    [LibraryImport(Library)]
+    internal static partial void lv_timer_resume(nint timer);
+
+    [LibraryImport(Library)]
+    internal static partial void lv_timer_ready(nint timer);
+
+    [LibraryImport(Library)]
+    internal static partial void lv_timer_reset(nint timer);
+
+    [LibraryImport(Library)]
+    internal static partial void lv_timer_set_period(nint timer, uint periodMs);
+
+    [LibraryImport(Library)]
+    internal static partial void lv_timer_set_repeat_count(nint timer, int count);
+
+    /// <summary>
+    /// Off for every managed timer: an auto-deleted timer would leave the wrapper holding a freed
+    /// pointer. With it off, a timer whose repeat count runs out is paused instead.
+    /// </summary>
+    [LibraryImport(Library)]
+    internal static partial void lv_timer_set_auto_delete(nint timer, [MarshalAs(UnmanagedType.U1)] bool autoDelete);
+
+    [LibraryImport(Library)]
+    [return: MarshalAs(UnmanagedType.U1)]
+    internal static partial bool lv_timer_get_paused(nint timer);
 
     #endregion
 

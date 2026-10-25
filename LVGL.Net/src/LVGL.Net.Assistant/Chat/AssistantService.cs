@@ -307,8 +307,16 @@ public sealed class AssistantService : IDisposable
         HttpRequestException http =>
             $"The request failed: {http.Message}\n\nCheck the API key, the model id, and that you are online.",
         AssistantConfigurationException configuration => configuration.Message,
+
+        // The provider's own explanation - "model not found", "unsupported parameter" - is what
+        // the user needs to fix their settings; the status code alone says nothing.
+        Anthropic.Exceptions.AnthropicApiException api =>
+            $"The provider rejected the request ({api.StatusCode}): {Truncate(api.ResponseBody, 600)}",
         _ => $"Something went wrong: {ex.Message}",
     };
+
+    private static string Truncate(string? text, int length) =>
+        string.IsNullOrEmpty(text) ? "(no details)" : text.Length <= length ? text : text[..length] + "...";
 
     public void Dispose()
     {

@@ -36,7 +36,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    env:
+      # The native library is built below, so an LVGL that fails to load must fail the run
+      # rather than quietly skip every integration test.
+      LVGLNET_REQUIRE_NATIVE: '1'
 
     steps:
       - uses: actions/checkout@v4
@@ -63,30 +68,35 @@ jobs:
             bash ./native/build.sh
           fi
 
-      # The WPF designer targets net10.0-windows and cannot even be restored on Linux, so the
-      # whole solution is only built on Windows. Everything else is cross-platform.
-      - name: Build (Windows)
-        if: runner.os == 'Windows'
+      # The designer is Avalonia now, so the whole solution builds on every OS.
+      - name: Build
         run: dotnet build LVGL.Net.slnx -c Release
 
-      - name: Build (Linux)
-        if: runner.os == 'Linux'
-        run: |
-          for p in src/LVGL.Net src/LVGL.Net.Ui src/LVGL.Net.Sdl src/LVGL.Net.Linux \
-                   src/LVGL.Net.Assistant samples/LVGL.Desktop samples/LVGL.Raspi \
-                   tests/LVGL.Net.Tests; do
-            dotnet build "$p" -c Release
-          done
-
-      # The unit tests run without the native library and LvglIntegrationTests no-ops when it is
-      # missing - but the native build above means the integration tests really execute here.
-      - name: Test
+      # The unit tests run without the native library; with it (built above) the integration
+      # tests execute against real LVGL, and the designer tests drive the real window headlessly.
+      - name: Test library
         run: dotnet test tests/LVGL.Net.Tests -c Release --no-build --logger "trx;LogFileName=test-results.trx"
 
-      - name: Upload test results
+      - name: Test designer
+        shell: bash
+        run: |
+          LVGLNET_SCREENSHOTS="$PWD/artifacts/screenshots"             dotnet test tests/LVGL.Designer.Tests -c Release --no-build --logger "trx;LogFileName=designer-results.trx"
+
+      # Frame time, allocation and memory of the Pi dashboard, rendered off-screen. Not a Pi
+      # number, but a regression in the render path shows up here on every push.
+      - name: Bench (headless)
+        shell: bash
+        run: |
+          mkdir -p artifacts
+          dotnet run --project samples/LVGL.Raspi -c Release --no-build --             --headless --bench 10 --report "artifacts/bench-${{ matrix.os }}.json"
+
+      - name: Upload results
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: lvgl-net-test-results-${{ matrix.os }}
-          path: LVGL.Net/tests/LVGL.Net.Tests/TestResults/*.trx
+          name: lvgl-net-results-${{ matrix.os }}
+          path: |
+            LVGL.Net/tests/**/TestResults/*.trx
+            LVGL.Net/artifacts/bench-*.json
+            LVGL.Net/artifacts/screenshots/*.png
           if-no-files-found: ignore

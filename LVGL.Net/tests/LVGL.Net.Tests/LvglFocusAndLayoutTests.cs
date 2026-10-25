@@ -16,7 +16,7 @@ namespace Lvgl.Tests;
 [Collection(LvglCollection.Name)]
 public class LvglFocusAndLayoutTests(LvglFixture lvgl)
 {
-    private bool Skip => !lvgl.IsAvailable;
+    private bool Skip => lvgl.ShouldSkip();
 
     [Fact]
     public void A_freshly_created_widget_reports_no_size_until_layout_runs()

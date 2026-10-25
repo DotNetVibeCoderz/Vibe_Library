@@ -7,13 +7,13 @@
   ┌───────────────────────┐              ┌────────────────────────┐
   │ Aplikasi Anda         │              │                        │
   ├───────────────────────┤   P/Invoke   │  lvglnet (satu library)│
-  │ LVGL.Net              │─────────────▶│    sumber LVGL v9      │
+  │ LVGL.Net              │─────────────▶│    sumber LVGL v9.6    │
   │  widget, style,       │◀─────────────│    + shim ABI lvn_*    │
   │  event, run loop      │   callback   │                        │
   ├───────────────────────┤              └────────────────────────┘
   │ ILvglBackend          │
   │  SDL / framebuffer /  │   piksel keluar, input masuk
-  │  headless             │
+  │  DRM/KMS / headless   │
   └───────────────────────┘
 ```
 
@@ -50,6 +50,11 @@ Sebagian besar API LVGL bisa dipanggil langsung lewat P/Invoke. Sebagian kecil t
 | `lv_indev_data_t`, `lv_area_t` | Kode managed harus menebak offset struct | `lvn_indev_data_set_*`, `lvn_area_get` |
 | `lv_font_montserrat_*` | Diekspor sebagai *variabel*, yang tidak bisa diikat P/Invoke secara portabel | `lvn_font_montserrat(size)` |
 | Ordinal `lv_event_code_t` | LVGL menyisipkan `LV_EVENT_ROTARY` di tengah enum pada 9.1 sehingga nilai berikutnya bergeser | `lvn_event_code(stable_id)` menerjemahkan saat runtime |
+| Ordinal enum lainnya | `LV_STATE_ALT` dan `LV_CHART_TYPE_CURVE` disisipkan di tengah enum setelah 9.2 | `lvn_constant("LV_STATE_CHECKED")` mengekspos nilai sebenarnya; sebuah test memeriksa setiap cerminan managed |
+| `lv_anim_t` dialokasikan pemanggil | Tata letaknya urusan internal LVGL | `lvn_anim_start` membangunnya di stack-nya sendiri; callback-nya berupa tiga trampoline yang berlaku untuk seluruh proses |
+| Bit field `lv_image_dsc_t` | Header berbentuk bit field tidak punya layout managed yang portabel | `lvn_image_dsc_create` / `lvn_image_dsc_delete` |
+| `lv_obj_get_coords` mengisi `lv_area_t` | Lagi-lagi offset struct | `lvn_obj_get_coords` mengembalikan empat integer |
+| `lv_led_set_color` menerima `lv_color_t` | Masalah warna by value | `lvn_led_set_color(..., uint32_t rgb)` |
 | `LV_PCT`, `LV_SIZE_CONTENT` | Makro C tidak ada di dalam shared library | Diimplementasikan ulang di `LvCoord`, diverifikasi oleh test |
 
 Selebihnya memanggil `lv_*` secara langsung. Shim tidak menambah biaya per frame: jalur render
@@ -103,16 +108,28 @@ marshalling delegate di jalur render.
   di sini: LVGL memanggil callback *sambil* membongkar sebuah objek, dan membaca `GCHandle` yang
   sudah dibebaskan adalah undefined behaviour, sedangkan pencarian dictionary yang gagal hanya
   menjadi no-op yang aman.
+- **Animasi dan timer** mengikuti aturan yang sama, dengan id sebagai pengganti pointer: id itulah
+  yang dipegang LVGL (sebagai `var` animasi, atau user data timer), dan sebuah registry
+  memetakannya kembali. Memakai id alih-alih pointer widget juga berarti menghentikan satu animasi
+  tidak pernah menghentikan animasi lain yang berjalan di widget yang sama. Menghapus sebuah widget
+  menghentikan animasi yang menargetkannya.
 
 Tidak ada exception managed yang boleh naik ke C. Jalur flush menyimpan exception-nya dan run loop
-melemparnya kembali; handler event menelan exception-nya sendiri.
+melemparnya kembali. Handler event, timer, dan animasi menahan exception-nya di batas callback dan
+melaporkannya melalui `LvglRuntime.CallbackFailed`, sehingga handler yang gagal terlihat alih-alih
+diabaikan diam-diam:
+
+```csharp
+LvglRuntime.CallbackFailed += (_, e) => log.Error(e.Exception, "LVGL callback failed: {Source}", e.Source);
+```
 
 ## Format warna
 
-`LV_COLOR_DEPTH` dikunci pada 32. LVGL menghasilkan XRGB8888 (urutan byte B, G, R, X pada mesin
-little-endian), yang disalin apa adanya ke tekstur `ARGB8888` milik SDL dan ke framebuffer 32-bit,
-serta dibaca sebagai `Bgr32` milik WPF di designer. `LvglRuntime.Initialize` menolak library native
-dengan kedalaman warna berbeda alih-alih menggambar warna yang tertukar.
+Format warna dikunci pada XRGB8888 (`LV_COLOR_FORMAT_DEFAULT` di `lv_conf.h`, yang membuat
+`LV_COLOR_DEPTH` bernilai 32). LVGL menghasilkan urutan byte B, G, R, X pada mesin little-endian,
+yang disalin apa adanya ke tekstur `ARGB8888` milik SDL, ke framebuffer 32-bit, ke dumb buffer DRM,
+dan ke bitmap BGRA opak di designer. `LvglRuntime.Initialize` menolak library native dengan
+kedalaman warna berbeda alih-alih menggambar warna yang tertukar.
 
 ## Batas antar proyek
 
@@ -121,4 +138,7 @@ dengan kedalaman warna berbeda alih-alih menggambar warna yang tertukar.
   binding SDL yang tidak dipakai.
 - `LVGL.Net.Ui` memuat model layout yang dipakai bersama oleh designer, loader runtime, dan
   generator kode, sehingga layout yang dipratinjau dan yang berjalan tidak dapat berbeda.
-- `LVGL.Designer` adalah satu-satunya proyek khusus Windows, dan hanya karena WPF memang begitu.
+- `LVGL.Designer` adalah aplikasi Avalonia, sehingga berjalan di Windows, macOS, dan Linux. Proyek
+  ini hanya memuat lapisan presentasi; model penyuntingannya (`DesignerSession`) tidak bergantung
+  pada UI dan diuji langsung dengan unit test.
+- `LVGL.Net.Assistant` memuat seluruh kode AI dan tidak memuat UI.

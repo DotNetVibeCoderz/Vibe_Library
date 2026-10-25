@@ -16,7 +16,7 @@ public sealed class LvBar : LvObject
     }
 
     /// <summary>Sets the value, optionally without animation.</summary>
-    public void SetValue(int value, bool animate) => LvglNative.lv_bar_set_value(Handle, value, animate ? 1 : 0);
+    public void SetValue(int value, bool animate) => LvglNative.lv_bar_set_value(Handle, value, animate);
 
     /// <summary>Sets the displayed range. Defaults to 0..100.</summary>
     public void SetRange(int minimum, int maximum)

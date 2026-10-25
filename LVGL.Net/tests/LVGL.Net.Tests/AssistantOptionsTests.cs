@@ -25,6 +25,23 @@ public class AssistantOptionsTests
     }
 
     [Fact]
+    public void An_anthropic_workspace_is_read_from_config_unless_the_environment_names_one()
+    {
+        var options = AssistantOptions.Load(Settings(("Anthropic:WorkspaceId", "wrkspc_from_config")));
+
+        // The environment wins, like the API key; only assert the config path when it is unset.
+        if (Environment.GetEnvironmentVariable("ANTHROPIC_WORKSPACE_ID") is { Length: > 0 } fromEnvironment)
+        {
+            Assert.Equal(fromEnvironment, options.Anthropic.ResolveWorkspaceId());
+        }
+        else
+        {
+            Assert.Equal("wrkspc_from_config", options.Anthropic.ResolveWorkspaceId());
+            Assert.Null(AssistantOptions.Load(new NameValueCollection()).Anthropic.ResolveWorkspaceId());
+        }
+    }
+
+    [Fact]
     public void Settings_are_read_from_the_config_section()
     {
         var options = AssistantOptions.Load(Settings(

@@ -1,4 +1,5 @@
 using Lvgl;
+using Lvgl.Backends;
 using Lvgl.Interop;
 using Lvgl.Samples.Desktop;
 using Lvgl.Samples.Desktop.Demos;
@@ -9,7 +10,10 @@ if (options is null) return 0;
 
 try
 {
-    using var backend = new SdlBackend(options.Width, options.Height, "LVGL.Net - desktop demos", options.VSync);
+    // --screenshots renders off-screen: no window, no SDL needed, the same LVGL pixels.
+    using ILvglBackend backend = options.ScreenshotFolder is null
+        ? new SdlBackend(options.Width, options.Height, "LVGL.Net - desktop demos", options.VSync)
+        : new HeadlessBackend(options.Width, options.Height);
     using var application = LvglApplication.Create(backend, new LvglOptions
     {
         // Partial rendering keeps the draw buffers small, which is the configuration the
@@ -25,6 +29,7 @@ try
     DemoPage[] pages =
     [
         new WidgetGalleryDemo(),
+        new ControlsDemo(),
         new ChartDemo(),
         new LayoutDemo(),
         new StyleDemo(),
@@ -55,6 +60,31 @@ try
         e.Cancel = true;
         cancellation.Cancel();
     };
+
+    if (options.ScreenshotFolder is { } folder && backend is HeadlessBackend headless)
+    {
+        // Every page, given a moment for animations and timers to get going, saved as a PNG of
+        // exactly what LVGL drew.
+        for (var page = 0; page < pages.Length; page++)
+        {
+            shell.Show(page);
+
+            var settle = System.Diagnostics.Stopwatch.StartNew();
+            while (settle.ElapsedMilliseconds < 1200)
+            {
+                application.RunFrame();
+                Thread.Sleep(10);
+            }
+
+            application.Display.RefreshNow();
+            var slug = new string(pages[page].Title.ToLowerInvariant().Select(c => char.IsLetterOrDigit(c) ? c : '-').ToArray()).Trim('-');
+            var path = Path.Combine(folder, $"desktop-{page + 1:D2}-{slug}.png");
+            headless.SavePng(path);
+            Console.WriteLine($"Saved {path}");
+        }
+
+        return 0;
+    }
 
     if (options.Frames > 0)
     {
@@ -91,7 +121,7 @@ catch (LvglException ex)
     return 1;
 }
 
-internal sealed record CommandLineOptions(int Width, int Height, bool VSync, int Frames);
+internal sealed record CommandLineOptions(int Width, int Height, bool VSync, int Frames, string? ScreenshotFolder = null);
 
 internal static class CommandLine
 {
@@ -102,6 +132,7 @@ internal static class CommandLine
         var height = 600;
         var vsync = true;
         var frames = 0;
+        string? screenshots = null;
 
         for (var i = 0; i < args.Length; i++)
         {
@@ -123,6 +154,10 @@ internal static class CommandLine
                     frames = f;
                     break;
 
+                case "--screenshots" when i + 1 < args.Length:
+                    screenshots = args[++i];
+                    break;
+
                 case "--help" or "-?":
                     PrintUsage();
                     return null;
@@ -134,7 +169,7 @@ internal static class CommandLine
             }
         }
 
-        return new CommandLineOptions(width, height, vsync, frames);
+        return new CommandLineOptions(width, height, vsync, frames, screenshots);
     }
 
     private static void PrintUsage()
@@ -149,6 +184,7 @@ internal static class CommandLine
               -h, --height <px>    Window height (default 600)
                   --no-vsync       Do not synchronise to the display refresh
                   --frames <n>     Render n frames, print a summary and exit (smoke test)
+                  --screenshots <dir>  Render every page off-screen into PNGs and exit (no SDL needed)
               -?, --help           Show this help
 
             Requires SDL2 and the native lvglnet library (build it with native/build.sh or native/build.ps1).

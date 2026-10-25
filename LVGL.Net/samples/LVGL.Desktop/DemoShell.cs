@@ -130,7 +130,8 @@ internal sealed class DemoShell
         if (_status.IsAlive) _status.Text = text;
     }
 
-    private void Show(int index)
+    /// <summary>Shows page <paramref name="index"/>; used by the navigation and by --screenshots.</summary>
+    public void Show(int index)
     {
         if ((uint)index >= (uint)_pages.Count || index == _currentIndex) return;
 

@@ -25,7 +25,7 @@ public static class LvglRuntime
     /// ABI version the managed side expects from the native shim. Kept in step with
     /// <c>LVN_ABI_VERSION</c> in <c>native/shim/lvglnet_shim.h</c>.
     /// </summary>
-    public const uint ExpectedShimAbi = 3;
+    public const uint ExpectedShimAbi = 4;
 
     /// <summary>True once <see cref="Initialize"/> has completed.</summary>
     public static bool IsInitialized
@@ -109,6 +109,30 @@ public static class LvglRuntime
         Volatile.Read(ref _uiThreadId) is var owner && (owner == -1 || owner == Environment.CurrentManagedThreadId);
 
     /// <summary>
+    /// Raised when managed code called back from LVGL - an event handler, a timer, an animation -
+    /// throws.
+    /// </summary>
+    /// <remarks>
+    /// Such an exception cannot be allowed to unwind into LVGL's C stack, so it is caught at the
+    /// callback boundary. Without a subscriber it is discarded; subscribe to log it, or to fail a
+    /// test. Raised on the UI thread, from inside the callback, so keep the handler short.
+    /// </remarks>
+    public static event EventHandler<LvglCallbackFailedEventArgs>? CallbackFailed;
+
+    /// <summary>Reports an exception caught at a callback boundary. Never throws.</summary>
+    internal static void ReportCallbackFailure(string source, Exception exception)
+    {
+        try
+        {
+            CallbackFailed?.Invoke(null, new LvglCallbackFailedEventArgs(source, exception));
+        }
+        catch
+        {
+            // A failing subscriber must not turn into the very unwind this exists to prevent.
+        }
+    }
+
+    /// <summary>
     /// Tears LVGL down. Intended for tests and for hosts that create and destroy the UI repeatedly;
     /// long-running applications normally just exit the process.
     /// </summary>
@@ -130,6 +154,16 @@ public class LvglException : Exception
     public LvglException(string message) : base(message) { }
 
     public LvglException(string message, Exception innerException) : base(message, innerException) { }
+}
+
+/// <summary>Describes an exception caught where LVGL called into managed code.</summary>
+public sealed class LvglCallbackFailedEventArgs(string source, Exception exception) : EventArgs
+{
+    /// <summary>What was being called back: "event Clicked on LvButton", "timer", "animation".</summary>
+    public string Source { get; } = source;
+
+    /// <summary>The exception the managed code threw.</summary>
+    public Exception Exception { get; } = exception;
 }
 
 /// <summary>Thrown when LVGL is touched from a thread that does not own it.</summary>

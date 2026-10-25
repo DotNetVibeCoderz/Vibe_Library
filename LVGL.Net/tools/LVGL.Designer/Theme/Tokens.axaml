@@ -1,0 +1,63 @@
+<!--
+  Design tokens. The designer's look is taken from the thing its layouts end up on: a circuit
+  board. Blue solder mask for the surfaces, warm silkscreen ink for text, copper for anything the
+  user is acting on (selection, primary actions, resize pads), and one live-signal teal for "LVGL
+  is running". Every other colour in the app is derived from these.
+-->
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <!-- Surfaces, darkest to lightest -->
+  <Color x:Key="MaskColor">#0B1A26</Color>          <!-- solder mask: window base, canvas -->
+  <Color x:Key="BoardColor">#112638</Color>         <!-- panels -->
+  <Color x:Key="RaisedColor">#17324A</Color>        <!-- hover, inputs -->
+  <Color x:Key="TraceColor">#24445E</Color>         <!-- lines and borders: copper traces under mask -->
+  <Color x:Key="TraceBrightColor">#33597A</Color>
+
+  <!-- Ink -->
+  <Color x:Key="SilkColor">#E8E3D3</Color>          <!-- silkscreen: primary text -->
+  <Color x:Key="SilkDimColor">#8FA3B5</Color>       <!-- secondary text -->
+  <Color x:Key="SilkFaintColor">#5C7489</Color>     <!-- tertiary text, disabled -->
+
+  <!-- Signal -->
+  <Color x:Key="CopperColor">#D08A3C</Color>        <!-- selection, primary action, pads -->
+  <Color x:Key="CopperHotColor">#E7A458</Color>
+  <Color x:Key="CopperDeepColor">#7A4E22</Color>
+  <Color x:Key="LiveColor">#5FD4C4</Color>          <!-- LVGL running -->
+  <Color x:Key="FaultColor">#F07167</Color>         <!-- errors -->
+  <Color x:Key="WarnColor">#E9C46A</Color>          <!-- warnings -->
+
+  <SolidColorBrush x:Key="Mask" Color="{StaticResource MaskColor}" />
+  <SolidColorBrush x:Key="Board" Color="{StaticResource BoardColor}" />
+  <SolidColorBrush x:Key="Raised" Color="{StaticResource RaisedColor}" />
+  <SolidColorBrush x:Key="Trace" Color="{StaticResource TraceColor}" />
+  <SolidColorBrush x:Key="TraceBright" Color="{StaticResource TraceBrightColor}" />
+  <SolidColorBrush x:Key="Silk" Color="{StaticResource SilkColor}" />
+  <SolidColorBrush x:Key="SilkDim" Color="{StaticResource SilkDimColor}" />
+  <SolidColorBrush x:Key="SilkFaint" Color="{StaticResource SilkFaintColor}" />
+  <SolidColorBrush x:Key="Copper" Color="{StaticResource CopperColor}" />
+  <SolidColorBrush x:Key="CopperHot" Color="{StaticResource CopperHotColor}" />
+  <SolidColorBrush x:Key="CopperDeep" Color="{StaticResource CopperDeepColor}" />
+  <SolidColorBrush x:Key="CopperWash" Color="#26D08A3C" />
+  <SolidColorBrush x:Key="Live" Color="{StaticResource LiveColor}" />
+  <SolidColorBrush x:Key="Fault" Color="{StaticResource FaultColor}" />
+  <SolidColorBrush x:Key="Warn" Color="{StaticResource WarnColor}" />
+
+  <!--
+    Type. Barlow for reading, Barlow Condensed for section heads, Martian Mono only where the
+    board vocabulary is quoted: reference designators, coordinates, sizes, code.
+  -->
+  <FontFamily x:Key="BodyFont">avares://LVGL.Designer/Assets/Fonts#Barlow</FontFamily>
+  <FontFamily x:Key="HeadFont">avares://LVGL.Designer/Assets/Fonts#Barlow Condensed</FontFamily>
+  <FontFamily x:Key="MonoFont">avares://LVGL.Designer/Assets/Fonts#Martian Mono</FontFamily>
+
+  <x:Double x:Key="TextSmall">11</x:Double>
+  <x:Double x:Key="TextBody">13</x:Double>
+  <x:Double x:Key="TextHead">13</x:Double>
+  <x:Double x:Key="TextTitle">17</x:Double>
+  <x:Double x:Key="TextMono">10.5</x:Double>
+
+  <CornerRadius x:Key="RadiusSmall">3</CornerRadius>
+  <CornerRadius x:Key="RadiusPanel">6</CornerRadius>
+
+</ResourceDictionary>

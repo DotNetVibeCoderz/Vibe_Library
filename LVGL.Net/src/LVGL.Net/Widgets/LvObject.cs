@@ -78,6 +78,12 @@ public unsafe class LvObject
     internal static nint ResolveParent(LvObject? parent) =>
         parent?.Handle ?? LvglNative.lv_screen_active();
 
+    /// <summary>
+    /// Returns the wrapper for an object LVGL created itself (a tab page, a list button), creating
+    /// a plain <see cref="LvObject"/> wrapper the first time.
+    /// </summary>
+    internal static LvObject Wrap(nint handle) => FromHandle(handle) ?? new LvObject(handle);
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private nint RequireHandle() => Handle;
 
@@ -166,6 +172,31 @@ public unsafe class LvObject
     /// </remarks>
     public void UpdateLayout() => LvglNative.lv_obj_update_layout(RequireHandle());
 
+    /// <summary>
+    /// Absolute bounds on the display, after layout and scrolling - what the user actually sees.
+    /// </summary>
+    /// <remarks>
+    /// Unlike <see cref="X"/> and <see cref="Y"/>, which are relative to the parent's content area,
+    /// this accounts for every ancestor's padding and scroll offset. Like them it reflects the last
+    /// layout pass, so call <see cref="UpdateLayout"/> first after changing geometry.
+    /// </remarks>
+    public LvArea GetBounds()
+    {
+        int x1, y1, x2, y2;
+        LvglNative.lvn_obj_get_coords(RequireHandle(), &x1, &y1, &x2, &y2);
+        return new LvArea(x1, y1, x2, y2);
+    }
+
+    /// <summary>
+    /// Position among its siblings; higher indices are drawn on top. Setting it re-orders the
+    /// widget, so 0 sends it to the back.
+    /// </summary>
+    public int ZIndex
+    {
+        get => LvglNative.lv_obj_get_index(RequireHandle());
+        set => LvglNative.lv_obj_move_to_index(RequireHandle(), value);
+    }
+
     #endregion
 
     #region Flags and states
@@ -215,13 +246,13 @@ public unsafe class LvObject
         return this;
     }
 
-    public bool HasState(LvState state) => LvglNative.lv_obj_has_state(RequireHandle(), (ushort)state);
+    public bool HasState(LvState state) => LvglNative.lv_obj_has_state(RequireHandle(), (uint)state);
 
     public LvObject SetState(LvState state, bool enabled)
     {
         var handle = RequireHandle();
-        if (enabled) LvglNative.lv_obj_add_state(handle, (ushort)state);
-        else LvglNative.lv_obj_remove_state(handle, (ushort)state);
+        if (enabled) LvglNative.lv_obj_add_state(handle, (uint)state);
+        else LvglNative.lv_obj_remove_state(handle, (uint)state);
         return this;
     }
 
@@ -355,6 +386,19 @@ public unsafe class LvObject
         return this;
     }
 
+    /// <summary>
+    /// Size of a part the widget draws itself - a chart's point markers (<see cref="LvPart.Indicator"/>),
+    /// a slider's knob. Zero hides chart point markers, leaving a plain line.
+    /// </summary>
+    public LvObject SetPartSize(int width, int height, LvPart part, LvState state = LvState.Default)
+    {
+        var handle = RequireHandle();
+        var selector = Selector(part, state);
+        LvglNative.lv_obj_set_style_width(handle, width, selector);
+        LvglNative.lv_obj_set_style_height(handle, height, selector);
+        return this;
+    }
+
     public LvObject SetArcWidth(int width, LvPart part = LvPart.Main, LvState state = LvState.Default)
     {
         LvglNative.lv_obj_set_style_arc_width(RequireHandle(), width, Selector(part, state));
@@ -369,6 +413,27 @@ public unsafe class LvObject
     {
         var font = LvglNative.lvn_font_montserrat((uint)size);
         if (font != 0) LvglNative.lvn_obj_set_style_text_font(RequireHandle(), font, Selector(part, state));
+        return this;
+    }
+
+    /// <summary>
+    /// Applies a font. A TrueType <see cref="LvFont"/> must outlive the widget, exactly like an
+    /// <see cref="LvStyle"/>.
+    /// </summary>
+    public LvObject SetFont(LvFont font, LvPart part = LvPart.Main, LvState state = LvState.Default)
+    {
+        ArgumentNullException.ThrowIfNull(font);
+        LvglNative.lvn_obj_set_style_text_font(RequireHandle(), font.Handle, Selector(part, state));
+        return this;
+    }
+
+    /// <summary>Tints an image towards <paramref name="color"/> by <paramref name="opacity"/> (0-255).</summary>
+    public LvObject SetImageRecolor(LvColor color, byte opacity = 255, LvPart part = LvPart.Main, LvState state = LvState.Default)
+    {
+        var handle = RequireHandle();
+        var selector = Selector(part, state);
+        LvglNative.lvn_obj_set_style_image_recolor(handle, color.Rgb, selector);
+        LvglNative.lv_obj_set_style_image_recolor_opa(handle, opacity, selector);
         return this;
     }
 
@@ -501,21 +566,25 @@ public unsafe class LvObject
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static void EventThunk(nint e)
     {
+        LvObject? self = null;
+        var code = LvEventCode.All;
+
         try
         {
             // current_target, not target: with LV_OBJ_FLAG_EVENT_BUBBLE a child's event is
             // delivered to the ancestor that subscribed, and the subscriber is what callers expect.
             var handle = LvglNative.lv_event_get_current_target(e);
-            if (handle == 0 || !Registry.TryGetValue(handle, out var self)) return;
+            if (handle == 0 || !Registry.TryGetValue(handle, out self)) return;
 
-            if (!LvEventCodes.TryFromNative(LvglNative.lv_event_get_code(e), out var code)) return;
+            if (!LvEventCodes.TryFromNative(LvglNative.lv_event_get_code(e), out code)) return;
 
             self.Dispatch(code, new LvEventArgs(code, e, handle));
         }
-        catch
+        catch (Exception ex)
         {
-            // A managed exception must not unwind into LVGL's C stack. Handlers are expected to
-            // deal with their own failures; see LvglApplication.Post for work that can throw.
+            // A managed exception must not unwind into LVGL's C stack. It is contained here and
+            // reported, so a failing handler is visible rather than silently ignored.
+            LvglRuntime.ReportCallbackFailure($"event {code} on {self?.GetType().Name ?? "widget"}", ex);
         }
     }
 
@@ -533,6 +602,9 @@ public unsafe class LvObject
         // pointer.
         Registry.TryRemove(_handle, out _);
         _handle = 0;
+
+        // An animation driving this widget would otherwise keep calling into a deleted object.
+        LvAnimation.StopAllFor(this);
         OnDeleted();
     }
 

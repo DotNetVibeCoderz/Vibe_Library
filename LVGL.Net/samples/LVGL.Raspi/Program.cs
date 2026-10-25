@@ -37,6 +37,40 @@ try
     var dashboard = new Dashboard(backend.Width, backend.Height, sensors.Description);
     dashboard.Build(application.Screen);
 
+    if (options.ScreenshotPath is { } screenshot && backend is HeadlessBackend headless)
+    {
+        // Two seconds of samples, so the chart has a trace and the gauges have moved.
+        var settle = System.Diagnostics.Stopwatch.StartNew();
+        var next = 0L;
+        while (settle.ElapsedMilliseconds < 2500)
+        {
+            if (settle.ElapsedMilliseconds >= next)
+            {
+                dashboard.Update(sensors.Read());
+                next = settle.ElapsedMilliseconds + 60;
+            }
+
+            application.RunFrame();
+            Thread.Sleep(10);
+        }
+
+        application.Display.RefreshNow();
+        headless.SavePng(screenshot);
+        Console.WriteLine($"Saved {screenshot}");
+        return 0;
+    }
+
+    if (options.BenchSeconds > 0)
+    {
+        Console.WriteLine($"Benchmarking for {options.BenchSeconds} s...");
+        var report = Bench.Run(application, dashboard, sensors, TimeSpan.FromSeconds(options.BenchSeconds), backend.GetType().Name);
+        var json = Bench.ToJson(report);
+
+        Console.WriteLine(json);
+        if (options.ReportPath is { } reportPath) File.WriteAllText(reportPath, json);
+        return 0;
+    }
+
     using var cancellation = new CancellationTokenSource();
     Console.CancelKeyPress += (_, e) =>
     {
@@ -108,6 +142,24 @@ static void SampleLoop(
 
 static ILvglBackend CreateBackend(RaspiOptions options)
 {
+    if (options.Headless)
+    {
+        return new HeadlessBackend(options.Width, options.Height);
+    }
+
+    if (options.UseDrm)
+    {
+        // DRM first, for the pointer scaling to see the mode the display actually runs.
+        var drm = new DrmBackend(options.DrmDevice);
+        Console.WriteLine($"DRM/KMS on {drm.DevicePath}: {drm.Mode}");
+
+        var drmPointer = EvdevPointer.AutoDetect(drm.Width, drm.Height);
+        if (drmPointer is null) return drm;
+
+        drm.Dispose();
+        return new DrmBackend(options.DrmDevice, drmPointer);
+    }
+
     if (options.UseSdl)
     {
         return new SdlBackend(options.Width, options.Height, "LVGL.Raspi (development window)");
@@ -146,7 +198,13 @@ internal sealed record RaspiOptions(
     int Width,
     int Height,
     int IntervalMs,
-    string FramebufferDevice);
+    string FramebufferDevice,
+    bool UseDrm = false,
+    string? DrmDevice = null,
+    bool Headless = false,
+    int BenchSeconds = 0,
+    string? ReportPath = null,
+    string? ScreenshotPath = null);
 
 internal static class RaspiCommandLine
 {
@@ -158,6 +216,12 @@ internal static class RaspiCommandLine
         var height = 480;
         var interval = 1000;
         var device = "/dev/fb0";
+        var drm = false;
+        string? drmDevice = null;
+        var headless = false;
+        var bench = 0;
+        string? report = null;
+        string? screenshot = null;
 
         for (var i = 0; i < args.Length; i++)
         {
@@ -173,6 +237,30 @@ internal static class RaspiCommandLine
 
                 case "--fb" when i + 1 < args.Length:
                     device = args[++i];
+                    break;
+
+                case "--drm":
+                    drm = true;
+                    if (i + 1 < args.Length && args[i + 1].StartsWith("/dev/", StringComparison.Ordinal)) drmDevice = args[++i];
+                    break;
+
+                case "--headless":
+                    headless = true;
+                    break;
+
+                case "--bench" when i + 1 < args.Length && int.TryParse(args[++i], out var seconds):
+                    bench = Math.Clamp(seconds, 1, 3600);
+                    simulate = true;
+                    break;
+
+                case "--report" when i + 1 < args.Length:
+                    report = args[++i];
+                    break;
+
+                case "--screenshot" when i + 1 < args.Length:
+                    screenshot = args[++i];
+                    headless = true;
+                    simulate = true;
                     break;
 
                 case "--width" or "-w" when i + 1 < args.Length && int.TryParse(args[++i], out var w):
@@ -198,7 +286,7 @@ internal static class RaspiCommandLine
             }
         }
 
-        return new RaspiOptions(useSdl, simulate, width, height, interval, device);
+        return new RaspiOptions(useSdl, simulate, width, height, interval, device, drm, drmDevice, headless, bench, report, screenshot);
     }
 
     private static void PrintUsage() => Console.WriteLine("""
@@ -210,6 +298,12 @@ internal static class RaspiCommandLine
               --sdl              Render into a window instead of the framebuffer (for development)
               --simulate         Use fake telemetry instead of the board's real sensors
               --fb <device>      Framebuffer device (default /dev/fb0)
+              --drm [device]     Use DRM/KMS with page flipping instead of fbdev - no tearing.
+                                 Needs the display to itself (no desktop on it).
+              --headless         Render off-screen (for --bench on a machine without a display)
+              --bench <seconds>  Measure frame time, allocation and memory; prints JSON
+              --report <file>    Also write the --bench JSON to a file
+              --screenshot <png> Render the dashboard off-screen with simulated data and save it
           -w, --width <px>       Window width when using --sdl (default 800)
           -h, --height <px>      Window height when using --sdl (default 480)
               --interval <ms>    Sampling interval (default 1000)

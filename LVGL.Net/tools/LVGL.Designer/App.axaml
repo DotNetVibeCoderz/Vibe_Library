@@ -1,0 +1,60 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="Lvgl.Designer.App"
+             RequestedThemeVariant="Dark"
+             Name="LVGL.Net Designer">
+
+  <Application.Resources>
+    <ResourceDictionary>
+      <ResourceDictionary.MergedDictionaries>
+        <ResourceInclude Source="avares://LVGL.Designer/Theme/Tokens.axaml" />
+      </ResourceDictionary.MergedDictionaries>
+    </ResourceDictionary>
+  </Application.Resources>
+
+  <Application.Styles>
+    <!--
+      Fluent supplies the control templates; its dark palette is remapped wholesale onto the board
+      tokens so every stock control - scrollbars, menus, combo popups - already speaks the same
+      colours before any custom style is written.
+    -->
+    <FluentTheme>
+      <FluentTheme.Palettes>
+        <ColorPaletteResources x:Key="Dark"
+                               Accent="#D08A3C"
+                               AltHigh="#0B1A26"
+                               AltLow="#0B1A26"
+                               AltMedium="#0B1A26"
+                               AltMediumHigh="#0B1A26"
+                               AltMediumLow="#0B1A26"
+                               BaseHigh="#E8E3D3"
+                               BaseLow="#24445E"
+                               BaseMedium="#8FA3B5"
+                               BaseMediumHigh="#C9CCC6"
+                               BaseMediumLow="#5C7489"
+                               ChromeAltLow="#C9CCC6"
+                               ChromeBlackHigh="#000000"
+                               ChromeBlackLow="#C9CCC6"
+                               ChromeBlackMedium="#0B1A26"
+                               ChromeBlackMediumLow="#0B1A26"
+                               ChromeDisabledHigh="#24445E"
+                               ChromeDisabledLow="#5C7489"
+                               ChromeGray="#5C7489"
+                               ChromeHigh="#33597A"
+                               ChromeLow="#0F2132"
+                               ChromeMedium="#112638"
+                               ChromeMediumLow="#17324A"
+                               ChromeWhite="#E8E3D3"
+                               ListLow="#17324A"
+                               ListMedium="#24445E"
+                               RegionColor="#0B1A26"
+                               ErrorText="#F07167" />
+      </FluentTheme.Palettes>
+    </FluentTheme>
+
+    <StyleInclude Source="avares://AvaloniaEdit/Themes/Fluent/AvaloniaEdit.xaml" />
+    <StyleInclude Source="avares://Avalonia.Controls.ColorPicker/Themes/Fluent/Fluent.xaml" />
+    <StyleInclude Source="avares://LVGL.Designer/Theme/Controls.axaml" />
+  </Application.Styles>
+
+</Application>

@@ -1,0 +1,22 @@
+{
+  "Processors": 8,
+  "Os": "Microsoft Windows 10.0.26200",
+  "Architecture": "X64",
+  "Runtime": ".NET 10.0.12",
+  "Lvgl": "9.6.0",
+  "Backend": "HeadlessBackend",
+  "Width": 800,
+  "Height": 480,
+  "Seconds": 10.01,
+  "Frames": 636,
+  "FramesPerSecond": 63.5,
+  "FrameMsMedian": 0.013,
+  "FrameMsP95": 1.602,
+  "FrameMsP99": 1.944,
+  "FrameMsMax": 2.486,
+  "BytesAllocatedPerFrame": 53.4,
+  "Gen0Collections": 0,
+  "DrawBufferKiB": 200,
+  "WorkingSetMiB": 34.5,
+  "ManagedHeapMiB": 2
+}

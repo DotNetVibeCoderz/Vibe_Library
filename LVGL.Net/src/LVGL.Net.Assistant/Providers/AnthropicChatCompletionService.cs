@@ -44,17 +44,24 @@ public sealed class AnthropicChatCompletionService : IChatCompletionService
     /// reject it - see <see cref="AnthropicModelTraits"/> and <see cref="TemperatureNotice"/>.
     /// </param>
     /// <param name="maxToolIterations">How many tool rounds before answering regardless.</param>
+    /// <param name="workspaceId">
+    /// Workspace to bill and scope the request to. Required by Anthropic for keys that are not
+    /// themselves scoped to a workspace; null for keys that are.
+    /// </param>
     public AnthropicChatCompletionService(
         string apiKey,
         string modelId,
         int maxTokens = 4096,
         double? temperature = null,
-        int maxToolIterations = 8)
+        int maxToolIterations = 8,
+        string? workspaceId = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(apiKey);
         ArgumentException.ThrowIfNullOrWhiteSpace(modelId);
 
-        _client = new AnthropicClient { ApiKey = apiKey };
+        _client = string.IsNullOrWhiteSpace(workspaceId)
+            ? new AnthropicClient { ApiKey = apiKey }
+            : new AnthropicClient { ApiKey = apiKey, HttpClient = WorkspaceClient(workspaceId) };
         _modelId = modelId;
         _maxTokens = maxTokens;
         _maxToolIterations = Math.Max(1, maxToolIterations);
@@ -63,6 +70,17 @@ public sealed class AnthropicChatCompletionService : IChatCompletionService
         // TemperatureNotice to explain why their slider had no effect.
         _temperature = AnthropicModelTraits.SupportsTemperature(modelId) ? temperature : null;
         TemperatureNotice = temperature is null ? null : AnthropicModelTraits.ExplainIgnoredTemperature(modelId);
+    }
+
+    /// <summary>
+    /// An HTTP client that names the workspace on every request. The SDK has no option for it, and
+    /// a default header is exactly what the API asks for.
+    /// </summary>
+    private static HttpClient WorkspaceClient(string workspaceId)
+    {
+        var client = new HttpClient();
+        client.DefaultRequestHeaders.Add("anthropic-workspace-id", workspaceId.Trim());
+        return client;
     }
 
     /// <summary>

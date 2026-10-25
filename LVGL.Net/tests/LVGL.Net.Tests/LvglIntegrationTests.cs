@@ -18,7 +18,7 @@ namespace Lvgl.Tests;
 [Collection(LvglCollection.Name)]
 public class LvglIntegrationTests(LvglFixture lvgl)
 {
-    private bool Skip => !lvgl.IsAvailable;
+    private bool Skip => lvgl.ShouldSkip();
 
     [Fact]
     public void The_loaded_library_matches_what_the_wrapper_expects()
@@ -255,14 +255,7 @@ public class LvglIntegrationTests(LvglFixture lvgl)
     }
 
     /// <summary>Presses and releases the pointer at a position, pumping LVGL either side.</summary>
-    private void ClickAt(int x, int y) => lvgl.Invoke(() =>
-    {
-        lvgl.Backend.SetPointer(x, y, pressed: true);
-        for (var i = 0; i < 5; i++) { lvgl.Application.RunFrame(); Thread.Sleep(10); }
-
-        lvgl.Backend.SetPointer(x, y, pressed: false);
-        for (var i = 0; i < 5; i++) { lvgl.Application.RunFrame(); Thread.Sleep(10); }
-    });
+    private void ClickAt(int x, int y) => lvgl.ClickAt(x, y);
 
     [Fact]
     public void Deleting_a_widget_marks_the_wrapper_dead()

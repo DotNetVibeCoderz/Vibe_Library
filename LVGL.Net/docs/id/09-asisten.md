@@ -1,15 +1,17 @@
 # Jack The Code Bender — asisten desain
 
 Asisten AI yang tertanam di dalam designer. Ia merancang layar LVGL, menulis kode .NET di
-sekitarnya, dan dapat menyerahkan layout jadi langsung kembali ke kanvas.
+sekitarnya, dan menaruh layout jadi langsung ke kanvas - cukup satu undo untuk membatalkannya.
 
-Buka lewat tombol **Ask Jack** pada toolbar designer.
+Buka lewat **Jack** pada command bar designer, atau `Ctrl+J`.
+
+![Jack merancang layar rumah pintar](../images/screenshots/designer-assistant.png)
 
 ## Kemampuannya
 
 | Kemampuan | Rincian |
 |---|---|
-| Merancang layout | Menghasilkan `.lvgl.json` tervalidasi yang bisa dibuka di designer dengan satu klik |
+| Merancang layout | Menghasilkan layout tervalidasi yang mendarat di kanvas sebagai satu langkah yang bisa di-undo |
 | Menghasilkan kode | Memakai `CSharpUiGenerator` yang sama dengan tombol Export C#, plus kerangka handler event |
 | Mencari di internet | Tavily, bila kuncinya dikonfigurasi |
 | Membaca halaman dan berkas | Mengambil URL lalu menyaringnya menjadi teks, atau mengunduh berkas teks apa adanya |
@@ -23,7 +25,7 @@ Empat penyedia didukung, dapat dipilih per percakapan:
 | Penyedia | Konfigurasi | Catatan |
 |---|---|---|
 | OpenAI | `OPENAI_API_KEY` atau `Assistant:OpenAI:ApiKey` | Bawaan |
-| Anthropic | `ANTHROPIC_API_KEY` atau `Assistant:Anthropic:ApiKey` | Lihat catatan temperature di bawah |
+| Anthropic | `ANTHROPIC_API_KEY` atau `Assistant:Anthropic:ApiKey` | Lihat catatan temperature dan workspace di bawah |
 | Gemini | `GEMINI_API_KEY` atau `Assistant:Gemini:ApiKey` | |
 | Ollama | `Assistant:Ollama:Endpoint` | Berjalan lokal, tanpa kunci |
 
@@ -44,9 +46,16 @@ jendela chat menampilkan `temperature ignored on this model` saat itu terjadi. M
 lebih lama tetap menerimanya secara normal. Gunakan pengaturan effort model untuk menukar kualitas
 dengan biaya.
 
+### Kunci yang dibatasi workspace
+
+Kunci Anthropic yang **tidak terikat pada sebuah workspace** ditolak kecuali request-nya menyebutkan
+workspace. Setel id workspace - diawali `wrkspc_` - di `ANTHROPIC_WORKSPACE_ID` atau
+`Assistant:Anthropic:WorkspaceId`, dan konektor mengirimkannya sebagai header
+`anthropic-workspace-id`. Kunci yang dibuat di dalam sebuah workspace tidak memerlukan apa pun lagi.
+
 ## Konfigurasi
 
-Semuanya berada di `app.config` milik designer, di bawah `appSettings` dengan awalan `Assistant:`.
+Semuanya berada di `App.config` milik designer, di bawah `appSettings` dengan awalan `Assistant:`.
 Variabel lingkungan dengan nama yang tercantum selalu menang atas nilai di berkas, jadi kunci bisa
 dibiarkan kosong dan tidak ikut masuk ke kontrol versi.
 
@@ -59,6 +68,7 @@ dibiarkan kosong dan tidak ikut masuk ke kontrol versi.
 <add key="Assistant:MaxToolIterations" value="8" />
 <add key="Assistant:SystemPrompt" value="" />
 <add key="Assistant:Anthropic:Model" value="claude-opus-5" />
+<add key="Assistant:Anthropic:WorkspaceId" value="" />
 <add key="Assistant:TavilyApiKey" value="" />
 ```
 
@@ -69,10 +79,11 @@ menghasilkan kode yang lolos kompilasi lalu berperilaku salah.
 
 ## Percakapan
 
-Setiap percakapan disimpan sebagai satu berkas JSON di `%APPDATA%\LVGL.Net\assistant`.
+Setiap percakapan disimpan sebagai satu berkas JSON di folder data aplikasi
+(`%APPDATA%\LVGL.Net\assistant` di Windows, `~/.config/LVGL.Net/assistant` di Linux dan macOS).
 
 - **New** memulai percakapan baru.
-- **Reset** menghapus isi pesan tetapi mempertahankan percakapan, judul, dan penyedianya.
+- **Clear** menghapus isi pesan tetapi mempertahankan percakapan, judul, dan penyedianya.
 - **Delete** menghapusnya permanen.
 
 Tiap percakapan mengingat penyedianya sendiri, jadi Anda bisa menyimpan satu di model Ollama lokal
@@ -94,6 +105,14 @@ diterima model. Model Ollama yang berjalan lokal bisa mengambil URL dokumen; mod
 memberi tahu bahwa ia tidak bisa.
 
 Bila host lokal gagal mengikat port, lampiran tetap berfungsi dan memakai URL `file://`.
+
+## Transkrip
+
+Balasan dirender secara native di panel - judul, daftar, tabel, kutipan, dan blok kode dengan tombol
+**Copy** - memakai huruf dan warna milik designer sendiri, dan mengalir masuk selagi model menulis.
+Pemanggilan tool tampil sebagai chip kecil di bawah balasan, sehingga Anda bisa melihat apa yang
+sebenarnya dilakukan model: template mana yang menjadi titik awalnya, dan apakah `create_layout`
+menerima desainnya.
 
 ## Template prompt
 
@@ -124,6 +143,21 @@ Model memanggil ini sendiri; Anda tidak menjalankannya secara langsung.
 yang salah bentuk kembali sebagai daftar masalah yang bisa diperbaiki model — bukan sebagai JSON
 yang tampak meyakinkan tetapi gagal dibuka.
 
+## Pengujian dengan model sungguhan
+
+Rangkaian test menyertakan pemeriksaan end-to-end yang memanggil model sungguhan: test ini meminta
+layar termostat, mewajibkan model memanggil `create_layout`, lalu memeriksa bahwa layout yang
+dihasilkannya valid, memuat widget yang diminta, dan dapat di-generate. Test ini opt-in, karena
+membutuhkan kunci dan memakan satu request:
+
+```bash
+LVGLNET_LIVE_LLM=1 ANTHROPIC_API_KEY=... dotnet test tests/LVGL.Net.Tests --filter LiveAssistantTests
+LVGLNET_LIVE_LLM=1 ANTHROPIC_API_KEY=... dotnet test tests/LVGL.Designer.Tests --filter LiveAssistantWindowTests
+```
+
+`LVGLNET_LIVE_PROVIDER` dan `LVGLNET_LIVE_MODEL` memilih penyedia atau model lain. Tanpa opt-in,
+kedua test langsung selesai.
+
 ## Catatan keamanan
 
 Layak dipahami sebelum mengarahkan asisten ke konten sembarangan:
@@ -142,11 +176,13 @@ Layak dipahami sebelum mengarahkan asisten ke konten sembarangan:
 
 ## Pemecahan masalah
 
-**"No API key for X"** — setel variabel lingkungan yang disebut dalam pesan, atau isi kunci
-`app.config` yang bersesuaian, lalu buka ulang jendela chat.
+**"No API key"** pada baris status panel — setel variabel lingkungan yang disebut di sana, atau isi
+kunci `App.config` yang bersesuaian, lalu jalankan ulang designer.
 
-**Area chat menyebut WebView2 tidak ada** — pasang Microsoft Edge WebView2 Runtime. Komponen ini
-bawaan Windows 11, jadi kasus ini tidak lazim. Semua fungsi selain transkrip terender tetap bekerja.
+**"The provider rejected the request (BadRequest): ..."** — penjelasan dari penyedia sendiri
+mengikuti kode status, dan biasanya menyebutkan perbaikannya. *"This API key is not scoped to a
+workspace"* berarti perlu menyetel `ANTHROPIC_WORKSPACE_ID` (lihat di atas); id model yang tidak
+dikenal berarti perlu memeriksa `Assistant:<Provider>:Model`.
 
 **Status bar menyebut `web search off`** — `Assistant:TavilyApiKey` kosong, jadi tool pencarian
 tidak didaftarkan sama sekali. Ini disengaja: tool yang diiklankan tetapi selalu gagal memboroskan

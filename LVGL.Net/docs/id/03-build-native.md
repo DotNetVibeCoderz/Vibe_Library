@@ -2,7 +2,7 @@
 
 ## Apa yang dibangun
 
-Satu shared library, `lvglnet`, berisi LVGL v9 resmi ditambah shim ABI dari `native/shim`. Satu
+Satu shared library, `lvglnet`, berisi LVGL v9.6 resmi ditambah shim ABI dari `native/shim`. Satu
 artefak berarti satu nama `DllImport` dan tidak ada masalah urutan pemuatan antar library yang
 saling bergantung.
 
@@ -61,7 +61,7 @@ cmake --build native/build --config Release
 
 | Opsi | Bawaan | Efek |
 |------|--------|------|
-| `LVGL_TAG` | `v9.2.2` | Rilis LVGL yang diunduh |
+| `LVGL_TAG` | `v9.6.0` | Rilis LVGL yang diunduh |
 | `LVGLNET_WITH_DEMOS` | `ON` | Mengompilasi `lv_demo_widgets` dan `lv_demo_benchmark` |
 | `LVGLNET_TUNE_PI4` | `OFF` | Menambahkan `-mcpu=cortex-a72`; biner menjadi tidak portabel |
 | `LVGLNET_RID` | dideteksi otomatis | Folder `runtimes/<rid>/native` tujuan |
@@ -78,11 +78,24 @@ artinya rilis kecil LVGL berikutnya tidak perlu digabung manual.
 Satu pengaturan yang tidak boleh diubah:
 
 ```c
-#define LV_COLOR_DEPTH 32
+#define LV_COLOR_FORMAT_DEFAULT LV_COLOR_FORMAT_XRGB8888
 ```
 
-Backend menyalin word XRGB8888 mentah. Build 16-bit akan menghasilkan tampilan kacau, sehingga
-`LvglRuntime.Initialize` menolaknya dengan pesan tegas alih-alih menggambar hal yang salah.
+Backend menyalin word XRGB8888 mentah. Sejak LVGL 9.5 format inilah pengaturannya, dan
+`LV_COLOR_DEPTH` (32) diturunkan darinya - mendefinisikan kedalaman warna secara langsung sudah
+deprecated, disertai `#warning` yang dianggap error oleh mode C11 milik MSVC. Build 16-bit akan
+menghasilkan tampilan kacau, sehingga `LvglRuntime.Initialize` menolaknya dengan pesan tegas
+alih-alih menggambar hal yang salah.
+
+Fitur yang dikompilasi dan diandalkan oleh sisi managed:
+
+| Pengaturan | Dipakai oleh |
+|------------|--------------|
+| `LV_USE_LODEPNG`, `LV_USE_BMP` | Sumber berkas `LvImage` - PNG dan BMP didekode secara native |
+| `LV_USE_FS_STDIO`, `LV_FS_STDIO_LETTER 'A'` | Setiap jalur berkas yang diserahkan ke LVGL; `LvFileSystem.ToLvglPath` menambahkan `A:` |
+| `LV_USE_TINY_TTF`, `LV_TINY_TTF_FILE_SUPPORT` | `LvFont.FromFile` / `FromData` |
+| `LV_CACHE_DEF_SIZE` (1 MiB) | Gambar yang sudah didekode di-cache alih-alih diurai ulang setiap kali digambar ulang |
+| `LV_USE_LED`, `LV_USE_SPINBOX`, dan flag widget lainnya | Kelas widget dengan nama yang sama |
 
 Pengaturan yang wajar untuk diubah:
 
@@ -95,6 +108,27 @@ Pengaturan yang wajar untuk diubah:
 | `LV_USE_LOG` | Setel 1 saat menelusuri masalah rendering |
 
 Setelah menyunting, bangun ulang library native. Kode managed tidak perlu dibangun ulang.
+
+## Berpindah ke LVGL yang lebih baru
+
+LVGL menjaga nama fungsinya tetap stabil dalam satu versi mayor, tetapi tidak dengan ordinal enum-nya,
+dan kadang mengubah sebuah fungsi menjadi makro (di 9.6, `lv_chart_set_range` menjadi makro untuk
+`lv_chart_set_axis_range`, sehingga nama lamanya tidak lagi diekspor). Upgrade dari 9.2.2 ke 9.6.0
+berjalan seperti ini, dan langkah yang sama berlaku untuk upgrade berikutnya:
+
+1. Ubah `LVGL_TAG`, hapus `native/lvgl` (atau pindahkan ke tempat lain untuk dibandingkan), lalu
+   build ulang.
+2. Bandingkan prototipe setiap fungsi yang diimpor di antara kedua pohon header - tipe argumen
+   berubah tanpa peringatan: `lv_state_t` membesar dari 16 menjadi 32 bit, `lv_anim_enable_t`
+   menjadi `bool`.
+3. Jalankan test dengan `LVGLNET_REQUIRE_NATIVE=1`. Test konstanta membandingkan setiap cerminan
+   enum managed dengan build baru melalui `lvn_constant`; test event-code melakukan hal yang sama
+   untuk event.
+4. Naikkan `LVN_ABI_VERSION` dan `LvglRuntime.ExpectedShimAbi` bersamaan bila shim berubah.
+
+`LvglConstantsTests` adalah jaring pengaman di sini: antara 9.2 dan 9.6, test ini akan menangkap
+`LV_STATE_ALT` yang menggeser setiap bit state dan `LV_CHART_TYPE_CURVE` yang memindahkan `Bar` dan
+`Scatter` - tidak satu pun dari keduanya gagal saat kompilasi atau linking.
 
 ## Cross-compile untuk Pi
 
@@ -143,7 +177,7 @@ library.
 
 ```csharp
 LvglRuntime.Initialize();
-Console.WriteLine(LvglRuntime.LvglVersion);   // mis. 9.2.2
+Console.WriteLine(LvglRuntime.LvglVersion);   // mis. 9.6.0
 Console.WriteLine(LvglRuntime.ColorDepth);    // harus 32
 ```
 
