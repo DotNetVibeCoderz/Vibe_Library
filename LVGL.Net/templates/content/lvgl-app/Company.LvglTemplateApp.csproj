@@ -32,8 +32,12 @@
 <!--#if (UseJson) -->
 
   <ItemGroup>
-    <None Update="Screens/*.lvgl.json" CopyToOutputDirectory="PreserveNewest" />
-    <None Update="Screens/assets/**" CopyToOutputDirectory="PreserveNewest" />
+    <!--
+      Included explicitly rather than by updating the SDK's default None items: an Update only
+      applies to files the default glob already found, and on macOS in CI it found none.
+    -->
+    <None Remove="Screens/**" />
+    <Content Include="Screens/*.lvgl.json;Screens/assets/**" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 <!--#endif -->
 

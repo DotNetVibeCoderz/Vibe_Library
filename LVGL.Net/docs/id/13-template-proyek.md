@@ -83,7 +83,8 @@ dotnet add package LVGL.Net.Ui
 
 ```xml
 <ItemGroup>
-  <None Update="Screens/*.lvgl.json" CopyToOutputDirectory="PreserveNewest" />
+  <None Remove="Screens/**" />
+  <Content Include="Screens/*.lvgl.json" CopyToOutputDirectory="PreserveNewest" />
 </ItemGroup>
 ```
 
