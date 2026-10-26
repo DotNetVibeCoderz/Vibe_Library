@@ -93,7 +93,14 @@ public sealed class DesignerWindowTests : IDisposable
         if (window.Preview.IsAvailable) return true;
         if (Environment.GetEnvironmentVariable("LVGLNET_REQUIRE_NATIVE") is "1" or "true")
         {
-            throw new InvalidOperationException($"LVGLNET_REQUIRE_NATIVE is set but the preview is offline: {window.Preview.UnavailableReason}");
+            // Everything that tells "never started" from "failed silently", for a CI-only failure.
+            var status = window.FindControl<TextBlock>("StatusText")?.Text;
+            var live = window.FindControl<TextBlock>("LiveText")?.Text;
+            throw new InvalidOperationException(
+                $"LVGLNET_REQUIRE_NATIVE is set but the preview is offline: '{window.Preview.UnavailableReason}'. " +
+                $"Window visible: {window.IsVisible}; document: {window.Session.Document.Name} ({window.Session.Document.Children.Count} parts); " +
+                $"bitmap: {window.Preview.Bitmap is not null}; LVGL initialised: {LvglRuntime.IsInitialized}; " +
+                $"status: '{status}'; live: '{live}'.");
         }
 
         return false;
