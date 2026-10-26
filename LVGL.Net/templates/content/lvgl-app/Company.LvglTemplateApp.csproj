@@ -33,11 +33,13 @@
 
   <ItemGroup>
     <!--
-      Included explicitly rather than by updating the SDK's default None items: an Update only
-      applies to files the default glob already found, and on macOS in CI it found none.
+      Link names each file's place in the output. Without it MSBuild derives that from the path
+      relative to the project, and under a symlinked folder (macOS's /var -> /private/var) it
+      cannot, so the files land flat in bin/ and MainScreen cannot find Screens/.
     -->
     <None Remove="Screens/**" />
-    <Content Include="Screens/*.lvgl.json;Screens/assets/**" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Screens/*.lvgl.json" Link="Screens/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Screens/assets/**" Link="Screens/assets/%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 <!--#endif -->
 

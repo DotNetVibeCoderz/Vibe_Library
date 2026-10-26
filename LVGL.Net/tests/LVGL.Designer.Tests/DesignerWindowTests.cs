@@ -86,6 +86,10 @@ public sealed class DesignerWindowTests : IDisposable
 
     private static bool NeedsPreview(MainWindow window)
     {
+        // The first build reaches the preview through the rebuild timer after the window opens,
+        // so wait for it to start or to say why it could not; a fixed wait lost this race on CI.
+        PumpUntil(() => window.Preview.IsAvailable || window.Preview.UnavailableReason is not null);
+
         if (window.Preview.IsAvailable) return true;
         if (Environment.GetEnvironmentVariable("LVGLNET_REQUIRE_NATIVE") is "1" or "true")
         {
