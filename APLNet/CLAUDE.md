@@ -6,8 +6,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 `APLNet/` is one project inside the **Vibe_Library** monorepo (the git root is one level up,
 alongside `ActorNet`, `RLNet`, …). Keep all work inside `APLNet/`; do not touch sibling projects.
-Workflows live in the **root** `.github/workflows/` (`aplnet-ci.yml`, `aplnet-publish.yml`),
-path-scoped to `APLNet/**`. Release tags are namespaced: `APLNet-v1.0.0`.
+Workflows live in the **root** `.github/workflows/` (`aplnet-ci.yml`, `aplnet-publish.yml`,
+`aplnet-arm64.yml`), path-scoped to `APLNet/**`. Release tags are namespaced: `APLNet-v1.1.0`. A tag
+publishes to nuget.org through the `NUGET_API_KEY` repository secret and creates a GitHub release.
 
 `requirements.md` is the original spec. The owner's notes at its end override the body: target
 **.NET 10**, the Avalonia **APL.Net Gallery** sample, bilingual (EN/ID) docs and README with real
@@ -20,7 +21,7 @@ never copy it into the repo.
 
 ```sh
 dotnet build APL.Net.slnx -c Release
-dotnet test --project tests/APL.Net.Tests -c Release                       # 113 tests, ~10 s
+dotnet test --project tests/APL.Net.Tests -c Release                       # 172 tests, ~20 s
 dotnet test --project tests/APL.Net.Tests -c Release --filter-class "*ParallelExecutorTests"
 dotnet run  --project tests/APL.Net.Tests -c Release                       # same suite, directly
 DOTNET_EnableAVX2=0 dotnet run --project tests/APL.Net.Tests -c Release    # SIMD fallback paths
@@ -29,6 +30,8 @@ dotnet run -c Release --project benchmarks/APL.Net.Benchmarks -- --filter '*Simd
 dotnet run --project samples/APL.Net.Gallery -c Release [-- --case zipf --lang id]
 dotnet run --project samples/APL.Net.Gallery -c Release -- --screenshot docs/images   # regenerates every screenshot
 dotnet pack src/APL.Net/APL.Net.csproj -c Release -o artifacts
+dotnet run --project tools/APL.Net.ApiDocs -c Release -- docs/api           # regenerate the API reference (CI diffs it)
+python tools/icon/make_icon.py                                              # redraw the package icon
 cargo bench --manifest-path benchmarks/rust-rayon/Cargo.toml                # out-of-band reference
 ```
 
@@ -37,6 +40,7 @@ cargo bench --manifest-path benchmarks/rust-rayon/Cargo.toml                # ou
 - NativeAOT publish on Windows needs `C:\Program Files (x86)\Microsoft Visual Studio\Installer`
   on `PATH` (for `vswhere.exe`).
 - A running Gallery or benchmark locks the DLLs (MSB3021). Close it before building.
+- After changing any `///` comment on a public API, regenerate `docs/api/`, or CI fails.
 - **Never build while benchmarks are running.** Close to 100% of the numbers depend on idle cores.
 
 ## Architecture
@@ -51,7 +55,10 @@ acronym casing; `APL.For` inside namespace `APL` would not compile). Five layers
 Every public loop is adapted (in `Core/Bodies.cs`) to a single internal shape, `IRangeWorkBody`,
 and run by a pooled `RangeJob<TBody>` or `ReduceJob<T,TBody>`. The job **is** the
 `IThreadPoolWorkItem`. It is queued `workers-1` times with `UnsafeQueueUserWorkItem`, and the
-caller works too.
+caller works too. That covers `long` ranges (`LongRangeBody` maps int units onto `scale`
+iterations) and loop state (`StatefulElementBody` checks one shared `int` limit per iteration).
+With `AplOptions.Workers`, `SpinningWorkers.Dispatch` hands the job to dedicated threads instead,
+and static partitions are claimed home first (`WorkHomed`).
 
 ## Invariants: don't "fix" these (docs/en/design-decisions.md explains each)
 
@@ -72,6 +79,10 @@ caller works too.
 - **SIMD operator interfaces have no default methods** (DIMs box struct implementers).
 - Inside `AplNet.*` code, `Unsafe.X` resolves to the `AplNet.Unsafe` *namespace*. Use an alias
   (`MemUnsafe`) or the full `System.Runtime.CompilerServices.Unsafe` name.
+- **Native interop lives only in `Core/AplTopology.cs`** (`LibraryImport`), and runs only when
+  `WorkerAffinity` is not `None`. Keep it that way.
+- Straggler tolerance is `StaticRangePartitioner(partitionsPerWorker)`: more *static* partitions,
+  not dynamic claiming. The default stays `k = 1`.
 
 ## Benchmarks and numbers
 
@@ -83,7 +94,8 @@ prose. Gallery timings (in-app harness) are illustrative; quote BenchmarkDotNet 
 
 ## Documentation
 
-`docs/en/` and `docs/id/` are parallel (13 files each, same file names). **Update both together.**
+`docs/en/` and `docs/id/` are parallel (14 files each, same file names). **Update both together.**
+`docs/api/` is generated (English only) by `tools/APL.Net.ApiDocs`. Never edit it by hand.
 The README is bilingual in one file. `docs/images/` holds real captures from the Gallery's
 `--screenshot` mode. Retake them after UI changes.
 

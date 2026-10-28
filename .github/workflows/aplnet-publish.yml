@@ -39,6 +39,8 @@ defaults:
 jobs:
   publish:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write   # the GitHub release
 
     steps:
       - uses: actions/checkout@v4
@@ -64,13 +66,21 @@ jobs:
           echo "value=$version" >> "$GITHUB_OUTPUT"
           echo "Publishing version: ${version:-<from Directory.Build.props>}"
 
+      # The version goes into the build too, so the assembly and the package agree.
       - name: Build
-        run: dotnet build APL.Net.slnx -c Release
+        shell: bash
+        run: |
+          if [ -n "${{ steps.version.outputs.value }}" ]; then
+            dotnet build APL.Net.slnx -c Release -p:Version=${{ steps.version.outputs.value }}
+          else
+            dotnet build APL.Net.slnx -c Release
+          fi
 
       - name: Test
         run: dotnet run --project tests/APL.Net.Tests -c Release --no-build
 
       - name: Pack
+        shell: bash
         run: |
           if [ -n "${{ steps.version.outputs.value }}" ]; then
             dotnet pack src/APL.Net/APL.Net.csproj -c Release --no-build -o artifacts -p:Version=${{ steps.version.outputs.value }}
@@ -84,10 +94,28 @@ jobs:
           name: aplnet-nupkg
           path: APLNet/artifacts/*
 
+      # Pushes the .nupkg; nuget.org picks up the .snupkg beside it as the symbol package.
       - name: Push to nuget.org
         if: startsWith(github.ref, 'refs/tags/APLNet-v') || inputs.push
+        env:
+          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
         run: |
+          if [ -z "$NUGET_API_KEY" ]; then
+            echo "::error::The NUGET_API_KEY repository secret is not set."
+            exit 1
+          fi
           dotnet nuget push "artifacts/*.nupkg" \
-            --api-key "${{ secrets.NUGET_API_KEY }}" \
+            --api-key "$NUGET_API_KEY" \
             --source https://api.nuget.org/v3/index.json \
             --skip-duplicate
+
+      # A tag also gets a GitHub release carrying the same packages.
+      - name: GitHub release
+        if: startsWith(github.ref, 'refs/tags/APLNet-v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" artifacts/*.nupkg artifacts/*.snupkg \
+            --title "APL.Net ${{ steps.version.outputs.value }}" \
+            --notes "APL.Net ${{ steps.version.outputs.value }}: https://www.nuget.org/packages/APL.Net/${{ steps.version.outputs.value }}. Changes: APLNet/PLAN.md and APLNet/Progress.md." \
+            || echo "::warning::GitHub release not created (it may already exist)."

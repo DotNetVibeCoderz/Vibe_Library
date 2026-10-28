@@ -6,7 +6,8 @@
 
 - **Small `n`.** Waking even one pool thread costs microseconds. A loop that finishes in a
   microsecond or two on one thread won't get faster. Use a plain `for`, or set `MinChunkSize`
-  so APL.Net runs it inline.
+  so APL.Net runs it inline. If such loops come in a steady stream (a game tick, a solver
+  iteration), [spinning workers](workers.md) remove most of the wake-up cost.
 - **Uneven work with the default partitioner.** If iteration costs vary widely, the static split
   loses to `Parallel.For`. Choose `WorkStealingPartitioner`, or just use TPL.
 - **I/O-bound bodies.** If the body waits on disk or the network, dispatch cost is irrelevant.
@@ -22,7 +23,19 @@
 **My loop is slower with `Apl.For` than with `Parallel.For`.**
 The work is probably uneven, or the machine is busy. With static partitioning, one slow or
 descheduled core delays the whole loop. Look at the lanes (Gallery or a profiler) and try
-`StripedPartitioner` or `WorkStealingPartitioner`.
+`StripedPartitioner` or `WorkStealingPartitioner` for uneven work, or
+`new StaticRangePartitioner(partitionsPerWorker: 4)` for uniform work on a busy machine.
+
+**My process uses CPU even when no loop is running.**
+That is `SpinningWorkers` doing its job for `SpinDuration` after each loop. Shorten the duration,
+use fewer threads, or dispose the group when the hot phase ends.
+
+**`IsAffinityApplied` is false.**
+Pinning is supported on Windows and Linux only. On macOS the workers still run, unpinned. On Linux
+a container may also restrict which processors a thread can be pinned to.
+
+**`InvalidOperationException` from `AplLoopState`.**
+A loop called both `Stop()` and `Break()`. Use one or the other, as with `ParallelLoopState`.
 
 **`AsyncLocal` values are null inside my body.**
 That is by design. See [design decisions §2](design-decisions.md#2-unsafequeueuserworkitem-no-executioncontext-flow).

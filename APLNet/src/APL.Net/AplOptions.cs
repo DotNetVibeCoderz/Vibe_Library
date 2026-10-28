@@ -54,6 +54,13 @@ public sealed class AplOptions
     public IParallelismProvider? ParallelismProvider { get; init; }
 
     /// <summary>
+    /// Dedicated spinning worker threads to run the loop on instead of the thread pool. <c>null</c>
+    /// (the default) uses the pool. Opt-in for very small loops that run very often; see
+    /// <see cref="SpinningWorkers"/> for the trade-off.
+    /// </summary>
+    public SpinningWorkers? Workers { get; init; }
+
+    /// <summary>
     /// The fewest iterations worth handing to one worker. A loop over <c>n</c> items uses at most
     /// <c>ceil(n / MinChunkSize)</c> workers, so tiny loops are not split into slices smaller than the
     /// cost of waking a thread. <c>null</c> uses the API's own default: 1 for the loop methods (the

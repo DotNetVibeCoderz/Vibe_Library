@@ -15,7 +15,7 @@ namespace AplNet;
 /// <c>Parallel.For</c> / <c>Parallel.ForEach</c>. The generic struct overloads
 /// (<c>TBody : struct, IWorkBody</c>) are the zero-allocation path: the JIT specialises the loop
 /// for your struct and inlines its <c>Invoke</c>, so there is no delegate call per iteration at all.
-/// <see cref="ForRange{TBody}"/> goes further and hands the body whole sub-ranges.
+/// <see cref="ForRange{TBody}(int, int, TBody, AplOptions?)"/> goes further and hands the body whole sub-ranges.
 /// </para>
 /// <para>
 /// <b>Behavioural difference from TPL: the <see cref="ExecutionContext"/> does not flow to pool
@@ -54,6 +54,48 @@ public static class Apl
         where TBody : struct, IWorkBody =>
         ParallelExecutor.For(fromInclusive, toExclusive, body, options);
 
+    /// <summary>
+    /// Runs <paramref name="body"/> for every index, letting it end the loop early with
+    /// <see cref="AplLoopState.Stop"/> or <see cref="AplLoopState.Break"/>. Drop-in for
+    /// <c>Parallel.For</c> with a <see cref="ParallelLoopState"/>.
+    /// </summary>
+    /// <returns>Whether the loop ran to completion, and the lowest break index if it did not.</returns>
+    /// <exception cref="AggregateException">The body threw; contains every exception thrown.</exception>
+    /// <exception cref="OperationCanceledException">The options' token was canceled.</exception>
+    public static AplLoopResult For(int fromInclusive, int toExclusive, Action<int, AplLoopState> body, AplOptions? options = null)
+    {
+        ArgumentNullException.ThrowIfNull(body);
+        return ParallelExecutor.RunStateful(fromInclusive, toExclusive, new StatefulDelegateBody(body), options);
+    }
+
+    /// <summary>
+    /// Runs a struct body for every index, letting it end the loop early through
+    /// <see cref="AplLoopState"/>. Allocation-free in steady state. The state is checked before every
+    /// iteration, at the cost of one load and one compare.
+    /// </summary>
+    /// <returns>Whether the loop ran to completion, and the lowest break index if it did not.</returns>
+    /// <exception cref="AggregateException">The body threw; contains every exception thrown.</exception>
+    /// <exception cref="OperationCanceledException">The options' token was canceled.</exception>
+    public static AplLoopResult ForWithState<TBody>(int fromInclusive, int toExclusive, TBody body, AplOptions? options = null)
+        where TBody : struct, IStatefulWorkBody =>
+        ParallelExecutor.ForWithState(fromInclusive, toExclusive, body, options);
+
+    /// <summary>Runs <paramref name="body"/> for every index of a 64-bit range, for loops over more than <see cref="int.MaxValue"/> items.</summary>
+    /// <exception cref="AggregateException">The body threw; contains every exception thrown.</exception>
+    /// <exception cref="OperationCanceledException">The options' token was canceled.</exception>
+    public static void For(long fromInclusive, long toExclusive, Action<long> body, AplOptions? options = null)
+    {
+        ArgumentNullException.ThrowIfNull(body);
+        ParallelExecutor.RunLong(fromInclusive, toExclusive, new LongDelegateBody(body), options);
+    }
+
+    /// <summary>Runs a struct body for every index of a 64-bit range. Allocation-free in steady state.</summary>
+    /// <exception cref="AggregateException">The body threw; contains every exception thrown.</exception>
+    /// <exception cref="OperationCanceledException">The options' token was canceled.</exception>
+    public static void For<TBody>(long fromInclusive, long toExclusive, TBody body, AplOptions? options = null)
+        where TBody : struct, ILongWorkBody =>
+        ParallelExecutor.For(fromInclusive, toExclusive, body, options);
+
     // ---------------------------------------------------------------- ForRange
 
     /// <summary>Runs <paramref name="body"/> once per sub-range; the ranges are disjoint and cover <c>[fromInclusive, toExclusive)</c>.</summary>
@@ -73,6 +115,22 @@ public static class Apl
     /// <exception cref="OperationCanceledException">The options' token was canceled.</exception>
     public static void ForRange<TBody>(int fromInclusive, int toExclusive, TBody body, AplOptions? options = null)
         where TBody : struct, IRangeWorkBody =>
+        ParallelExecutor.ForRange(fromInclusive, toExclusive, body, options);
+
+    /// <summary>Runs <paramref name="body"/> once per sub-range of a 64-bit range; the ranges are disjoint and cover <c>[fromInclusive, toExclusive)</c>.</summary>
+    /// <exception cref="AggregateException">The body threw; contains every exception thrown.</exception>
+    /// <exception cref="OperationCanceledException">The options' token was canceled.</exception>
+    public static void ForRange(long fromInclusive, long toExclusive, Action<long, long> body, AplOptions? options = null)
+    {
+        ArgumentNullException.ThrowIfNull(body);
+        ParallelExecutor.RunLong(fromInclusive, toExclusive, new LongRangeDelegateBody(body), options);
+    }
+
+    /// <summary>Runs a struct body once per sub-range of a 64-bit range. Allocation-free in steady state.</summary>
+    /// <exception cref="AggregateException">The body threw; contains every exception thrown.</exception>
+    /// <exception cref="OperationCanceledException">The options' token was canceled.</exception>
+    public static void ForRange<TBody>(long fromInclusive, long toExclusive, TBody body, AplOptions? options = null)
+        where TBody : struct, ILongRangeWorkBody =>
         ParallelExecutor.ForRange(fromInclusive, toExclusive, body, options);
 
     // ---------------------------------------------------------------- ForEach

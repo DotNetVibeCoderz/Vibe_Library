@@ -102,9 +102,12 @@ src/APL.Net/                 the library (package "APL.Net", namespace AplNet)
 src/APL.Net.SourceGen/       the Roslyn generator, shipped inside the package
 tests/APL.Net.Tests/         xunit.v3 suite (JIT)
 tests/APL.Net.AotTests/      console checks, published with PublishAot=true
-benchmarks/APL.Net.Benchmarks/  BenchmarkDotNet B1–B7
+benchmarks/APL.Net.Benchmarks/  BenchmarkDotNet B1–B10
 benchmarks/rust-rayon/       out-of-band Rust/Rayon reference (no FFI)
 samples/APL.Net.Samples/     console quick start + image processing demo
 samples/APL.Net.Gallery/     Avalonia showcase comparing APL.Net and TPL
 docs/en, docs/id             this documentation, in English and Indonesian
+docs/api/                    API reference, generated from the XML documentation
+tools/APL.Net.ApiDocs/       the generator for docs/api (CI fails if its output drifts)
+tools/icon/                  draws the package icon
 ```

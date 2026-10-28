@@ -1,0 +1,63 @@
+# Arm64 validation for APL.Net (Vibe_Library/APLNet) on real hardware.
+#
+# CI already runs the unit suite and NativeAOT on Arm64 for every push. This workflow adds the
+# part CI does not do: BenchmarkDotNet on Arm64 machines, so the AdvSimd (Vector128) kernels and the
+# scheduler are measured, not just tested. Manual only. GitHub's hosted runners are shared VMs, so
+# the numbers are indicative, not a lab measurement. The reports are uploaded as an artifact.
+name: APL.Net Arm64 benchmarks
+
+on:
+  workflow_dispatch:
+    inputs:
+      filter:
+        description: 'BenchmarkDotNet filter'
+        required: false
+        default: '*CallOverhead* *SimdBenchmarks* *Reduction* *SimdMath* *SpinningWorkers*'
+        type: string
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+defaults:
+  run:
+    working-directory: APLNet
+
+jobs:
+  bench:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04-arm, macos-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: APLNet/global.json
+
+      - name: Build
+        run: dotnet build benchmarks/APL.Net.Benchmarks -c Release
+
+      - name: Machine
+        shell: bash
+        run: |
+          uname -a
+          (lscpu || sysctl -a | grep -E 'machdep.cpu|hw.perflevel|hw.ncpu') 2>/dev/null | head -40
+
+      # --job short: 3 warmups, 3 iterations. Enough to compare variants on one machine.
+      - name: Benchmarks
+        shell: bash
+        run: |
+          set -f   # the filter is a list of globs for BenchmarkDotNet, not for the shell
+          dotnet run -c Release --no-build --project benchmarks/APL.Net.Benchmarks -- \
+            --filter ${{ inputs.filter }} --job short --artifacts bdn
+
+      - name: Upload reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: aplnet-arm64-bench-${{ matrix.os }}
+          path: APLNet/bdn/results/*

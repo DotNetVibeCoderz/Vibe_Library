@@ -38,9 +38,10 @@ jobs:
       fail-fast: false
       matrix:
         # All three: the suite is about threads and timing, and the thread pool behaves differently
-        # enough across platforms to be worth catching here. macos-latest is Arm64, which is also
-        # the only place the AdvSimd (Vector128) path runs on real hardware.
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        # enough across platforms to be worth catching here. Two of them are Arm64 on real
+        # hardware: macos-latest (Apple silicon) and ubuntu-24.04-arm (Neoverse), where the
+        # AdvSimd (Vector128) path and Linux thread pinning both run.
+        os: [ubuntu-latest, windows-latest, macos-latest, ubuntu-24.04-arm]
 
     steps:
       - uses: actions/checkout@v4
@@ -59,13 +60,13 @@ jobs:
       # The SIMD kernels must give the same answers on narrower hardware (NFR3). Rerun the suite
       # with the wider instruction sets switched off, down to no hardware intrinsics at all.
       - name: Test without AVX-512
-        if: runner.os != 'macOS'
+        if: runner.arch == 'X64'
         env:
           DOTNET_EnableAVX512F: '0'
         run: dotnet run --project tests/APL.Net.Tests -c Release --no-build
 
       - name: Test without AVX2
-        if: runner.os != 'macOS'
+        if: runner.arch == 'X64'
         env:
           DOTNET_EnableAVX2: '0'
         run: dotnet run --project tests/APL.Net.Tests -c Release --no-build
@@ -75,11 +76,34 @@ jobs:
           DOTNET_EnableHWIntrinsic: '0'
         run: dotnet run --project tests/APL.Net.Tests -c Release --no-build
 
+      # docs/api is generated from the XML documentation. Regenerate it and fail if anything moved,
+      # so the reference can never drift from the code. Once is enough: the output does not depend
+      # on the platform.
+      - name: API reference is up to date
+        if: matrix.os == 'ubuntu-latest'
+        shell: bash
+        run: |
+          dotnet run --project tools/APL.Net.ApiDocs -c Release --no-build -- docs/api
+          if [ -n "$(git status --porcelain -- docs/api)" ]; then
+            git status --porcelain -- docs/api
+            git diff --stat -- docs/api
+            echo "::error::docs/api is out of date. Run: dotnet run --project tools/APL.Net.ApiDocs -c Release -- docs/api"
+            exit 1
+          fi
+
   # The NativeAOT half of the definition of done: publish the check app with PublishAot (trim and
   # AOT warnings are errors in that project) and run it.
   aot:
-    name: nativeaot
-    runs-on: ubuntu-latest
+    name: nativeaot ${{ matrix.rid }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            rid: linux-x64
+          - os: ubuntu-24.04-arm
+            rid: linux-arm64
     steps:
       - uses: actions/checkout@v4
 
@@ -88,7 +112,7 @@ jobs:
           global-json-file: APLNet/global.json
 
       - name: Publish
-        run: dotnet publish tests/APL.Net.AotTests -c Release -r linux-x64 -o out/aot
+        run: dotnet publish tests/APL.Net.AotTests -c Release -r ${{ matrix.rid }} -o out/aot
 
       - name: Run
         run: ./out/aot/APL.Net.AotTests

@@ -16,6 +16,7 @@ public sealed class ImageFilterCase : GalleryCase
 {
     private const int Width = 1920;
     private const int Height = 1080;
+    private static readonly AplOptions FourPerWorker = new() { Partitioner = new AplNet.Core.Partitioners.StaticRangePartitioner(partitionsPerWorker: 4) };
     private int[] _source = [];
     private int[] _target = [];
 
@@ -25,8 +26,8 @@ public sealed class ImageFilterCase : GalleryCase
     public override string TitleId => "Filter gambar";
     public override string SummaryEn => "A sepia tone with a vignette over a full-HD frame: a colour matrix and a distance falloff per pixel, one row per iteration.";
     public override string SummaryId => "Nada sepia dengan vinyet pada frame full-HD: matriks warna dan peredupan berdasarkan jarak per piksel, satu baris per iterasi.";
-    public override string TakeawayEn => "With a whole row per iteration, dispatch is already amortised and both libraries saturate the cores; the difference comes from the range body. ForRange hands a worker a contiguous run of rows, so it slices spans once and the per-pixel loop has no bounds checks.";
-    public override string TakeawayId => "Dengan satu baris per iterasi, biaya dispatch sudah teramortisasi dan kedua pustaka memenuhi semua core; selisihnya datang dari range body. ForRange memberi worker sederet baris berurutan, sehingga span dibuat sekali dan loop per piksel tanpa pengecekan batas.";
+    public override string TakeawayEn => "With a whole row per iteration, dispatch is already amortised and both libraries saturate the cores; the difference comes from the range body. ForRange hands a worker a contiguous run of rows, so it slices spans once and the per-pixel loop has no bounds checks. On a busy machine one descheduled core can hold up a static split; four partitions per worker (opt-in) let the others take its share.";
+    public override string TakeawayId => "Dengan satu baris per iterasi, biaya dispatch sudah teramortisasi dan kedua pustaka memenuhi semua core; selisihnya datang dari range body. ForRange memberi worker sederet baris berurutan, sehingga span dibuat sekali dan loop per piksel tanpa pengecekan batas. Di mesin yang sibuk, satu core yang di-deschedule bisa menahan pembagian statis; empat partisi per worker (opt-in) membuat worker lain mengambil jatahnya.";
     public override string SizeEn => "1920 × 1080 pixels (8 MB)";
     public override string SizeId => "1920 × 1080 piksel (8 MB)";
 
@@ -89,6 +90,7 @@ public sealed class ImageFilterCase : GalleryCase
             new("Parallel.For (rows)", VariantKind.Tpl, () => Parallel.For(0, Height, y => Filter.Row(s, d, y))),
             new("Apl.For (rows)", VariantKind.Apl, () => Apl.For(0, Height, y => Filter.Row(s, d, y))),
             new("Apl.ForRange (struct)", VariantKind.Apl, () => Apl.ForRange(0, Height, new SepiaBody(s, d))),
+            new("Apl.ForRange (4 per worker)", VariantKind.Apl, () => Apl.ForRange(0, Height, new SepiaBody(s, d), FourPerWorker)),
         ];
     }
 

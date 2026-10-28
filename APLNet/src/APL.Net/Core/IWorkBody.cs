@@ -73,3 +73,33 @@ public interface IReduceBody<T>
 
 /// <summary>A <c>ForEach</c> callback that receives the element by reference.</summary>
 public delegate void RefItemAction<T>(int index, ref T item);
+
+/// <summary>
+/// A loop body invoked once per index of a 64-bit range: the <c>long</c> counterpart of
+/// <see cref="IWorkBody"/>, for loops over more than <see cref="int.MaxValue"/> items.
+/// </summary>
+public interface ILongWorkBody
+{
+    /// <summary>Runs one iteration.</summary>
+    void Invoke(long index);
+}
+
+/// <summary>
+/// A loop body invoked once per contiguous sub-range of a 64-bit range: the <c>long</c> counterpart
+/// of <see cref="IRangeWorkBody"/>.
+/// </summary>
+public interface ILongRangeWorkBody
+{
+    /// <summary>Runs every iteration in <c>[fromInclusive, toExclusive)</c>.</summary>
+    void Invoke(long fromInclusive, long toExclusive);
+}
+
+/// <summary>
+/// A loop body that can end its loop early through <see cref="AplLoopState"/>: the struct form of
+/// <c>Parallel.For</c> with a <see cref="ParallelLoopState"/>.
+/// </summary>
+public interface IStatefulWorkBody
+{
+    /// <summary>Runs one iteration. <paramref name="state"/> is valid only during this call.</summary>
+    void Invoke(int index, AplLoopState state);
+}

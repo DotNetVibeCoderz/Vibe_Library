@@ -2,7 +2,8 @@
 
 [Bahasa Indonesia](../id/benchmark-results.md) · [Index](README.md)
 
-These are BenchmarkDotNet results for the matrix in spec §5, B1–B7. The raw reports, with every
+These are BenchmarkDotNet results for the matrix in spec §5, B1–B7, plus B8–B10 for the 1.1
+options. The raw reports, with every
 column, are in [docs/benchmarks/](../benchmarks/). This page shows the numbers **where APL.Net loses
 as well as where it wins**, and explains why in each case.
 
@@ -16,7 +17,7 @@ as well as where it wins**, and explains why in each case.
 | Runtime | .NET 10.0.12, RyuJIT x86-64-v3, SDK 10.0.401 |
 | Harness | BenchmarkDotNet 0.15.8, `Job.Default` on .NET 10, 5 warm-ups, 10–30 iterations, `MemoryDiagnoser` |
 | Environment variables | none set (`DOTNET_TieredPGO` and `DOTNET_ReadyToRun` at their defaults) |
-| Date | 2026-09-25, total run time 24 min for 66 benchmarks |
+| Date | B1–B7: 2026-09-25, total run time 24 min for 66 benchmarks. B8–B10: 2026-10-28 |
 
 Reproduce with:
 
@@ -145,6 +146,68 @@ For skewed workloads: measure with your own data, and if neither APL.Net partiti
 
 The struct path allocates **nothing**. The job, its wait handle and its partition state are
 pooled per body type. The 96 B on the lambda path is the benchmark's own closure and delegate.
+
+## B8: tiny loops on spinning workers (1.1)
+
+The B7 loop again, on the thread pool and on [`SpinningWorkers`](workers.md). BenchmarkDotNet calls
+back to back, so the workers are always still spinning when the next call comes: this is the best
+case, and the case the option exists for.
+
+| Method | 1,000 elements | 16,000 elements | Allocated |
+|---|---:|---:|---:|
+| `Parallel.For` | 10.32 µs | 34.15 µs | 2.9–3.0 KB |
+| `Apl.For` (struct), thread pool | 3.13 µs (3.3×) | 8.62 µs (4.0×) | 0 B |
+| `Apl.For` (struct), spinning workers | **2.23 µs (4.6×)** | **5.49 µs (6.2×)** | **0 B** |
+| `Apl.For` (struct), spinning, pinned to cores | 2.21 µs (4.7×) | 5.99 µs (5.7×) | 0 B |
+| Sequential | 0.45 µs | 7.80 µs | – |
+
+Spinning workers take another **1.4×** (1K) to **1.6×** (16K) off the already pooled call. At 16K
+elements that is enough to beat the sequential loop, which the thread-pool path does not manage.
+Pinning makes no measurable difference on this 4-core laptop. Its use is cache and NUMA locality
+on bigger machines, which this one cannot show. Raw report:
+[SpinningWorkersBenchmarks.md](../benchmarks/SpinningWorkersBenchmarks.md).
+
+## B9: straggler tolerance (1.1)
+
+B2's `√x · sin x` over 1M doubles. With `BusyCore = true`, a background thread keeps one core busy,
+as another process would. The two runs below were taken on the same day, the first while editing
+files and the second on an idle machine.
+
+| Method | Run 1, idle | Run 1, busy core | Run 2, idle | Run 2, busy core |
+|---|---:|---:|---:|---:|
+| `Parallel.For` | 4,334 µs | 4,587 µs | 4,612 µs | 4,678 µs |
+| Static, 1 partition per worker (default) | 5,314 µs | 5,915 µs | 5,870 µs | 4,910 µs |
+| Static, **4 per worker** | **4,741 µs** | **4,638 µs** | **3,755 µs** | 4,951 µs |
+| Work stealing | 3,381 µs | 3,704 µs | 3,286 µs | 3,810 µs |
+
+Four partitions per worker beat one in three of the four columns, by **1.12× to 1.56×**, and tied
+in the fourth. That is the point of the option: it is still static, still claims once per
+partition, and costs nothing per iteration. Work stealing was fastest everywhere. The honest
+reading is that on this laptop on this day, even the "idle" machine was uneven enough that the
+default static split lost to `Parallel.For`, unlike the September B2 run where it won by 1.26×.
+That is the sensitivity that [design decision §1](design-decisions.md#1-static-partitioning-is-the-default)
+documents. If your machine is shared, try `partitionsPerWorker: 4` first (it keeps static
+semantics), and work stealing if that is not enough. Raw report (run 2):
+[StragglerBenchmarks.md](../benchmarks/StragglerBenchmarks.md).
+
+## B10: `Exp`, `Log` and fused multiply-add (1.1)
+
+1M doubles, single-threaded unless stated otherwise. **Medians**: the scalar `Exp` row had a
+standard deviation of 5 ms on a 7 ms median (clock changes on a laptop), so means would mislead.
+
+| Operation | Median | vs scalar |
+|---|---:|---:|
+| `Math.Exp` loop | 7,285 µs | baseline |
+| `ExpOperator` (Vector256) | 4,468 µs | **1.6×** |
+| `ExpOperator`, `ParallelTransform` | 1,984 µs | **3.7×** |
+| `Math.Log` loop | 6,442 µs | baseline |
+| `LogOperator` (Vector256) | 3,013 µs | **2.1×** |
+| `MultiplyAddOperator` | 1,266 µs | – |
+| `FusedMultiplyAddOperator` | 1,255 µs | same |
+
+FMA costs the same as the multiply-then-add. Both are bound by memory here (16 MB moved), so the
+reason to choose FMA is its single rounding, not speed. Raw report:
+[SimdMathBenchmarks.md](../benchmarks/SimdMathBenchmarks.md).
 
 ## Rust/Rayon reference (out-of-band, illustrative only)
 

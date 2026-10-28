@@ -1,15 +1,19 @@
+<img src="docs/images/icon-512.png" alt="APL.Net" width="96" align="right">
+
 # APL.Net — Another Parallel Library for .NET
+
+[![NuGet](https://img.shields.io/nuget/v/APL.Net.svg)](https://www.nuget.org/packages/APL.Net)
 
 **Parallel loops without the per-iteration tax.** APL.Net gives .NET data-parallel loops the JIT
 compiles for your exact body, with no delegate call, no `Task`, no captured `ExecutionContext` and
 no allocation per call, plus explicit SIMD kernels, an opt-in pointer tier and a source generator.
-It uses no native interop and is NativeAOT-safe.
+It is NativeAOT-safe, and the default path makes no native calls.
 
 **Loop paralel tanpa pajak per iterasi.** APL.Net menyediakan loop paralel-data untuk .NET yang
 di-compile JIT khusus untuk body Anda: tanpa pemanggilan delegate, tanpa `Task`, tanpa
 `ExecutionContext` yang ditangkap, dan tanpa alokasi per panggilan. Ditambah kernel SIMD
-eksplisit, tingkat pointer yang opt-in, dan source generator. Tanpa interop native, dan aman untuk
-NativeAOT.
+eksplisit, tingkat pointer yang opt-in, dan source generator. Aman untuk NativeAOT, dan jalur
+default-nya tanpa panggilan native.
 
 > Made by **Gravicode Studios**, led by **Kang Fadhil**. · Dibuat oleh **Gravicode Studios**,
 > dipimpin oleh **Kang Fadhil**.
@@ -63,14 +67,37 @@ Apl.For(0, rows, new RenderRow(image), new AplOptions { Partitioner = new WorkSt
 > worker pool; nilai `AsyncLocal<T>` dan culture tidak terlihat di body yang berjalan di thread
 > lain. Teruskan state secara eksplisit.
 
+## New in 1.1 / Baru di 1.1
+
+```csharp
+// Busy machine? Cut each worker's share into 4 static slices / Mesin sibuk? Potong jadi 4 bagian per worker
+Apl.For(0, n, body, new AplOptions { Partitioner = new StaticRangePartitioner(partitionsPerWorker: 4) });
+
+// Stop / Break, like ParallelLoopState / seperti ParallelLoopState
+AplLoopResult r = Apl.For(0, n, (i, state) => { if (data[i] < 0) state.Break(); });
+
+// Beyond 2^31 iterations / Di atas 2^31 iterasi
+Apl.ForRange(0L, 10_000_000_000L, (from, to) => Scan(from, to));
+
+// Exp, Log, fused multiply-add
+SimdOps.ParallelTransform(x, y, new ExpOperator<double>());
+
+// Tiny loops, many times a second: workers that stay awake / Loop kecil yang sangat sering
+using var workers = new SpinningWorkers(affinity: WorkerAffinity.NumaNode);
+Apl.For(0, n, body, new AplOptions { Workers = workers });
+```
+
+Plus a generated [API reference](docs/api/README.md) and CI on Arm64 hardware. · Ditambah
+[referensi API](docs/api/README.md) yang dibangkitkan otomatis dan CI di perangkat keras Arm64.
+
 ## What's inside / Isinya
 
 | Layer / Lapisan | API |
 |---|---|
-| Ergonomic / Ergonomis | `Apl.For`, `Apl.ForRange`, `Apl.ForEach`, `Apl.Reduce`, `Apl.ForEachAsync` |
-| Struct invoker | `IWorkBody`, `IRangeWorkBody`, `IWorkBody<T>`, `IReduceBody<T>` |
-| Scheduling / Penjadwalan | `StaticRangePartitioner` (default), `StripedPartitioner`, `WorkStealingPartitioner` |
-| SIMD | `SimdOps` over Vector512/256/128 with scalar fallback; operator structs |
+| Ergonomic / Ergonomis | `Apl.For` (`int` and `long`, with optional `AplLoopState`), `Apl.ForRange`, `Apl.ForEach`, `Apl.Reduce`, `Apl.ForEachAsync` |
+| Struct invoker | `IWorkBody`, `IRangeWorkBody`, `IWorkBody<T>`, `IReduceBody<T>`, `IStatefulWorkBody`, `ILongWorkBody`, `ILongRangeWorkBody` |
+| Scheduling / Penjadwalan | `StaticRangePartitioner` (default, optional straggler tolerance), `StripedPartitioner`, `WorkStealingPartitioner`; opt-in `SpinningWorkers` with core/NUMA pinning |
+| SIMD | `SimdOps` over Vector512/256/128 with scalar fallback; operator structs including `Exp`, `Log` and FMA |
 | Unsafe | `UnsafeParallel` (function pointers), `NativeBuffer<T>` |
 | Tooling | `[AplBody]` source generator, `AplNet` EventSource counters |
 
@@ -89,6 +116,8 @@ are against `Parallel.For`. · Lebih kecil lebih baik; rasio dibandingkan `Paral
 | B5 sum, 1M doubles | 1,103 µs | **194 µs** (`SimdOps.ParallelSum`) | **5.7×** |
 | B6 Zipf, heavy first | 12.9 ms | **8.9 ms** (work stealing) | **1.44×** |
 | B6 Zipf, shuffled | **10.1 ms** | 13.2 ms (static) | **0.77× — TPL wins** |
+| B8 call overhead, 16K elements, spinning workers (1.1) | 34.15 µs | **5.49 µs, 0 B** | **6.2×** |
+| B9 `√x·sin x` 1M, static vs 4 per worker (1.1) | 4.61 ms | 5.87 ms → **3.76 ms** | 0.79× → **1.23×** |
 
 **Honest reading / Cara membaca yang jujur:** on trivial work over arrays larger than cache, every
 variant (sequential included) is memory-bound, and APL.Net ≈ TPL. On skewed work, TPL's dynamic
@@ -138,6 +167,7 @@ dotnet run --project samples/APL.Net.Gallery -c Release
 
 - English: [docs/en/README.md](docs/en/README.md)
 - Bahasa Indonesia: [docs/id/README.md](docs/id/README.md)
+- API reference / Referensi API: [docs/api/README.md](docs/api/README.md)
 - Design decisions / Keputusan desain: [en](docs/en/design-decisions.md) · [id](docs/id/design-decisions.md)
 - Roadmap: [PLAN.md](PLAN.md) · Status: [Progress.md](Progress.md) · [CONTRIBUTING.md](CONTRIBUTING.md)
 

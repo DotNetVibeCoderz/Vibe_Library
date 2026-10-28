@@ -46,10 +46,18 @@ input kosong mengembalikan identity.
 
 | Unary (`IUnaryOperator<T>`) | Biner (`IBinaryOperator<T>`) | Reduksi (`IReduceOperator<T>`) |
 |---|---|---|
-| `IdentityOperator`, `NegateOperator`, `AbsOperator`, `SquareOperator`, `SqrtOperator`, `ScaleOperator(f)`, `AddScalarOperator(a)`, `MultiplyAddOperator(a, b)`, `ClampOperator(min, max)` | `AddOperator`, `SubtractOperator`, `MultiplyOperator`, `DivideOperator`, `MinOperator`, `MaxOperator` | `AddOperator` (jumlah), `MultiplyOperator` (hasil kali), `MinOperator`, `MaxOperator` |
+| `IdentityOperator`, `NegateOperator`, `AbsOperator`, `SquareOperator`, `SqrtOperator`, `ScaleOperator(f)`, `AddScalarOperator(a)`, `MultiplyAddOperator(a, b)`, `ClampOperator(min, max)`, `ExpOperator`, `LogOperator`, `FusedMultiplyAddOperator(a, b)` | `AddOperator`, `SubtractOperator`, `MultiplyOperator`, `DivideOperator`, `MinOperator`, `MaxOperator` | `AddOperator` (jumlah), `MultiplyOperator` (hasil kali), `MinOperator`, `MaxOperator` |
 
 `MultiplyAddOperator` menghitung perkalian lalu penjumlahan, bukan fused multiply-add, sehingga
-hasilnya identik bit per bit dengan ekspresi skalarnya.
+hasilnya identik bit per bit dengan ekspresi skalarnya. `FusedMultiplyAddOperator` adalah pilihan
+opt-in yang eksplisit untuk bentuk fused: satu pembulatan, bukan dua, dan identik bit per bit dengan
+`Math.FusedMultiplyAdd` di setiap lane, sehingga bisa berbeda dari `MultiplyAddOperator` di bit
+terakhir. Pada perangkat keras tanpa FMA, runtime mengemulasinya secara tepat tetapi lambat.
+
+`ExpOperator` dan `LogOperator` (`float` dan `double`) memakai `Exp`/`Log` tervektorisasi milik
+runtime. Akurasinya dalam beberapa ulp dari `Math.Exp`/`Math.Log` (test mengizinkan galat relatif
+1e-14 untuk `double` dan 1e-6 untuk `float`), tidak identik bit per bit. Ekor skalar sebuah span
+memakai `Math`, jadi elemen yang bertetangga bisa berbeda di digit terakhir.
 
 ## Menulis operator
 

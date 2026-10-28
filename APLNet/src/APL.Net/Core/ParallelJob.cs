@@ -19,6 +19,7 @@ internal readonly struct LoopPlan
     public required CancellationToken Token { get; init; }
     public required bool Stealing { get; init; }
     public required int Grain { get; init; }
+    public SpinningWorkers? Workers { get; init; }
 }
 
 /// <summary>
@@ -50,6 +51,13 @@ internal readonly struct LoopPlan
 /// (An earlier design reference-counted the items and returned the job when the last one ran; on a
 /// two-core machine the items lagged behind the calls and every few calls needed a new job.)
 /// </para>
+/// <para>
+/// With <see cref="SpinningWorkers"/> the job is handed to dedicated threads instead of the pool, and
+/// static partitions are claimed <em>home first</em>: each participant tries its own partition (the
+/// caller's is 0, worker <c>k</c>'s is <c>k + 1</c>) before helping with the rest, one flag per
+/// partition. That keeps the same data on the same thread from call to call. The default path keeps
+/// its single counter.
+/// </para>
 /// </remarks>
 internal abstract class ParallelJob : IThreadPoolWorkItem
 {
@@ -73,6 +81,8 @@ internal abstract class ParallelJob : IThreadPoolWorkItem
     private IPartitioner _partitioner = StaticRangePartitioner.Instance;
     private CancellationToken _token;
     private long[] _slots = [];
+    private int[] _claims = [];
+    private bool _homed;
 
     private int _next;       // static: next partition to claim; stealing: next worker slot
     private int _remaining;  // static: partitions not finished; stealing: iterations not finished
@@ -120,6 +130,15 @@ internal abstract class ParallelJob : IThreadPoolWorkItem
             _remaining = _partitionCount;
         }
 
+        _homed = plan.Workers is not null && !_stealing;
+        if (_homed)
+        {
+            if (_claims.Length < _partitionCount)
+                _claims = new int[_partitionCount];
+            else
+                Array.Clear(_claims, 0, _partitionCount);
+        }
+
         Prepare(SlotCount);
 
         int queued = _workerCount - 1;
@@ -132,10 +151,17 @@ internal abstract class ParallelJob : IThreadPoolWorkItem
         if (AplEventSource.Log.IsEnabled())
             AplEventSource.Log.OnLoop(inline: false);
 
-        for (int i = 0; i < queued; i++)
-            ThreadPool.UnsafeQueueUserWorkItem(this, preferLocal: false);
+        if (plan.Workers is { } workers)
+        {
+            workers.Dispatch(this, queued);
+        }
+        else
+        {
+            for (int i = 0; i < queued; i++)
+                ThreadPool.UnsafeQueueUserWorkItem(this, preferLocal: false);
+        }
 
-        Work();
+        Work(home: 0);
 
         if (Volatile.Read(ref _remaining) != 0)
             _done.Wait();
@@ -182,7 +208,13 @@ internal abstract class ParallelJob : IThreadPoolWorkItem
         ReturnToPool();
     }
 
-    void IThreadPoolWorkItem.Execute()
+    void IThreadPoolWorkItem.Execute() => RunAsWorker(home: -1);
+
+    /// <summary>
+    /// Joins the loop from a worker thread, if it is still running. <paramref name="home"/> is the
+    /// partition this worker tries first under home-first claiming; -1 for a pool item, which has none.
+    /// </summary>
+    internal void RunAsWorker(int home)
     {
         int observed = Volatile.Read(ref _gate);
         while (true)
@@ -198,7 +230,7 @@ internal abstract class ParallelJob : IThreadPoolWorkItem
 
         try
         {
-            Work();
+            Work(home);
         }
         finally
         {
@@ -206,10 +238,12 @@ internal abstract class ParallelJob : IThreadPoolWorkItem
         }
     }
 
-    private void Work()
+    private void Work(int home)
     {
         if (_stealing)
             WorkStealing();
+        else if (_homed)
+            WorkHomed(home);
         else
             WorkStatic();
     }
@@ -224,6 +258,34 @@ internal abstract class ParallelJob : IThreadPoolWorkItem
         {
             // A claimed partition is always counted, even when a failure or cancellation means it is
             // skipped - otherwise the caller would wait for work nobody is going to do.
+            if (Volatile.Read(ref _stop) == NoStop)
+                RunPartition(partition);
+
+            if (Interlocked.Decrement(ref _remaining) == 0)
+                _done.Set();
+        }
+    }
+
+    /// <summary>
+    /// Static partitions claimed home first: this participant's own partition, then the others in
+    /// order after it. One flag per partition, so a partition is still claimed exactly once.
+    /// </summary>
+    private void WorkHomed(int home)
+    {
+        int count = _partitionCount;
+        int[] claims = _claims;
+
+        // Homes are spread over the partitions when there are more partitions than workers.
+        int start = home < 0 ? 0 : (int)((long)home * count / _workerCount) % count;
+        for (int k = 0; k < count; k++)
+        {
+            int partition = start + k;
+            if (partition >= count)
+                partition -= count;
+
+            if (Volatile.Read(ref claims[partition]) != 0 || Interlocked.Exchange(ref claims[partition], 1) != 0)
+                continue;
+
             if (Volatile.Read(ref _stop) == NoStop)
                 RunPartition(partition);
 

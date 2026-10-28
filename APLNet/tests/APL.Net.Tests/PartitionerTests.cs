@@ -36,6 +36,35 @@ public class PartitionerTests
         Assert.True(sizes.Max() - sizes.Min() <= 1, "static partitions must differ in size by at most one");
     }
 
+    [Theory]
+    [MemberData(nameof(Shapes))]
+    public void StragglerTolerantStaticSplitsEachShareIntoKPartitions(int length, int workers)
+    {
+        foreach (int k in new[] { 1, 2, 4 })
+        {
+            var partitioner = new StaticRangePartitioner(partitionsPerWorker: k);
+            int count = partitioner.GetPartitionCount(length, workers);
+            Assert.Equal(Math.Min(length, workers * k), count);
+
+            int expectedStart = 0;
+            for (int p = 0; p < count; p++)
+            {
+                Assert.True(partitioner.TryGetRange(length, count, p, 0, out int from, out int to));
+                Assert.Equal(expectedStart, from);
+                expectedStart = to;
+            }
+
+            Assert.Equal(length, expectedStart);
+        }
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => new StaticRangePartitioner(0));
+        Assert.Equal(1, StaticRangePartitioner.Instance.PartitionsPerWorker);
+    }
+
+    [Fact]
+    public void StragglerTolerantStaticCountDoesNotOverflow() =>
+        Assert.Equal(int.MaxValue, new StaticRangePartitioner(1_000_000).GetPartitionCount(int.MaxValue, 64_000));
+
     [Fact]
     public void BalancedSplitDoesNotLeaveWorkersIdleWhereCeilingWould()
     {

@@ -6,7 +6,9 @@
 
 - **`n` kecil.** Membangunkan satu thread pool saja butuh beberapa mikrodetik. Loop yang selesai
   dalam satu-dua mikrodetik di satu thread tidak akan menjadi lebih cepat. Pakai `for` biasa, atau
-  setel `MinChunkSize` agar APL.Net menjalankannya inline.
+  setel `MinChunkSize` agar APL.Net menjalankannya inline. Jika loop seperti itu datang terus-menerus
+  (tick game, iterasi solver), [spinning worker](workers.md) menghapus sebagian besar biaya
+  membangunkan thread.
 - **Beban timpang dengan partitioner default.** Jika biaya iterasi sangat bervariasi, pembagian
   statis kalah dari `Parallel.For`. Pilih `WorkStealingPartitioner`, atau pakai TPL saja.
 - **Body yang terikat I/O.** Jika body menunggu disk atau jaringan, biaya dispatch tidak relevan.
@@ -22,7 +24,20 @@
 **Loop saya lebih lambat dengan `Apl.For` daripada `Parallel.For`.**
 Kemungkinan bebannya timpang, atau mesin sedang sibuk. Dengan partisi statis, satu core yang
 lambat atau di-deschedule menahan seluruh loop. Lihat lajurnya (di Galeri atau profiler), lalu coba
-`StripedPartitioner` atau `WorkStealingPartitioner`.
+`StripedPartitioner` atau `WorkStealingPartitioner` untuk beban timpang, atau
+`new StaticRangePartitioner(partitionsPerWorker: 4)` untuk beban seragam di mesin yang sibuk.
+
+**Proses saya memakai CPU meski tidak ada loop yang berjalan.**
+Itu `SpinningWorkers` yang sedang menjalankan tugasnya selama `SpinDuration` setelah setiap loop.
+Perpendek durasinya, kurangi jumlah thread, atau dispose kelompoknya saat fase sibuk selesai.
+
+**`IsAffinityApplied` bernilai false.**
+Pinning hanya didukung di Windows dan Linux. Di macOS worker tetap berjalan, tanpa pin. Di Linux,
+container juga bisa membatasi prosesor mana yang boleh dipakai untuk pin.
+
+**`InvalidOperationException` dari `AplLoopState`.**
+Satu loop memanggil `Stop()` dan `Break()` sekaligus. Pakai salah satunya saja, seperti
+`ParallelLoopState`.
 
 **Nilai `AsyncLocal` bernilai null di dalam body.**
 Itu memang disengaja. Lihat [keputusan desain §2](design-decisions.md#2-unsafequeueuserworkitem-executioncontext-tidak-mengalir).

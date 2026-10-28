@@ -169,3 +169,42 @@ dan gagal di-compile.
 | `NativeBuffer<T>` | Memori native yang rata untuk tingkat pointer dan SIMD |
 | `SimdCapabilities` | Memberi tahu pengguna lebar vektor yang benar-benar dipakai kernel |
 | Aplikasi uji NativeAOT | Runner xunit bergantung pada reflection, jadi separuh AOT dari definition of done butuh binary tersendiri |
+| Tambahan 1.1 | Partisi statis tahan straggler, state loop, rentang 64-bit, operator `Exp`/`Log`/FMA, spinning worker dengan afinitas, referensi API yang dibangkitkan: lihat §12 |
+
+## 12. Rilis 1.1: apa yang ditambahkan, dan apa yang tidak berubah
+
+Semua fitur 1.1 bersifat opt-in, dan tidak satu pun mengubah jalur default.
+
+- **Toleransi straggler berarti lebih banyak partisi statis, bukan klaim dinamis.**
+  `StaticRangePartitioner(partitionsPerWorker: k)` menetapkan `k × worker` potongan sebelum loop
+  dimulai, dan worker mengklaim potongan utuh dengan counter yang sudah ada. Itu sesuai §1: tidak
+  ada operasi interlocked per chunk, dan `k = 1` tetap default. Work stealing tetap jawaban untuk
+  *pekerjaan* yang timpang; ini jawaban murah untuk *mesin* yang timpang.
+- **State loop berada di adaptor body, bukan di scheduler.** `Stop` dan `Break` dilipat menjadi satu
+  batas `int`, sehingga pemeriksaan sebelum setiap iterasi hanya satu load dan satu perbandingan,
+  dan hanya loop yang memakai state yang membayarnya. Scheduler, `ParallelJob`, dan jalur tanpa
+  alokasi untuk loop lain tidak tersentuh. Objek state di-cache per thread, jadi `ForWithState` juga
+  tidak mengalokasi apa pun.
+- **Rentang 64-bit memakai ulang job 32-bit.** Menjalankan rentang panjang sebagai deretan jendela
+  seukuran `int` akan menyisipkan barrier di antara jendela. Sebagai gantinya, setiap unit rentang
+  `int` milik job mewakili `ceil(count / Int32.MaxValue)` iterasi berurutan: satu loop, satu set
+  worker. Sampai 2³¹ iterasi, unit dan iterasi berpasangan satu-satu.
+- **Spinning worker adalah dispatcher terpisah, di balik `AplOptions.Workers`.** Tanpanya, pekerjaan
+  masuk ke pool persis seperti sebelumnya. Dengannya, job diserahkan ke thread khusus lewat satu CAS
+  per worker. Partisi diklaim dengan aturan *rumah dulu* (worker *k* mencoba partisi *k + 1* sebelum
+  yang lain, satu flag per partisi), sehingga data yang sama tetap di core yang sama dari panggilan
+  ke panggilan. Invarian §5 tetap berlaku: pemanggil tidak pernah menunggu worker mengambil
+  bagiannya, jadi kelompok yang sibuk atau sudah di-dispose bisa memperlambat loop tetapi tidak bisa
+  memblokirnya.
+- **Interop native hanya untuk afinitas thread.** Membaca topologi NUMA dan mem-pin thread butuh OS
+  (`GetNumaNodeProcessorMaskEx`/`SetThreadGroupAffinity` di Windows, `sched_setaffinity` dan
+  `/sys/devices/system/node` di Linux). Panggilannya memakai `LibraryImport`, jadi dibangkitkan saat
+  compile dan tetap aman untuk NativeAOT. Panggilan itu hanya berjalan jika `WorkerAffinity.Core`
+  atau `WorkerAffinity.NumaNode` diminta. Bagian lain pustaka tidak melakukan panggilan native.
+- **`ExpOperator`, `LogOperator`, dan `FusedMultiplyAddOperator` memilih jalur lewat `typeof(T)`.**
+  JIT melipat pemeriksaan itu per instansiasi, sehingga operator generik memanggil
+  `Vector128.Exp(Vector128<float>)` dan sejenisnya tanpa biaya. FMA dibuat sebagai operator
+  tersendiri, bukan flag pada `MultiplyAddOperator`, agar jaminan bit-per-bit operator lama tidak
+  berubah.
+- **Tetap di luar cakupan.** Eksekusi terdistribusi (spesifikasi §9) dan offload ke GPU bukan bagian
+  dari pustaka ini. Lihat [PLAN.md](../../PLAN.md).

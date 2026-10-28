@@ -35,6 +35,10 @@ it means.
 | `⊆` partition | Scheduling | Mandelbrot set · Skewed workload (Zipf) |
 | `⎕` quad | Low level | Raw pointers and function pointers · `[AplBody]` source generator |
 
+Two cases also show the 1.1 options. *Many small loops* runs a variant on
+[`SpinningWorkers`](workers.md), and *Image filter* runs one with four static partitions per worker
+(straggler tolerance).
+
 ![Trivial arithmetic](../images/gallery-trivial.png)
 
 ![Many small loops: time and allocations](../images/gallery-overhead.png)

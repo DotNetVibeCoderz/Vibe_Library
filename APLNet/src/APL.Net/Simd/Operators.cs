@@ -3,6 +3,7 @@
 
 using System.Numerics;
 using System.Runtime.CompilerServices;
+using MemUnsafe = System.Runtime.CompilerServices.Unsafe;
 using System.Runtime.Intrinsics;
 
 namespace AplNet.Simd;
@@ -218,6 +219,155 @@ public readonly struct ClampOperator<T>(T min, T max) : IUnaryOperator<T>
     [MethodImpl(MethodImplOptions.AggressiveInlining)] public Vector256<T> Invoke(Vector256<T> x) => Vector256.Min(Vector256.Max(x, Vector256.Create(Min)), Vector256.Create(Max));
     /// <inheritdoc />
     [MethodImpl(MethodImplOptions.AggressiveInlining)] public Vector512<T> Invoke(Vector512<T> x) => Vector512.Min(Vector512.Max(x, Vector512.Create(Min)), Vector512.Create(Max));
+}
+
+/// <summary>
+/// <c>e^x</c>, for <c>float</c> and <c>double</c>. The vector form is the runtime's own vectorized
+/// <c>Exp</c>: accurate to within a few ulp of <see cref="Math.Exp(double)"/>, not bit-identical
+/// to it, so a vectorized result can differ from the scalar tail in the last digits.
+/// </summary>
+public readonly struct ExpOperator<T> : IUnaryOperator<T>
+    where T : unmanaged, IExponentialFunctions<T>
+{
+    /// <inheritdoc />
+    [MethodImpl(MethodImplOptions.AggressiveInlining)] public T Invoke(T x) => T.Exp(x);
+
+    /// <inheritdoc />
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public Vector128<T> Invoke(Vector128<T> x)
+    {
+        if (typeof(T) == typeof(float))
+            return Vector128.Exp(x.As<T, float>()).As<float, T>();
+        if (typeof(T) == typeof(double))
+            return Vector128.Exp(x.As<T, double>()).As<double, T>();
+        throw FloatingOnly();
+    }
+
+    /// <inheritdoc />
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public Vector256<T> Invoke(Vector256<T> x)
+    {
+        if (typeof(T) == typeof(float))
+            return Vector256.Exp(x.As<T, float>()).As<float, T>();
+        if (typeof(T) == typeof(double))
+            return Vector256.Exp(x.As<T, double>()).As<double, T>();
+        throw FloatingOnly();
+    }
+
+    /// <inheritdoc />
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public Vector512<T> Invoke(Vector512<T> x)
+    {
+        if (typeof(T) == typeof(float))
+            return Vector512.Exp(x.As<T, float>()).As<float, T>();
+        if (typeof(T) == typeof(double))
+            return Vector512.Exp(x.As<T, double>()).As<double, T>();
+        throw FloatingOnly();
+    }
+
+    private static NotSupportedException FloatingOnly() => new($"{nameof(ExpOperator<T>)} is vectorized for float and double only, not {typeof(T).Name}.");
+}
+
+/// <summary>
+/// The natural logarithm <c>ln(x)</c>, for <c>float</c> and <c>double</c>. Like
+/// <see cref="ExpOperator{T}"/>, the vector form is within a few ulp of the scalar one rather than
+/// bit-identical to it.
+/// </summary>
+public readonly struct LogOperator<T> : IUnaryOperator<T>
+    where T : unmanaged, ILogarithmicFunctions<T>
+{
+    /// <inheritdoc />
+    [MethodImpl(MethodImplOptions.AggressiveInlining)] public T Invoke(T x) => T.Log(x);
+
+    /// <inheritdoc />
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public Vector128<T> Invoke(Vector128<T> x)
+    {
+        if (typeof(T) == typeof(float))
+            return Vector128.Log(x.As<T, float>()).As<float, T>();
+        if (typeof(T) == typeof(double))
+            return Vector128.Log(x.As<T, double>()).As<double, T>();
+        throw FloatingOnly();
+    }
+
+    /// <inheritdoc />
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public Vector256<T> Invoke(Vector256<T> x)
+    {
+        if (typeof(T) == typeof(float))
+            return Vector256.Log(x.As<T, float>()).As<float, T>();
+        if (typeof(T) == typeof(double))
+            return Vector256.Log(x.As<T, double>()).As<double, T>();
+        throw FloatingOnly();
+    }
+
+    /// <inheritdoc />
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public Vector512<T> Invoke(Vector512<T> x)
+    {
+        if (typeof(T) == typeof(float))
+            return Vector512.Log(x.As<T, float>()).As<float, T>();
+        if (typeof(T) == typeof(double))
+            return Vector512.Log(x.As<T, double>()).As<double, T>();
+        throw FloatingOnly();
+    }
+
+    private static NotSupportedException FloatingOnly() => new($"{nameof(LogOperator<T>)} is vectorized for float and double only, not {typeof(T).Name}.");
+}
+
+/// <summary>
+/// <c>x * multiplier + addend</c> as a fused multiply-add: one rounding instead of the two of
+/// <see cref="MultiplyAddOperator{T}"/>. The explicit opt-in, for <c>float</c> and <c>double</c>.
+/// Results match <see cref="Math.FusedMultiplyAdd(double, double, double)"/> bit for bit in every
+/// lane, so they can differ from <see cref="MultiplyAddOperator{T}"/> in the last bit. On hardware
+/// without FMA instructions the runtime emulates it exactly, which is slow.
+/// </summary>
+public readonly struct FusedMultiplyAddOperator<T>(T multiplier, T addend) : IUnaryOperator<T>
+    where T : unmanaged, IFloatingPointIeee754<T>
+{
+    /// <summary>The multiplier <c>a</c> in <c>fma(x, a, b)</c>.</summary>
+    public T Multiplier { get; } = multiplier;
+
+    /// <summary>The addend <c>b</c> in <c>fma(x, a, b)</c>.</summary>
+    public T Addend { get; } = addend;
+
+    /// <inheritdoc />
+    [MethodImpl(MethodImplOptions.AggressiveInlining)] public T Invoke(T x) => T.FusedMultiplyAdd(x, Multiplier, Addend);
+
+    /// <inheritdoc />
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public Vector128<T> Invoke(Vector128<T> x)
+    {
+        if (typeof(T) == typeof(float))
+            return Vector128.FusedMultiplyAdd(x.As<T, float>(), Vector128.Create(MemUnsafe.BitCast<T, float>(Multiplier)), Vector128.Create(MemUnsafe.BitCast<T, float>(Addend))).As<float, T>();
+        if (typeof(T) == typeof(double))
+            return Vector128.FusedMultiplyAdd(x.As<T, double>(), Vector128.Create(MemUnsafe.BitCast<T, double>(Multiplier)), Vector128.Create(MemUnsafe.BitCast<T, double>(Addend))).As<double, T>();
+        throw FloatingOnly();
+    }
+
+    /// <inheritdoc />
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public Vector256<T> Invoke(Vector256<T> x)
+    {
+        if (typeof(T) == typeof(float))
+            return Vector256.FusedMultiplyAdd(x.As<T, float>(), Vector256.Create(MemUnsafe.BitCast<T, float>(Multiplier)), Vector256.Create(MemUnsafe.BitCast<T, float>(Addend))).As<float, T>();
+        if (typeof(T) == typeof(double))
+            return Vector256.FusedMultiplyAdd(x.As<T, double>(), Vector256.Create(MemUnsafe.BitCast<T, double>(Multiplier)), Vector256.Create(MemUnsafe.BitCast<T, double>(Addend))).As<double, T>();
+        throw FloatingOnly();
+    }
+
+    /// <inheritdoc />
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public Vector512<T> Invoke(Vector512<T> x)
+    {
+        if (typeof(T) == typeof(float))
+            return Vector512.FusedMultiplyAdd(x.As<T, float>(), Vector512.Create(MemUnsafe.BitCast<T, float>(Multiplier)), Vector512.Create(MemUnsafe.BitCast<T, float>(Addend))).As<float, T>();
+        if (typeof(T) == typeof(double))
+            return Vector512.FusedMultiplyAdd(x.As<T, double>(), Vector512.Create(MemUnsafe.BitCast<T, double>(Multiplier)), Vector512.Create(MemUnsafe.BitCast<T, double>(Addend))).As<double, T>();
+        throw FloatingOnly();
+    }
+
+    private static NotSupportedException FloatingOnly() => new($"{nameof(FusedMultiplyAddOperator<T>)} is vectorized for float and double only, not {typeof(T).Name}.");
 }
 
 // ---------------------------------------------------------------- binary and reductions

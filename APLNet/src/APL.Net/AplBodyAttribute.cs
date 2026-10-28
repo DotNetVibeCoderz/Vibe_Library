@@ -28,7 +28,7 @@ public sealed class AplBodyAttribute : Attribute;
 /// <summary>
 /// Like <see cref="AplBodyAttribute"/>, for a method whose first two parameters are a range
 /// (<c>int fromInclusive, int toExclusive</c>). The generated struct implements
-/// <see cref="Core.IRangeWorkBody"/> and is used with <see cref="Apl.ForRange{TBody}"/>.
+/// <see cref="Core.IRangeWorkBody"/> and is used with <see cref="Apl.ForRange{TBody}(int, int, TBody, AplOptions?)"/>.
 /// </summary>
 [AttributeUsage(AttributeTargets.Method, AllowMultiple = false, Inherited = false)]
 public sealed class AplRangeBodyAttribute : Attribute;

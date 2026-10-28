@@ -57,6 +57,32 @@ public class AllocationTests
     }
 
     [Fact]
+    public void LongRangeAndStatefulLoopsDoNotAllocatePerCall()
+    {
+        var hits = new int[50_000];
+        var options = new AplOptions { MaxDegreeOfParallelism = s_dop };
+        long longFor = MeasurePerCall(() => Apl.For(0L, hits.Length, new LongCountingBody(hits), options));
+        long stateful = MeasurePerCall(() => Apl.ForWithState(0, hits.Length, new LoopStateTests.FindNegative(hits), options));
+        Assert.True(longFor < 8 && stateful < 8, $"bytes per call: long For {longFor}, ForWithState {stateful}");
+    }
+
+    [Fact]
+    public void SpinningWorkersDoNotAllocatePerCall()
+    {
+        using var workers = new SpinningWorkers(s_dop - 1 > 0 ? s_dop - 1 : 1);
+        var data = new double[20_000];
+        var result = new double[data.Length];
+        var options = new AplOptions { MaxDegreeOfParallelism = s_dop, Workers = workers };
+        long perCall = MeasurePerCall(() => Apl.For(0, data.Length, new AffineBody(data, result), options));
+        Assert.True(perCall < 8, $"For on spinning workers allocated {perCall} bytes per call");
+    }
+
+    private readonly struct LongCountingBody(int[] hits) : ILongWorkBody
+    {
+        public void Invoke(long index) => hits[index]++;
+    }
+
+    [Fact]
     public void ParallelForAllocatesForComparison()
     {
         // Not a property of APL.Net - a sanity check that the measurement can see allocations at all,

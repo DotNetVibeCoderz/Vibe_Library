@@ -11,7 +11,10 @@ specialisation at compile time, and the source generator runs in the compiler.
 `tests/APL.Net.AotTests` exercises every public API against a sequential reference: all three
 partitioners, `For`/`ForRange`/`ForEach`/`Reduce`, generated bodies, SIMD over
 `float`/`double`/`int`/`long`, the pointer tier, cancellation, exception aggregation and
-`ForEachAsync`. It is published with `PublishAot=true`, and trim/AOT warnings are errors:
+`ForEachAsync`. The 1.1 additions are covered as well: straggler-tolerant partitions, `long` ranges,
+loop state, `Exp`/`Log`/FMA, and spinning workers pinned to cores, which exercises the
+`LibraryImport` calls for topology and affinity. It is published with `PublishAot=true`, and
+trim/AOT warnings are errors:
 
 ```sh
 dotnet publish tests/APL.Net.AotTests -c Release -r win-x64 -o out/aot
@@ -19,7 +22,7 @@ out/aot/APL.Net.AotTests            # exit code 0 = every check passed
 ```
 
 On the reference machine, this produces a 3.5 MB executable with zero trim or AOT warnings, and
-every check passes. CI repeats the check on Linux.
+every check passes. CI repeats the check on Linux x64 and Linux Arm64.
 
 ## Vector width under AOT
 

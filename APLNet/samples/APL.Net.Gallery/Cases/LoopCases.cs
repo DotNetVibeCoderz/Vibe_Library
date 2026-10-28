@@ -161,6 +161,8 @@ public sealed class CallOverheadCase : GalleryCase
     private const int N = 2_000;
     private double[] _src = [];
     private double[] _dst = [];
+    private SpinningWorkers? _workers;
+    private AplOptions _spinning = AplOptions.Default;
 
     public override string Id => "overhead";
     public override CaseCategory Category => CaseCategory.Loops;
@@ -168,8 +170,8 @@ public sealed class CallOverheadCase : GalleryCase
     public override string TitleId => "Banyak loop kecil";
     public override string SummaryEn => "200 parallel loops of 2,000 elements each, back to back — what a simulation step or a per-frame update looks like. The cost here is starting and joining loops, not running them.";
     public override string SummaryId => "200 loop paralel masing-masing 2.000 elemen, berurutan — seperti satu langkah simulasi atau update per frame. Biayanya di sini adalah memulai dan menggabungkan loop, bukan menjalankannya.";
-    public override string TakeawayEn => "APL.Net reuses a pooled job per body type and queues it without a Task or a captured context, so a call costs a few microseconds and allocates nothing. Compare the allocation figures too. Loops this small can still lose to a plain for loop — parallelism has a floor.";
-    public override string TakeawayId => "APL.Net memakai ulang job dari pool per tipe body dan mengantrikannya tanpa Task maupun context yang ditangkap, sehingga satu panggilan hanya beberapa mikrodetik dan tanpa alokasi. Bandingkan juga angka alokasinya. Loop sekecil ini tetap bisa kalah dari for biasa — paralelisme punya batas bawah.";
+    public override string TakeawayEn => "APL.Net reuses a pooled job per body type and queues it without a Task or a captured context, so a call costs a few microseconds and allocates nothing. Compare the allocation figures too. Opt-in spinning workers go one step further: they stay awake between calls, so no thread has to be woken at all — at the price of the CPU they spin on. Loops this small can still lose to a plain for loop — parallelism has a floor.";
+    public override string TakeawayId => "APL.Net memakai ulang job dari pool per tipe body dan mengantrikannya tanpa Task maupun context yang ditangkap, sehingga satu panggilan hanya beberapa mikrodetik dan tanpa alokasi. Bandingkan juga angka alokasinya. Spinning worker (opt-in) melangkah lebih jauh: worker tetap terjaga di antara panggilan, jadi tidak ada thread yang perlu dibangunkan — dengan harga CPU yang dipakai untuk berputar. Loop sekecil ini tetap bisa kalah dari for biasa — paralelisme punya batas bawah.";
     public override string SizeEn => "200 calls × 2,000 doubles per run";
     public override string SizeId => "200 panggilan × 2.000 double per run";
 
@@ -177,6 +179,12 @@ public sealed class CallOverheadCase : GalleryCase
         var body = new Affine(src, dst);    // a struct: nothing to allocate
         for (int step = 0; step < 200; step++)
             Apl.For(0, 2_000, body);        // pooled job, no Task, no closure
+
+        // Opt-in: workers that keep spinning between calls
+        using var workers = new SpinningWorkers();
+        var options = new AplOptions { Workers = workers };
+        for (int step = 0; step < 200; step++)
+            Apl.For(0, 2_000, body, options);
         """;
 
     public override string CodeTpl => """
@@ -190,9 +198,17 @@ public sealed class CallOverheadCase : GalleryCase
             return;
         _src = Enumerable.Range(0, N).Select(i => (double)i).ToArray();
         _dst = new double[N];
+        _workers ??= new SpinningWorkers();
+        _spinning = new AplOptions { Workers = _workers };
     }
 
-    public override void Release() => (_src, _dst) = ([], []);
+    public override void Release()
+    {
+        (_src, _dst) = ([], []);
+        _workers?.Dispose();
+        _workers = null;
+        _spinning = AplOptions.Default;
+    }
 
     public override IReadOnlyList<Variant> CreateVariants()
     {
@@ -220,6 +236,13 @@ public sealed class CallOverheadCase : GalleryCase
                 var body = new AffineBody(s, d);
                 for (int c = 0; c < Calls; c++)
                     Apl.For(0, s.Length, body);
+            }),
+            new("Apl.For (spinning workers)", VariantKind.Apl, () =>
+            {
+                var body = new AffineBody(s, d);
+                AplOptions options = _spinning;
+                for (int c = 0; c < Calls; c++)
+                    Apl.For(0, s.Length, body, options);
             }),
         ];
     }

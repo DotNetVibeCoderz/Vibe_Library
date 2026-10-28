@@ -2,7 +2,8 @@
 
 [English](../en/benchmark-results.md) · [Indeks](README.md)
 
-Halaman ini berisi hasil BenchmarkDotNet untuk matriks di spesifikasi §5, yaitu B1–B7. Laporan
+Halaman ini berisi hasil BenchmarkDotNet untuk matriks di spesifikasi §5, yaitu B1–B7, ditambah
+B8–B10 untuk opsi 1.1. Laporan
 mentahnya, lengkap dengan semua kolom, ada di [docs/benchmarks/](../benchmarks/). Angka ditampilkan
 **baik saat APL.Net kalah maupun saat menang**, beserta alasannya.
 
@@ -16,7 +17,7 @@ mentahnya, lengkap dengan semua kolom, ada di [docs/benchmarks/](../benchmarks/)
 | Runtime | .NET 10.0.12, RyuJIT x86-64-v3, SDK 10.0.401 |
 | Harness | BenchmarkDotNet 0.15.8, `Job.Default` di .NET 10, 5 warm-up, 10–30 iterasi, `MemoryDiagnoser` |
 | Variabel lingkungan | tidak ada yang disetel (`DOTNET_TieredPGO` dan `DOTNET_ReadyToRun` default) |
-| Tanggal | 2026-09-25, total 24 menit untuk 66 benchmark |
+| Tanggal | B1–B7: 2026-09-25, total 24 menit untuk 66 benchmark. B8–B10: 2026-10-28 |
 
 Cara mengulang:
 
@@ -148,6 +149,68 @@ menang, **pakai `Parallel.For`**.
 Jalur struct **tidak mengalokasi apa pun**. Job, wait handle-nya, dan state partisinya diambil dari
 pool per tipe body. Alokasi 96 B pada jalur lambda adalah closure dan delegate milik benchmark itu
 sendiri.
+
+## B8: loop kecil di atas spinning worker (1.1)
+
+Loop B7 lagi, di thread pool dan di [`SpinningWorkers`](workers.md). BenchmarkDotNet memanggil
+berturut-turut, jadi worker selalu masih berputar saat panggilan berikutnya datang: ini kasus
+terbaik, sekaligus kasus yang menjadi alasan opsi ini ada.
+
+| Method | 1.000 elemen | 16.000 elemen | Alokasi |
+|---|---:|---:|---:|
+| `Parallel.For` | 10,32 µs | 34,15 µs | 2,9–3,0 KB |
+| `Apl.For` (struct), thread pool | 3,13 µs (3,3×) | 8,62 µs (4,0×) | 0 B |
+| `Apl.For` (struct), spinning worker | **2,23 µs (4,6×)** | **5,49 µs (6,2×)** | **0 B** |
+| `Apl.For` (struct), spinning, di-pin ke core | 2,21 µs (4,7×) | 5,99 µs (5,7×) | 0 B |
+| Sekuensial | 0,45 µs | 7,80 µs | – |
+
+Spinning worker memangkas lagi **1,4×** (1K) sampai **1,6×** (16K) dari panggilan yang sudah
+memakai pool. Pada 16K elemen itu cukup untuk mengalahkan loop sekuensial, sesuatu yang tidak
+tercapai lewat thread pool. Pinning tidak memberi beda yang terukur di laptop 4 core ini. Gunanya
+ada pada lokalitas cache dan NUMA di mesin yang lebih besar, yang tidak bisa ditunjukkan mesin ini.
+Laporan mentah: [SpinningWorkersBenchmarks.md](../benchmarks/SpinningWorkersBenchmarks.md).
+
+## B9: toleransi straggler (1.1)
+
+`√x · sin x` dari B2 atas 1M double. Dengan `BusyCore = true`, sebuah thread latar membuat satu core
+tetap sibuk, seperti yang dilakukan proses lain. Dua run di bawah diambil di hari yang sama: run
+pertama sambil menyunting file, run kedua di mesin yang menganggur.
+
+| Method | Run 1, menganggur | Run 1, core sibuk | Run 2, menganggur | Run 2, core sibuk |
+|---|---:|---:|---:|---:|
+| `Parallel.For` | 4.334 µs | 4.587 µs | 4.612 µs | 4.678 µs |
+| Statis, 1 partisi per worker (default) | 5.314 µs | 5.915 µs | 5.870 µs | 4.910 µs |
+| Statis, **4 per worker** | **4.741 µs** | **4.638 µs** | **3.755 µs** | 4.951 µs |
+| Work stealing | 3.381 µs | 3.704 µs | 3.286 µs | 3.810 µs |
+
+Empat partisi per worker mengalahkan satu partisi di tiga dari empat kolom, sebesar **1,12× sampai
+1,56×**, dan seri di kolom keempat. Itulah inti opsinya: tetap statis, tetap satu klaim per
+partisi, dan tanpa biaya per iterasi. Work stealing tercepat di semua kolom. Cara membaca yang
+jujur: di laptop ini pada hari itu, bahkan mesin yang "menganggur" cukup timpang sehingga pembagian
+statis default kalah dari `Parallel.For`, berbeda dengan run B2 bulan September yang menang 1,26×.
+Itulah kepekaan yang didokumentasikan di
+[keputusan desain §1](design-decisions.md#1-partisi-statis-sebagai-default). Jika mesin Anda dipakai
+bersama, coba dulu `partitionsPerWorker: 4` (semantik statisnya tetap), lalu work stealing jika
+belum cukup. Laporan mentah (run 2): [StragglerBenchmarks.md](../benchmarks/StragglerBenchmarks.md).
+
+## B10: `Exp`, `Log`, dan fused multiply-add (1.1)
+
+1M double, satu thread kecuali disebutkan lain. **Median**: baris `Exp` skalar punya simpangan
+baku 5 ms pada median 7 ms (perubahan clock di laptop), jadi rata-rata akan menyesatkan.
+
+| Operasi | Median | vs skalar |
+|---|---:|---:|
+| Loop `Math.Exp` | 7.285 µs | baseline |
+| `ExpOperator` (Vector256) | 4.468 µs | **1,6×** |
+| `ExpOperator`, `ParallelTransform` | 1.984 µs | **3,7×** |
+| Loop `Math.Log` | 6.442 µs | baseline |
+| `LogOperator` (Vector256) | 3.013 µs | **2,1×** |
+| `MultiplyAddOperator` | 1.266 µs | – |
+| `FusedMultiplyAddOperator` | 1.255 µs | sama |
+
+FMA sama cepatnya dengan perkalian lalu penjumlahan. Keduanya terikat memori di sini (16 MB
+dipindahkan), jadi alasan memilih FMA adalah pembulatannya yang hanya sekali, bukan kecepatan.
+Laporan mentah: [SimdMathBenchmarks.md](../benchmarks/SimdMathBenchmarks.md).
 
 ## Referensi Rust/Rayon (terpisah, hanya ilustrasi)
 

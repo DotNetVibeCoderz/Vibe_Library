@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Generates docs/api/ (one Markdown page per public type) from the library's XML documentation.
+    Reflection is fine here: this is a build tool, not the library.
+
+      dotnet run (project tools/APL.Net.ApiDocs, Release) with the argument docs/api
+
+    CI runs the same command and fails if docs/api/ changes, so the reference cannot drift from the code.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>AplNet.ApiDocs</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/APL.Net/APL.Net.csproj" />
+  </ItemGroup>
+
+</Project>

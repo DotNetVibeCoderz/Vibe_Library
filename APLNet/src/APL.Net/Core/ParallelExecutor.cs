@@ -52,11 +52,70 @@ public static class ParallelExecutor
         where TBody : struct, IReduceBody<T> =>
         RunReduce(fromInclusive, toExclusive, identity, body, options, defaultMinChunk: 1);
 
-    internal static void Run<TBody>(int fromInclusive, int toExclusive, in TBody body, AplOptions? options, int defaultMinChunk)
+    /// <summary>Runs <paramref name="body"/> once for every index in the 64-bit range <c>[fromInclusive, toExclusive)</c>.</summary>
+    /// <exception cref="AggregateException">The body threw; contains every exception thrown.</exception>
+    /// <exception cref="OperationCanceledException">The options' token was canceled.</exception>
+    public static void For<TBody>(long fromInclusive, long toExclusive, TBody body, AplOptions? options = null)
+        where TBody : struct, ILongWorkBody =>
+        RunLong(fromInclusive, toExclusive, new LongElementBody<TBody>(body), options);
+
+    /// <summary>Runs <paramref name="body"/> over non-overlapping sub-ranges that together cover the 64-bit range <c>[fromInclusive, toExclusive)</c>.</summary>
+    /// <exception cref="AggregateException">The body threw; contains every exception thrown.</exception>
+    /// <exception cref="OperationCanceledException">The options' token was canceled.</exception>
+    public static void ForRange<TBody>(long fromInclusive, long toExclusive, TBody body, AplOptions? options = null)
+        where TBody : struct, ILongRangeWorkBody =>
+        RunLong(fromInclusive, toExclusive, body, options);
+
+    /// <summary>
+    /// Runs <paramref name="body"/> for every index in <c>[fromInclusive, toExclusive)</c>, letting it
+    /// end the loop early through <see cref="AplLoopState"/>.
+    /// </summary>
+    /// <returns>Whether the loop ran to completion, and the lowest break index if it did not.</returns>
+    /// <exception cref="AggregateException">The body threw; contains every exception thrown.</exception>
+    /// <exception cref="OperationCanceledException">The options' token was canceled.</exception>
+    public static AplLoopResult ForWithState<TBody>(int fromInclusive, int toExclusive, TBody body, AplOptions? options = null)
+        where TBody : struct, IStatefulWorkBody =>
+        RunStateful(fromInclusive, toExclusive, body, options);
+
+    internal static AplLoopResult RunStateful<TBody>(int fromInclusive, int toExclusive, in TBody body, AplOptions? options)
+        where TBody : struct, IStatefulWorkBody
+    {
+        LoopStateCore core = LoopStateCore.Rent();
+        try
+        {
+            Run(fromInclusive, toExclusive, new StatefulElementBody<TBody>(body, core), options, defaultMinChunk: 1);
+            return core.ToResult();
+        }
+        finally
+        {
+            LoopStateCore.Return(core);
+        }
+    }
+
+    /// <summary>
+    /// A 64-bit loop runs on the 32-bit machinery: when the count does not fit in an <c>int</c>, each
+    /// unit of the executor's range stands for <c>scale</c> consecutive iterations (see
+    /// <see cref="LongRangeBody{TBody}"/>). One loop and one set of workers, with no serial windows.
+    /// </summary>
+    internal static void RunLong<TBody>(long fromInclusive, long toExclusive, in TBody body, AplOptions? options)
+        where TBody : struct, ILongRangeWorkBody
+    {
+        if (toExclusive <= fromInclusive)
+            return;
+
+        ulong count = unchecked((ulong)toExclusive - (ulong)fromInclusive);
+        ulong scale = count <= int.MaxValue ? 1 : CeilDiv(count, int.MaxValue);
+        int units = (int)CeilDiv(count, scale);
+        Run(0, units, new LongRangeBody<TBody>(body, fromInclusive, count, scale, units), options, defaultMinChunk: 1, iterationsPerUnit: (long)scale);
+
+        static ulong CeilDiv(ulong x, ulong y) => x / y + (x % y != 0 ? 1UL : 0UL);
+    }
+
+    internal static void Run<TBody>(int fromInclusive, int toExclusive, in TBody body, AplOptions? options, int defaultMinChunk, long iterationsPerUnit = 1)
         where TBody : struct, IRangeWorkBody
     {
         options ??= AplOptions.Default;
-        if (!TryPlan(fromInclusive, toExclusive, options, defaultMinChunk, out LoopPlan plan))
+        if (!TryPlan(fromInclusive, toExclusive, options, defaultMinChunk, out LoopPlan plan, iterationsPerUnit))
             return;
 
         if (plan.WorkerCount <= 1)
@@ -86,7 +145,12 @@ public static class ParallelExecutor
     }
 
     /// <summary>Decides how a loop will run. False when there is nothing to do.</summary>
-    internal static bool TryPlan(int fromInclusive, int toExclusive, AplOptions options, int defaultMinChunk, out LoopPlan plan)
+    /// <remarks>
+    /// <paramref name="iterationsPerUnit"/> is greater than 1 only for 64-bit loops too long for an
+    /// <c>int</c>. Sizes given in iterations (the minimum chunk, the cancellation interval) are then
+    /// converted into units of that many iterations.
+    /// </remarks>
+    internal static bool TryPlan(int fromInclusive, int toExclusive, AplOptions options, int defaultMinChunk, out LoopPlan plan, long iterationsPerUnit = 1)
     {
         long count = (long)toExclusive - fromInclusive;
         if (count <= 0)
@@ -99,13 +163,20 @@ public static class ParallelExecutor
         token.ThrowIfCancellationRequested();
 
         if (count > int.MaxValue)
-            throw new ArgumentOutOfRangeException(nameof(toExclusive), "A loop may cover at most Int32.MaxValue iterations.");
+            throw new ArgumentOutOfRangeException(nameof(toExclusive), "An int loop may cover at most Int32.MaxValue iterations; use the long overloads for longer ranges.");
 
         int length = (int)count;
         int dop = options.GetEffectiveDegreeOfParallelism();
         int minChunk = options.MinChunkSize ?? defaultMinChunk;
+        int interval = options.CancellationCheckInterval;
+        if (iterationsPerUnit > 1)
+        {
+            minChunk = (int)Math.Max(1, minChunk / iterationsPerUnit);
+            interval = (int)Math.Max(1, interval / iterationsPerUnit);
+        }
+
         int maxWorkers = (int)Math.Min(dop, ((long)length + minChunk - 1) / minChunk);
-        int blockSize = token.CanBeCanceled ? options.CancellationCheckInterval : int.MaxValue;
+        int blockSize = token.CanBeCanceled ? interval : int.MaxValue;
         IPartitioner partitioner = options.Partitioner ?? StaticRangePartitioner.Instance;
 
         int partitionCount;
@@ -143,6 +214,7 @@ public static class ParallelExecutor
             Token = token,
             Stealing = stealing,
             Grain = grain,
+            Workers = options.Workers,
         };
         return true;
     }

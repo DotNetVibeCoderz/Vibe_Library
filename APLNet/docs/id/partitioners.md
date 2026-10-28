@@ -8,6 +8,7 @@ panggilan lewat `AplOptions.Partitioner`.
 | Partitioner | Cara pembagian | Biaya saat berjalan | Paling cocok untuk |
 |---|---|---|---|
 | `StaticRangePartitioner` (default) | Satu potongan berurutan per worker, selisih ukuran ≤ 1 | 1 increment per partisi | Iterasi seragam (kebanyakan loop numerik) |
+| `StaticRangePartitioner(partitionsPerWorker: k)` | Sama, dipotong menjadi *k* bagian per worker | 1 increment per partisi | Pekerjaan seragam di mesin yang sibuk (toleransi straggler) |
 | `StripedPartitioner(stripe)` | Garis berukuran tetap dibagi bergiliran: worker *w* mendapat garis *w*, *w+W*, … | 1 increment per partisi | Biaya yang berubah perlahan mengikuti indeks; lokalitas |
 | `WorkStealingPartitioner(grain)` | Mulai statis; pemilik mengambil grain dari depan, worker yang menganggur mencuri separuh belakang rentang terpenuh | 1 CAS per grain, 1 CAS per curian | Biaya timpang atau tidak terduga |
 | `IPartitioner` buatan sendiri | Rencana tetap apa pun | 1 increment per partisi | Tata letak khusus |
@@ -23,6 +24,21 @@ Apl.For(0, n, body);   // StaticRangePartitioner.Instance
 Pilihan termurah dan default yang tepat. Kelemahannya ada di keseimbangan beban: worker yang
 memegang bagian mahal dari rentang selesai paling akhir. Lihat
 [keputusan desain §1](design-decisions.md#1-partisi-statis-sebagai-default).
+
+### Toleransi straggler (opt-in)
+
+```csharp
+var options = new AplOptions { Partitioner = new StaticRangePartitioner(partitionsPerWorker: 4) };
+```
+
+*Pekerjaan* yang timpang adalah satu penyebab beban tidak seimbang. *Mesin* yang timpang adalah
+penyebab lain: proses lain, thread UI, atau core yang sibuk menunda satu worker, dan dengan satu
+potongan per worker semua menunggunya. Dengan `partitionsPerWorker: k`, rentang dipotong menjadi
+`k × worker` bagian sebelum loop dimulai. Setiap bagian tetap diklaim utuh, satu increment per
+bagian, tanpa klaim per chunk. Worker yang terlambat mendapati sebagian besar bagian sudah diambil,
+dan worker lain menyerap jatahnya. Biayanya `k` kali lebih banyak klaim dan panggilan body, jadi 2
+sampai 4 sudah cukup. Default tetap 1 (keputusan desain §1). Lihat B9 di
+[hasil benchmark](benchmark-results.md) untuk besar pemulihannya.
 
 ## Striped (bergaris)
 

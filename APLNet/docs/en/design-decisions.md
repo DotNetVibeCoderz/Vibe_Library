@@ -164,3 +164,40 @@ and fail to compile.
 | `NativeBuffer<T>` | Aligned native memory for the pointer tier and for SIMD |
 | `SimdCapabilities` | Tells the user which width the kernels will actually use |
 | NativeAOT check app | xunit's runner relies on reflection, so the AOT half of the definition of done needs its own binary |
+| 1.1 additions | Straggler-tolerant static partitions, loop state, 64-bit ranges, `Exp`/`Log`/FMA operators, spinning workers with affinity, generated API reference: see §12 |
+
+## 12. Release 1.1: what was added, and what did not change
+
+Every 1.1 feature is opt-in, and none of them moves the default path.
+
+- **Straggler tolerance is more static partitions, not dynamic claiming.**
+  `StaticRangePartitioner(partitionsPerWorker: k)` fixes `k × workers` slices before the loop starts,
+  and workers claim whole slices with the counter that was already there. That respects §1: no
+  per-chunk interlocked operation, and `k = 1` is still the default. Work stealing remains the answer
+  for uneven *work*; this is the cheap answer for an uneven *machine*.
+- **Loop state lives in the body adapter, not in the scheduler.** `Stop` and `Break` fold into one
+  `int` limit, so the check before each iteration is one load and one compare, and only stateful
+  loops pay it. The scheduler, `ParallelJob`, and the zero-allocation path for other loops are
+  untouched. The state object is cached per thread, so `ForWithState` allocates nothing either.
+- **64-bit ranges reuse the 32-bit job.** Running a long range as a sequence of `int`-sized windows
+  would put a barrier between windows. Instead, each unit of the job's `int` range stands for
+  `ceil(count / Int32.MaxValue)` consecutive iterations: one loop, one set of workers. Up to 2³¹
+  iterations, units map one to one onto iterations.
+- **Spinning workers are a separate dispatcher, behind `AplOptions.Workers`.** Without it, work goes
+  to the pool exactly as before. With it, the job is handed to dedicated threads through one CAS
+  per worker. Partitions are claimed *home first* (worker *k* tries partition *k + 1* before the
+  rest, one flag per partition) so the same data stays on the same core from call to call. The
+  invariant of §5 still holds: the caller never waits for a worker to pick its share up, so a busy
+  or disposed group slows a loop down but cannot block it.
+- **Native interop is confined to thread affinity.** Reading the NUMA topology and pinning threads
+  needs the OS (`GetNumaNodeProcessorMaskEx`/`SetThreadGroupAffinity` on Windows,
+  `sched_setaffinity` and `/sys/devices/system/node` on Linux). The calls use `LibraryImport`, so
+  they are generated at compile time and stay NativeAOT-safe. They run only when
+  `WorkerAffinity.Core` or `WorkerAffinity.NumaNode` is requested. The rest of the library makes no
+  native call.
+- **`ExpOperator`, `LogOperator` and `FusedMultiplyAddOperator` dispatch on `typeof(T)`.** The JIT
+  folds the check per instantiation, so a generic operator calls the runtime's
+  `Vector128.Exp(Vector128<float>)` and friends at no cost. FMA is a separate operator rather than a
+  flag on `MultiplyAddOperator`, so the bit-for-bit guarantee of the existing operator is unchanged.
+- **Out of scope, as before.** Distributed execution (spec §9) and GPU offload are not part of this
+  library. See [PLAN.md](../../PLAN.md).

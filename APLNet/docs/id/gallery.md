@@ -38,6 +38,10 @@ melihat artinya.
 | `⊆` partition | Penjadwalan | Himpunan Mandelbrot · Beban kerja timpang (Zipf) |
 | `⎕` quad | Tingkat rendah | Pointer mentah dan function pointer · Source generator `[AplBody]` |
 
+Dua kasus juga menampilkan opsi 1.1. *Banyak loop kecil* menjalankan satu varian di atas
+[`SpinningWorkers`](workers.md), dan *Filter gambar* menjalankan satu varian dengan empat partisi
+statis per worker (toleransi straggler).
+
 ![Mandelbrot dalam Bahasa Indonesia](../images/gallery-mandelbrot-id.png)
 
 ![Aritmetika sederhana](../images/gallery-trivial.png)

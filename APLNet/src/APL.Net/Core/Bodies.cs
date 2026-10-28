@@ -114,3 +114,94 @@ internal readonly struct DelegateReduceBody<T>(Func<int, int, T, T> accumulate, 
 
     public T Combine(T left, T right) => _combine(left, right);
 }
+
+// ---------------------------------------------------------------- 64-bit ranges
+
+/// <summary>
+/// Runs a 64-bit range as an <c>int</c> one: unit <c>u</c> of the executor's range covers iterations
+/// <c>[from + u * scale, from + (u + 1) * scale)</c>, clipped to the count. <c>scale</c> is 1
+/// whenever the count fits in an <c>int</c>, so units map one to one onto iterations; beyond that it
+/// is the smallest factor that brings the count under <see cref="int.MaxValue"/> units.
+/// </summary>
+internal readonly struct LongRangeBody<TBody>(TBody body, long from, ulong count, ulong scale, int units) : IRangeWorkBody
+    where TBody : struct, ILongRangeWorkBody
+{
+    private readonly TBody _body = body;
+    private readonly long _from = from;
+    private readonly ulong _count = count;
+    private readonly ulong _scale = scale;
+    private readonly int _units = units;
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void Invoke(int fromInclusive, int toExclusive)
+    {
+        // The last unit is clipped to the count. Computing units * scale there could pass 2^64.
+        ulong start = (ulong)fromInclusive * _scale;
+        ulong end = toExclusive == _units ? _count : (ulong)toExclusive * _scale;
+        TBody body = _body;
+        body.Invoke(unchecked(_from + (long)start), unchecked(_from + (long)end));
+    }
+}
+
+internal readonly struct LongElementBody<TBody>(TBody body) : ILongRangeWorkBody
+    where TBody : struct, ILongWorkBody
+{
+    private readonly TBody _body = body;
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void Invoke(long fromInclusive, long toExclusive)
+    {
+        TBody body = _body;
+        for (long i = fromInclusive; i < toExclusive; i++)
+            body.Invoke(i);
+    }
+}
+
+internal readonly struct LongDelegateBody(Action<long> action) : ILongRangeWorkBody
+{
+    private readonly Action<long> _action = action;
+
+    public void Invoke(long fromInclusive, long toExclusive)
+    {
+        Action<long> action = _action;
+        for (long i = fromInclusive; i < toExclusive; i++)
+            action(i);
+    }
+}
+
+internal readonly struct LongRangeDelegateBody(Action<long, long> action) : ILongRangeWorkBody
+{
+    private readonly Action<long, long> _action = action;
+
+    public void Invoke(long fromInclusive, long toExclusive) => _action(fromInclusive, toExclusive);
+}
+
+// ---------------------------------------------------------------- loop state
+
+/// <summary>Checks the shared limit before every iteration. Ranges ascend, so the first index past it ends the range.</summary>
+internal readonly struct StatefulElementBody<TBody>(TBody body, LoopStateCore core) : IRangeWorkBody
+    where TBody : struct, IStatefulWorkBody
+{
+    private readonly TBody _body = body;
+    private readonly LoopStateCore _core = core;
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void Invoke(int fromInclusive, int toExclusive)
+    {
+        TBody body = _body;
+        LoopStateCore core = _core;
+        for (int i = fromInclusive; i < toExclusive; i++)
+        {
+            if (core.ShouldExit(i))
+                return;
+            body.Invoke(i, new AplLoopState(core, i));
+        }
+    }
+}
+
+internal readonly struct StatefulDelegateBody(Action<int, AplLoopState> action) : IStatefulWorkBody
+{
+    private readonly Action<int, AplLoopState> _action = action;
+
+    public void Invoke(int index, AplLoopState state) => _action(index, state);
+}

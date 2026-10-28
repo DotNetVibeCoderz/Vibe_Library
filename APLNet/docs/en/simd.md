@@ -45,10 +45,18 @@ partially overlap it. That case throws `ArgumentException`. `Min`/`Max` on an em
 
 | Unary (`IUnaryOperator<T>`) | Binary (`IBinaryOperator<T>`) | Reductions (`IReduceOperator<T>`) |
 |---|---|---|
-| `IdentityOperator`, `NegateOperator`, `AbsOperator`, `SquareOperator`, `SqrtOperator`, `ScaleOperator(f)`, `AddScalarOperator(a)`, `MultiplyAddOperator(a, b)`, `ClampOperator(min, max)` | `AddOperator`, `SubtractOperator`, `MultiplyOperator`, `DivideOperator`, `MinOperator`, `MaxOperator` | `AddOperator` (sum), `MultiplyOperator` (product), `MinOperator`, `MaxOperator` |
+| `IdentityOperator`, `NegateOperator`, `AbsOperator`, `SquareOperator`, `SqrtOperator`, `ScaleOperator(f)`, `AddScalarOperator(a)`, `MultiplyAddOperator(a, b)`, `ClampOperator(min, max)`, `ExpOperator`, `LogOperator`, `FusedMultiplyAddOperator(a, b)` | `AddOperator`, `SubtractOperator`, `MultiplyOperator`, `DivideOperator`, `MinOperator`, `MaxOperator` | `AddOperator` (sum), `MultiplyOperator` (product), `MinOperator`, `MaxOperator` |
 
 `MultiplyAddOperator` computes a multiply and then an add, not a fused multiply-add, so it
-matches the scalar expression bit for bit.
+matches the scalar expression bit for bit. `FusedMultiplyAddOperator` is the explicit opt-in for
+the fused form: one rounding instead of two, bit-identical to `Math.FusedMultiplyAdd` in every
+lane, so it can differ from `MultiplyAddOperator` in the last bit. On hardware without FMA the
+runtime emulates it exactly but slowly.
+
+`ExpOperator` and `LogOperator` (`float` and `double`) use the runtime's vectorised `Exp`/`Log`.
+They are accurate to a few ulp of `Math.Exp`/`Math.Log` (the tests allow a relative error of 1e-14
+for `double` and 1e-6 for `float`), not bit-identical. The scalar tail of a span uses `Math`, so
+neighbouring elements can differ in the last digits.
 
 ## Writing an operator
 

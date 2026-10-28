@@ -4,7 +4,7 @@
 that the JIT compiles for your exact body. There is no delegate call, no `Task`, no captured
 `ExecutionContext` and no allocation per call. It also includes explicit SIMD kernels
 (Vector512/256/128 with a scalar fallback), an opt-in pointer tier and a source generator. It is
-NativeAOT-safe and uses no native interop.
+NativeAOT-safe, and the default path makes no native calls.
 
 Made by **Gravicode Studios**, led by **Kang Fadhil**. · Dibuat oleh Gravicode Studios, dipimpin
 oleh Kang Fadhil.
@@ -25,6 +25,17 @@ Apl.For(0, n, new ComputeBody(data, result));                 // zero-allocation
 double total = SimdOps.ParallelSum(values);                    // parallel + SIMD
 Apl.For(0, rows, new RenderRow(img),                           // uneven work: opt in
     new AplOptions { Partitioner = new WorkStealingPartitioner(1) });
+```
+
+New in 1.1:
+
+```csharp
+AplLoopResult r = Apl.For(0, n, (i, state) => { if (data[i] < 0) state.Break(); });   // Stop/Break
+Apl.ForRange(0L, 10_000_000_000L, (from, to) => Scan(from, to));                      // long ranges
+SimdOps.ParallelTransform(x, y, new ExpOperator<double>());                            // Exp, Log, FMA
+var busy = new AplOptions { Partitioner = new StaticRangePartitioner(partitionsPerWorker: 4) };
+using var workers = new SpinningWorkers(affinity: WorkerAffinity.NumaNode);           // tiny, frequent loops
+Apl.For(0, n, body, new AplOptions { Workers = workers });
 ```
 
 Measured on an Intel i7-8650U (4C/8T) with .NET 10 against `Parallel.For`:

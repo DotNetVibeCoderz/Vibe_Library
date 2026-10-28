@@ -104,9 +104,12 @@ src/APL.Net/                 pustaka (paket "APL.Net", namespace AplNet)
 src/APL.Net.SourceGen/       generator Roslyn, dikemas di dalam paket
 tests/APL.Net.Tests/         suite xunit.v3 (JIT)
 tests/APL.Net.AotTests/      pengecekan konsol, di-publish dengan PublishAot=true
-benchmarks/APL.Net.Benchmarks/  BenchmarkDotNet B1–B7
+benchmarks/APL.Net.Benchmarks/  BenchmarkDotNet B1–B10
 benchmarks/rust-rayon/       referensi Rust/Rayon terpisah (tanpa FFI)
 samples/APL.Net.Samples/     quick start konsol + demo pemrosesan gambar
 samples/APL.Net.Gallery/     etalase Avalonia yang membandingkan APL.Net dan TPL
 docs/en, docs/id             dokumentasi ini, dalam bahasa Inggris dan Indonesia
+docs/api/                    referensi API, dibangkitkan dari dokumentasi XML
+tools/APL.Net.ApiDocs/       generator untuk docs/api (CI gagal jika hasilnya bergeser)
+tools/icon/                  menggambar ikon paket
 ```

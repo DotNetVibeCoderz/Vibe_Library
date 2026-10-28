@@ -11,7 +11,10 @@ spesialisasi generik saat kompilasi, dan source generator berjalan di dalam comp
 `tests/APL.Net.AotTests` menguji setiap API publik terhadap referensi sekuensial: ketiga
 partitioner, `For`/`ForRange`/`ForEach`/`Reduce`, body hasil generator, SIMD untuk
 `float`/`double`/`int`/`long`, tingkat pointer, pembatalan, agregasi exception, dan `ForEachAsync`.
-Aplikasi ini di-publish dengan `PublishAot=true`, dan warning trim/AOT diperlakukan sebagai error:
+Tambahan 1.1 juga tercakup: partisi tahan straggler, rentang `long`, state loop, `Exp`/`Log`/FMA,
+dan spinning worker yang di-pin ke core, yang menjalankan panggilan `LibraryImport` untuk topologi
+dan afinitas. Aplikasi ini di-publish dengan `PublishAot=true`, dan warning trim/AOT diperlakukan
+sebagai error:
 
 ```sh
 dotnet publish tests/APL.Net.AotTests -c Release -r win-x64 -o out/aot
@@ -19,7 +22,7 @@ out/aot/APL.Net.AotTests            # exit code 0 = semua pengecekan lulus
 ```
 
 Di mesin referensi hasilnya executable 3,5 MB, nol warning trim atau AOT, dan semua pengecekan
-lulus. CI mengulanginya di Linux.
+lulus. CI mengulanginya di Linux x64 dan Linux Arm64.
 
 ## Lebar vektor di AOT
 

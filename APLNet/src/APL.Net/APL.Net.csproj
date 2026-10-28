@@ -14,7 +14,8 @@
     <IsPackable>true</IsPackable>
     <PackageId>APL.Net</PackageId>
     <Description>APL.Net (Another Parallel Library): high-performance data-parallel primitives for .NET. Struct-invoker loops the JIT devirtualizes and inlines, static/striped/work-stealing partitioning on the thread pool without ExecutionContext flow, zero-allocation steady state, Vector128/256/512 SIMD kernels, a pointer tier and a source generator. NativeAOT-safe. Dibuat oleh Gravicode Studios, dipimpin oleh Kang Fadhil.</Description>
-    <PackageTags>parallel;simd;vector;performance;tpl;parallel-for;work-stealing;avx2;avx512;nativeaot;hpc</PackageTags>
+    <PackageTags>parallel;simd;vector;performance;tpl;parallel-for;work-stealing;avx2;avx512;nativeaot;hpc;numa</PackageTags>
+    <PackageIcon>icon.png</PackageIcon>
 
     <!-- The library must stay usable from NativeAOT and trimmed apps (FR8, NFR4). These turn every
          reflection or dynamic-code hazard in it into a build warning. -->
@@ -25,6 +26,8 @@
   <ItemGroup>
     <!-- A package-specific README: the repository one links images by relative path, which nuget.org cannot show. -->
     <None Include="PACKAGE.md" Pack="true" PackagePath="/README.md" />
+    <!-- Drawn by tools/icon/make_icon.py; 128 px is what nuget.org asks for. -->
+    <None Include="icon.png" Pack="true" PackagePath="/" Visible="false" />
   </ItemGroup>
 
   <ItemGroup>

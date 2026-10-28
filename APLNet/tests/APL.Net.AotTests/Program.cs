@@ -119,12 +119,73 @@ catch (AggregateException ex)
 await Apl.ForEachAsync(Enumerable.Range(0, 10), async (i, ct) => await Task.Yield());
 Check("ForEachAsync", true);
 
+// 1.1: straggler-tolerant static partitions, 64-bit ranges, loop state, new SIMD operators.
+{
+    var hits = new int[100_003];
+    Apl.For(0, hits.Length, i => hits[i]++, new AplOptions { MaxDegreeOfParallelism = 8, Partitioner = new StaticRangePartitioner(partitionsPerWorker: 4) });
+    Check("Static partitioner, 4 partitions/worker", hits.All(h => h == 1));
+
+    long covered = 0;
+    Apl.ForRange(long.MinValue, long.MaxValue, (a, b) => Interlocked.Add(ref covered, unchecked(b - a)));
+    Check("ForRange over the whole long range", covered == -1); // 2^64 - 1 iterations, wrapped
+
+    var longHits = new int[1000];
+    Apl.For(10_000_000_000L, 10_000_001_000L, new LongBody(longHits, 10_000_000_000L));
+    Check("For long struct body", longHits.All(h => h == 1));
+
+    AplLoopResult stopped = Apl.For(0, 1_000_000, (i, state) => { if (i == 10) state.Stop(); });
+    Check("Loop state Stop", !stopped.IsCompleted && stopped.LowestBreakIteration is null);
+
+    var ran = new int[100_000];
+    AplLoopResult broken = Apl.ForWithState(0, ran.Length, new BreakAt(ran, 4321), new AplOptions { MaxDegreeOfParallelism = 8 });
+    Check("Loop state Break", broken.LowestBreakIteration == 4321 && ran.AsSpan(0, 4321).IndexOf(0) < 0);
+
+    double[] x = Enumerable.Range(1, 1000).Select(i => i * 0.01).ToArray();
+    double[] y = new double[x.Length];
+    SimdOps.Transform<double, LogOperator<double>>(x, y, default);
+    SimdOps.TransformInPlace(y.AsSpan(), new ExpOperator<double>());
+    Check("SIMD Exp(Log(x))", x.Zip(y).All(p => Math.Abs(p.First - p.Second) <= 1e-13 * p.First));
+
+    float[] f = Enumerable.Range(0, 1000).Select(i => i * 0.1f).ToArray();
+    float[] g = new float[f.Length];
+    SimdOps.Transform(f, g, new FusedMultiplyAddOperator<float>(3, 0.5f));
+    Check("SIMD fused multiply-add", f.Zip(g).All(p => MathF.FusedMultiplyAdd(p.First, 3, 0.5f) == p.Second));
+}
+
+// 1.2: persistent spinning workers, pinned, with NUMA topology detection (the native interop).
+{
+    Console.WriteLine($"Topology: {AplTopology.Describe()}");
+    using var workers = new SpinningWorkers(Math.Max(1, Math.Min(3, Environment.ProcessorCount - 1)), affinity: WorkerAffinity.Core);
+    Check("Spinning workers pinned where supported", workers.IsAffinityApplied == AplTopology.IsAffinitySupported);
+
+    var options = new AplOptions { MaxDegreeOfParallelism = workers.ThreadCount + 1, Workers = workers };
+    var data = new int[4096];
+    for (int round = 0; round < 1000; round++)
+        Apl.For(0, data.Length, i => data[i]++, options);
+    Check("Spinning workers, 1000 small loops", data.All(d => d == 1000));
+}
+
 Console.WriteLine(failures == 0 ? "All checks passed." : $"{failures} check(s) FAILED.");
 return failures == 0 ? 0 : 1;
 
 internal readonly struct Affine(double[] src, double[] dst) : IWorkBody
 {
     public void Invoke(int i) => dst[i] = src[i] * 2 + 1;
+}
+
+internal readonly struct LongBody(int[] hits, long offset) : ILongWorkBody
+{
+    public void Invoke(long index) => hits[index - offset]++;
+}
+
+internal readonly struct BreakAt(int[] ran, int at) : IStatefulWorkBody
+{
+    public void Invoke(int index, AplLoopState state)
+    {
+        ran[index] = 1;
+        if (index >= at)
+            state.Break();
+    }
 }
 
 internal readonly struct InPlace : IWorkBody<double>

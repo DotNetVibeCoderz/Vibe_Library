@@ -18,14 +18,36 @@ namespace AplNet.Core.Partitioners;
 /// <c>ceil(length / count)</c> each: with 9 items and 8 workers the ceiling split would give five
 /// workers two items and leave three idle, while this gives one worker two and the rest one each.
 /// </para>
+/// <para>
+/// <b>Straggler tolerance (opt-in).</b> With one partition per worker, a single worker that the OS
+/// deschedules - another process, a busy core - holds up the whole loop. Passing
+/// <c>partitionsPerWorker</c> greater than 1 splits the range into that many partitions per worker.
+/// They are still fixed before the loop starts and claimed whole, one interlocked increment per
+/// partition, so a late worker finds the leftovers already taken and the others absorb its share.
+/// The price is <c>k</c> times as many claims and body calls; 2 to 4 is usually enough.
+/// </para>
 /// </remarks>
 public sealed class StaticRangePartitioner : IPartitioner
 {
-    /// <summary>The shared instance.</summary>
+    /// <summary>The shared instance: one partition per worker.</summary>
     public static StaticRangePartitioner Instance { get; } = new();
 
+    /// <summary>
+    /// Creates a static partitioner that splits each loop into <paramref name="partitionsPerWorker"/>
+    /// equal partitions per worker. 1, the default, is the classic one-range-per-worker split.
+    /// </summary>
+    public StaticRangePartitioner(int partitionsPerWorker = 1)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(partitionsPerWorker, 1);
+        PartitionsPerWorker = partitionsPerWorker;
+    }
+
+    /// <summary>How many partitions each worker's share is split into.</summary>
+    public int PartitionsPerWorker { get; }
+
     /// <inheritdoc />
-    public int GetPartitionCount(int length, int maxWorkers) => Math.Max(1, Math.Min(length, maxWorkers));
+    public int GetPartitionCount(int length, int maxWorkers) =>
+        (int)Math.Max(1, Math.Min(length, (long)maxWorkers * PartitionsPerWorker));
 
     /// <inheritdoc />
     public bool TryGetRange(int length, int partitionCount, int partition, int index, out int fromInclusive, out int toExclusive)

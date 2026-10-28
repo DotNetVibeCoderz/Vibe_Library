@@ -12,6 +12,7 @@ internal static class TestSupport
     public static IPartitioner[] Partitioners { get; } =
     [
         StaticRangePartitioner.Instance,
+        new StaticRangePartitioner(partitionsPerWorker: 3),
         new StripedPartitioner(1),
         new StripedPartitioner(7),
         new StripedPartitioner(4096),

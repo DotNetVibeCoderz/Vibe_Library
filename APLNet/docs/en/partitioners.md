@@ -8,6 +8,7 @@ with `AplOptions.Partitioner`.
 | Partitioner | How work is split | Cost at run time | Best for |
 |---|---|---|---|
 | `StaticRangePartitioner` (default) | One contiguous slice per worker, sizes within 1 | 1 increment per partition | Uniform iterations (most numeric loops) |
+| `StaticRangePartitioner(partitionsPerWorker: k)` | The same, cut into *k* slices per worker | 1 increment per partition | Uniform work on a busy machine (straggler tolerance) |
 | `StripedPartitioner(stripe)` | Fixed stripes dealt round-robin: worker *w* gets stripes *w*, *w+W*, … | 1 increment per partition | Cost that varies smoothly with the index; locality |
 | `WorkStealingPartitioner(grain)` | Static start; owners take grains from the front, idle workers steal the back half of the fullest range | 1 CAS per grain, 1 CAS per steal | Skewed or unpredictable costs |
 | Your own `IPartitioner` | Any fixed plan | 1 increment per partition | Special layouts |
@@ -23,6 +24,20 @@ Apl.For(0, n, body);   // StaticRangePartitioner.Instance
 This is the cheapest option and the right default. Its weakness is load balance: the worker
 that owns the expensive part of the range finishes last. See
 [design decisions §1](design-decisions.md#1-static-partitioning-is-the-default).
+
+### Straggler tolerance (opt-in)
+
+```csharp
+var options = new AplOptions { Partitioner = new StaticRangePartitioner(partitionsPerWorker: 4) };
+```
+
+Uneven *work* is one way to lose balance. An uneven *machine* is another: another process, the
+UI thread or a busy core delays one worker, and with one slice per worker everyone waits for it.
+With `partitionsPerWorker: k` the range is cut into `k × workers` slices before the loop starts.
+They are still claimed whole, one increment per slice, with no per-chunk claiming. A late worker
+finds most slices already taken, and the others absorb its share. It costs `k` times as many claims
+and body calls, so 2 to 4 is enough. The default stays at 1 (design decision §1). See B9 in the
+[benchmark results](benchmark-results.md) for what it recovers.
 
 ## Striped
 
